@@ -1,9 +1,8 @@
 from subprocess import Popen, PIPE
+from pprint import pformat
 from time import sleep
 from util import print_debug
 from util import print_message
-from pprint import pformat
-
 
 
 class Diagnostic(object):
@@ -12,15 +11,20 @@ class Diagnostic(object):
     """
     def __init__(self, config=None):
         self.config = {}
+        self.proc = None
+        self.inputs = {
+            '--model': '',
+            '--obs': '',
+            '--outputdir': '',
+            '--package': '',
+            '--set': '',
+            'archive': ''
+        }
+        self.outputs = {
+            'output_path': '',
+            'console_output': '',
+        }
         self.status = self.validate(config)
-        self.inputs = [
-            'model_path',
-            'obs_path',
-            'output_path',
-            'package',
-            'set',
-            'archive'
-        ]
 
     def __str__(self):
         return pformat({
@@ -35,18 +39,34 @@ class Diagnostic(object):
         """
         cmd = ['metadiags']
         for i in self.config:
+            if i == 'archive':
+                continue
             cmd.append(i)
             cmd.append(self.config[i])
         try:
-            proc = Popen(cmd, stdout=PIPE)
+            console_output = ''
+            print_message(cmd, 'ok')
+            self.proc = Popen(
+                cmd,
+                stdout=PIPE,
+                shell=True)
+            self.status = 'running'
             done = 2
             while done != 0:
-                done = proc.poll()
-                line = proc.stdout.readline()
+                done = self.proc.poll()
+                line = self.proc.stdout.readline()
+                console_output += line
+                print line
                 if done < 0:
                     break
                 sleep(1)
+            console_output_path = '{}/console_output.txt'.format(self.config.get('output_path'))
+            with open(console_output_path, 'w') as outfile:
+                outfile.write(console_output)
+            self.outputs['console_output'] = console_output
+            self.status = 'complete'
         except Exception as e:
+            self.status = 'error'
             print_debug(e)
             print_message('Error running diagnostic')
 
@@ -55,31 +75,44 @@ class Diagnostic(object):
             Validates the config options
             Valid options are: model_path, obs_path, output_path, package, sets
         """
-
         for i in config:
-            if i not in valid_arguments:
+            if i not in self.inputs:
                 print_message('Unexpected argument: {}, {}'.format(i, config[i]))
             else:
-                self.config[i] = config[i]
+                if i == '--model':
+                    self.config['--model'] = 'path=' + config[i] + ',climos=yes'
+                elif i == '--obs':
+                    self.config['--obs'] = 'path=' + config[i] + ',climos=yes'
+                elif i == '--outputdir':
+                    self.config['--outputdir'] = config[i]
+                elif i == '--package':
+                    self.config['--package'] = config[i]
+                elif i == '--set':
+                    self.config['--set'] = config[i]
 
-        for i in valid_arguments:
+
+        for i in self.inputs:
             if i not in self.config:
                 default = ''
-                if i == 'model_path':
+                if i == '--model':
                     print_message('model_path is a required argument, exiting')
                     return 'Invalid'
-                elif i == 'obs_path':
+                elif i == '--obs':
                     print_message('obs_path is a required argument, exiting')
                     return 'Invalid'
-                elif i == 'output_path':
+                elif i == '--outputdir':
                     default = '.'
-                elif i == 'package':
+                    self.config['--outputdir'] = default
+                elif i == '--package':
                     default = 'amwg'
-                elif i == 'set':
+                    self.config['--package'] = default
+                elif i == '--set':
                     default = '5'
+                    self.config['--set'] = default
                 elif i == 'archive':
                     default = 'False'
-                self.config[i] = default
+                    self.config['archive'] = default
                 print_message('{} not found in config, using {}'.format(i, default), 'ok')
+        self.outputs['output_path'] = self.config['--outputdir']
         return 'valid'
 

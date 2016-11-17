@@ -3,6 +3,7 @@
 # pylint: disable=C0111
 import argparse
 from jobs.Diagnostic import Diagnostic
+from jobs.Pipeline import Pipeline
 from util import print_debug
 from util import print_message
 
@@ -19,9 +20,8 @@ if __name__ == "__main__":
     print args
     if args.diagnostic:
         config = {
-            'model_path': args.model_path,
-            'obs_path': '/test',
-            'not_valid': 'sudo rm -rf /'
+            '--model': args.model_path,
+            '--obs': '/test',
         }
         d = Diagnostic(config)
         if d.status == 'valid':
