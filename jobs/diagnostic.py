@@ -1,4 +1,5 @@
 from subprocess import Popen, PIPE
+import os
 from pprint import pformat
 from time import sleep
 from util import print_debug
@@ -56,7 +57,6 @@ class Diagnostic(object):
                 done = self.proc.poll()
                 line = self.proc.stdout.readline()
                 console_output += line
-                print line
                 if done < 0:
                     break
                 sleep(1)
@@ -101,7 +101,7 @@ class Diagnostic(object):
                     print_message('obs_path is a required argument, exiting')
                     return 'Invalid'
                 elif i == '--outputdir':
-                    default = '.'
+                    default = os.getcwd()
                     self.config['--outputdir'] = default
                 elif i == '--package':
                     default = 'amwg'
