@@ -1,0 +1,8 @@
+{
+    "diagnostic": {
+        "--model": "/export/baldwin32/projects/acme-web-fe/userdata/demo2/observations/obs_for_diagnostics",
+        "--obs": "/export/baldwin32/projects/acme-web-fe/userdata/demo2/model_output/metadiags_test_data",
+        "--outputdir": "/export/baldwin32/projects/acme_workflow",
+        "--archive": "True"
+    }
+}
