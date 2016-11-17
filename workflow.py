@@ -20,8 +20,8 @@ if __name__ == "__main__":
     print args
     if args.diagnostic:
         config = {
-            '--model': args.model_path,
-            '--obs': '/test',
+            '--model': '~/diags/metadiags_test_data',
+            '--obs': '~/data/obs_for_diagnostics',
         }
         d = Diagnostic(config)
         if d.status == 'valid':
