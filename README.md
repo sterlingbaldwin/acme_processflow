@@ -12,22 +12,19 @@ A workflow tool for the ACME project
 
 # Usage
 
-usage: workflow.py [-h] [-m MODEL_PATH] [-c CLIMOS] [-d DIAGNOSTIC]
-                   [-t TRANSFER] [-p PUBLISH] [-f FILE]
+    usage: workflow.py [-h] [-m] [-c] [-d] [-t] [-p] [-cm] [-ud] [-f FILE]
 
-optional arguments:
-  -h, --help            show this help message and exit
-  -m MODEL_PATH, --model-path MODEL_PATH
-                        A path to the model output
-  -c CLIMOS, --climos CLIMOS
-                        Compute climotologies from model output
-  -d DIAGNOSTIC, --diagnostic DIAGNOSTIC
-                        Run ACME diagnostics
-  -t TRANSFER, --transfer TRANSFER
-                        Transfer the diagnostics
-  -p PUBLISH, --publish PUBLISH
-                        Publish the output
-  -f FILE, --file FILE  config file
+    optional arguments:
+      -h, --help            show this help message and exit
+      -m, --model           Run the ACME model
+      -c, --climos          Compute climotologies from model output
+      -d, --diagnostic      Run ACME diagnostics
+      -t, --transfer        Transfer the diagnostics
+      -p, --publish         Publish the output
+      -cm, --cmore          Run CMOR on the model output
+      -ud, --upload-diagnostic
+                            upload the diagnostic output to the diagnostic viewer
+      -f FILE, --file FILE  config file
 
 
 # Supported job types
