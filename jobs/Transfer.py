@@ -17,6 +17,9 @@ from pprint import pformat
 
 
 class Transfer(object):
+    """
+        Uses Globus to transfer files between DTNs
+    """
     def __init__(self, config=None):
         self.config = {}
         self.status = 'unvalidated'
@@ -24,13 +27,13 @@ class Transfer(object):
         self.outputs = {
             "status": "unvalidated"
         }
-        self.inputs = [
-            'recursive',
-            'globus_username',
-            'globus_password',
-            'source_endpoint',
-            'destination_endpoint'
-        ]
+        self.inputs = {
+            'recursive': '',
+            'globus_username': '',
+            'globus_password': '',
+            'source_endpoint': '',
+            'destination_endpoint': ''
+        }
         self.validate(config)
         self.msg = None
 
@@ -86,17 +89,19 @@ class Transfer(object):
         self.status = 'valid'
         return 0
 
-    def activate_endpoint(self, api_client, endpoint):
+    def activate_endpoint(self, api_client, endpoint, username, password):
         code, reason, result = api_client.endpoint_autoactivate(endpoint, if_expires_in=2880)
+        print code, reason, result
         if result["code"] == "AutoActivationFailed":
             reqs = result
             myproxy_hostname = None
             for r in result['DATA']:
                 if r['type'] == 'myproxy' and r['name'] == 'hostname':
                     myproxy_hostname = r['value']
+                    print 'myproxy_hostname: ', myproxy_hostname
             reqs.set_requirement_value("myproxy", "hostname", myproxy_hostname)
-            reqs.set_requirement_value("myproxy", "username", self.config['credential'][endpoint]['username'])
-            reqs.set_requirement_value("myproxy", "passphrase", self.config['credential'][endpoint]['password'])
+            reqs.set_requirement_value("myproxy", "username", username)
+            reqs.set_requirement_value("myproxy", "passphrase", password)
             reqs.set_requirement_value("myproxy", "lifetime_in_hours", "168")
             code, reason, result = api_client.endpoint_activate(endpoint, reqs)
             if code != 200:
@@ -114,8 +119,12 @@ class Transfer(object):
                     basename = os.path.basename(srcpath)
                     return dstpath + basename
         return dstpath
-    
+
     def execute(self):
+        print_message('Starting transfer job from {src} to {dst}'.format(
+            src=self.config.get('source_endpoint').get('comment'),
+            dst=self.config.get('destination_endpoint').get('comment')
+        ), 'ok')
         # Map legacy endpoint names to UUIDs
         srcendpoint = self.config.get('source_endpoint').get('uuid')
         dstendpoint = self.config.get('destination_endpoint').get('uuid')
@@ -131,8 +140,12 @@ class Transfer(object):
 
         # Create a transfer submission
         api_client = TransferAPIClient(globus_username, goauth=auth_result.token)
-        self.activate_endpoint(api_client, srcendpoint)
-        self.activate_endpoint(api_client, dstendpoint)
+        source_user = self.config.get('source_endpoint').get('username')
+        source_pass = self.config.get('source_endpoint').get('password')
+        self.activate_endpoint(api_client, srcendpoint, source_user, source_pass)
+        dst_user = self.config.get('destination_endpoint').get('username')
+        dst_pass = self.config.get('destination_endpoint').get('password')
+        self.activate_endpoint(api_client, dstendpoint, dst_user, dst_pass)
 
         code, message, data = api_client.transfer_submission_id()
         submission_id = data["value"]
@@ -151,12 +164,24 @@ class Transfer(object):
                     self.config.get('recursive')),
                 recursive=self.config.get('recursive'))
         # Add srclist to the transfer task
-        # if options.srclist:
-        #     with open(options.srclist) as f:
-        #         srcpath = f.readline().rstrip('\n')
-        #         transfer_task.add_item(srcpath,
-        #             get_destination_path(srcpath, options.dstpath, options.recursive),
-        #             recursive=options.recursive)
+        source_list = self.config.get('srclist')
+        if source_list:
+            try:
+                with open(source_list) as f:
+                    srcpath = f.readline().rstrip('\n')
+                    dst_path = self.get_destination_path(
+                        srcpath,
+                        self.config.get('destination_endpoint').get('path'),
+                        self.config.get('recursive'))
+                    transfer_task.add_item(
+                        srcpath,
+                        dst_path,
+                        recursive=self.config.get('recursive'))
+            except IOError as e:
+                print_debug(e)
+                print_message('Error opening source list')
+                self.status = 'error: cannot open source list'
+                return
 
         # Start the transfer
         task_id = None
@@ -173,11 +198,12 @@ class Transfer(object):
         while True:
             code, reason, data = api_client.task(task_id)
             print data['status']
-            self.status = data['status']
             if data['status'] == 'SUCCEEDED':
                 print_message('progress %d/%d' % (data['files_transferred'], data['files']), 'ok')
+                self.status = 'success'
                 return ('success', '')
             elif data['status'] == 'FAILED':
+                self.status = 'error: ' + data.get('nice_status_details')
                 return ('error', data['nice_status_details'])
             elif data['status'] == 'ACTIVE':
                 print_message('progress %d/%d' % (data['files_transferred'], data['files']), 'ok')

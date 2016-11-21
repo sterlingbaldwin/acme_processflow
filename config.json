@@ -1,8 +1,40 @@
 {
     "diagnostic": {
-        "--model": "/export/baldwin32/projects/acme-web-fe/userdata/demo2/observations/obs_for_diagnostics",
-        "--obs": "/export/baldwin32/projects/acme-web-fe/userdata/demo2/model_output/metadiags_test_data",
-        "--outputdir": "/export/baldwin32/projects/acme_workflow",
-        "--archive": "True"
+        "inputs": {
+            "--model": "/export/baldwin32/projects/acme-web-fe/userdata/demo2/observations/obs_for_diagnostics",
+            "--obs": "/export/baldwin32/projects/acme-web-fe/userdata/demo2/model_output/metadiags_test_data",
+            "--outputdir": "/export/baldwin32/projects/acme_workflow/diag_output",
+            "--archive": "False"
+        },
+        "outputs":
+        {
+            "--outputdir": "",
+            "console_output": "",
+            "status": ""
+        }
+    },
+    "transfer": {
+        "inputs": {
+            "recursive": "True",
+            "globus_username": "",
+            "globus_password": "",
+            "source_endpoint": {
+                "comment": "nersc#edison",
+                "uuid": "b9d02196-6d04-11e5-ba46-22000b92c6ec",
+                "username": "",
+                "password": "",
+                "path": "/global/homes/s/sbaldwin/test/"
+            },
+            "destination_endpoint": {
+                "comment": "llnlesg#acme",
+                "uuid": "43d64772-a82e-11e5-99d3-22000b96db58",
+                "username": "",
+                "password": "",
+                "path": "/export/baldwin32/test/"
+            }
+        },
+        "outputs": {
+            "status": ""
+        }
     }
 }
