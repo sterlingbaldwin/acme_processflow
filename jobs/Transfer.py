@@ -5,6 +5,7 @@ import os, sys, json
 from optparse import OptionParser
 from datetime import datetime, timedelta
 import time
+from uuid import uuid4
 from globusonline.transfer import api_client
 from globusonline.transfer.api_client import Transfer as globus_transfer
 from globusonline.transfer.api_client import TransferAPIClient
@@ -25,8 +26,9 @@ class Transfer(object):
         self.status = 'unvalidated'
         self.type = 'transfer'
         self.outputs = {
-            "status": "unvalidated"
+            "status": self.status
         }
+        self.uuid = uuid4().hex
         self.inputs = {
             'recursive': '',
             'globus_username': '',
@@ -42,8 +44,9 @@ class Transfer(object):
             with open(conf_path, 'r') as infile:
                 config = json.load(infile)
             with open(conf_path, 'w') as outfile:
-                config[self.type]['inputs'] = self.config
-                config[self.type]['outputs'] = self.outputs
+                config[self.uuid]['inputs'] = self.config
+                config[self.uuid]['outputs'] = self.outputs
+                config[self.uuid]['type'] = self.type
                 json.dump(config, outfile, indent=4)
         except Exception as e:
             print_message('Error saving configuration file')

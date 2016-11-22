@@ -2,6 +2,7 @@
 # pylint: disable=C0111
 # pylint: disable=C0301
 import json
+import paramiko
 from util import print_debug
 from util import print_message
 
@@ -10,11 +11,25 @@ class Pipeline(object):
     """
         A job pipeline. Stores, validates, and executes ACME workflow jobs.
     """
-    def __init__(self):
+    def __init__(self, remote=False, username=None, password=None, privatekey=None):
         self.pipe = []
         self.status = 'empty'
         self.outputs = []
         self.conf_path = ''
+        self.remote = remote
+        self.username = username
+        self.password = password
+        self.privatekey = privatekey
+
+    def generate_jobs(self, data_path):
+        """
+            Populate the pipeline based on the data in the data_path
+        """
+        if self.remote:
+            # handle remote files
+            print 'remote'
+        else:
+            data_files = os.listdir(data_path)
 
     def set_conf_path(self, path):
         self.conf_path = path
@@ -34,7 +49,7 @@ class Pipeline(object):
         """
         valid = True
         for job in self.pipe:
-            if job.validate() == -1:
+            if job.prevalidate() == -1:
                 valid = False
         if valid:
             self.status = 'valid'
@@ -52,6 +67,7 @@ class Pipeline(object):
             return
         for i, j in enumerate(self.pipe):
             outputs = j.execute()
+            valid, error = j.postvalidate()
             if i != len(self.pipe) - 1:
                 # self.pipe[i + 1].inputs.update(outputs)
                 if j.type == 'diagnostic' and self.pipe[i + 1].type == 'transfer':
