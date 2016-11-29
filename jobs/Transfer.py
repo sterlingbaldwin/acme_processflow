@@ -30,13 +30,14 @@ class Transfer(object):
         }
         self.uuid = uuid4().hex
         self.inputs = {
+            'file_list': '',
             'recursive': '',
             'globus_username': '',
             'globus_password': '',
             'source_endpoint': '',
             'destination_endpoint': ''
         }
-        self.validate(config)
+        self.prevalidate(config)
         self.msg = None
 
     def save(self, conf_path):
@@ -59,7 +60,7 @@ class Transfer(object):
             'status': self.status
         }, indent=4)
 
-    def validate(self, config=None):
+    def prevalidate(self, config=None):
         """
             Validates transfer inputs
         """
@@ -75,6 +76,8 @@ class Transfer(object):
                         self.config[i] = True
                     else:
                         self.config[i] = False
+                elif i == 'file_list':
+                    self.config[i] = inputs.get(i)
                 elif i == 'globus_username':
                     self.config[i] = inputs.get(i)
                 elif i == 'globus_password':
@@ -86,11 +89,19 @@ class Transfer(object):
 
         for i in self.inputs:
             if i not in self.config:
-                print_message('Missing transfer argument {}'.format(i))
-                self.status = 'invalid'
-                return -1
+                if i == 'file_list':
+                    self.config[i] = ''
+                elif i == 'recurcive':
+                    self.config[i] = False
+                else:
+                    print_message('Missing transfer argument {}'.format(i))
+                    self.status = 'invalid'
+                    return -1
         self.status = 'valid'
         return 0
+    
+    def postvalidate(self):
+        print 'transfer postvalidate'
 
     def activate_endpoint(self, api_client, endpoint, username, password):
         code, reason, result = api_client.endpoint_autoactivate(endpoint, if_expires_in=2880)
@@ -167,19 +178,20 @@ class Transfer(object):
                     self.config.get('recursive')),
                 recursive=self.config.get('recursive'))
         # Add srclist to the transfer task
-        source_list = self.config.get('srclist')
+        source_list = self.config.get('file_list')
         if source_list:
             try:
                 with open(source_list) as f:
-                    srcpath = f.readline().rstrip('\n')
-                    dst_path = self.get_destination_path(
-                        srcpath,
-                        self.config.get('destination_endpoint').get('path'),
-                        self.config.get('recursive'))
-                    transfer_task.add_item(
-                        srcpath,
-                        dst_path,
-                        recursive=self.config.get('recursive'))
+                    srcpath = [line.rstrip('\n') for line in f.readlines()]
+                    for path in srcpath:
+                        dst_path = self.get_destination_path(
+                            path,
+                            self.config.get('destination_endpoint').get('path'),
+                            self.config.get('recursive'))
+                        transfer_task.add_item(
+                            path,
+                            dst_path,
+                            recursive=self.config.get('recursive'))
             except IOError as e:
                 print_debug(e)
                 print_message('Error opening source list')
