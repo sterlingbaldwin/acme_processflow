@@ -35,7 +35,13 @@ class Transfer(object):
             'globus_username': '',
             'globus_password': '',
             'source_endpoint': '',
-            'destination_endpoint': ''
+            'destination_endpoint': '',
+            'source_username': '',
+            'source_password': '',
+            'destination_username': '',
+            'destination_password': '',
+            'source_path': '',
+            'destination_path': ''
         }
         self.prevalidate(config)
         self.msg = None
@@ -66,7 +72,7 @@ class Transfer(object):
         """
         if self.status == 'valid':
             return 0
-        inputs = config.get('inputs')
+        inputs = config
         for i in inputs:
             if i not in self.inputs:
                 print_message("Unexpected arguement: {}, {}".format(i, inputs[i]))
@@ -76,15 +82,7 @@ class Transfer(object):
                         self.config[i] = True
                     else:
                         self.config[i] = False
-                elif i == 'file_list':
-                    self.config[i] = inputs.get(i)
-                elif i == 'globus_username':
-                    self.config[i] = inputs.get(i)
-                elif i == 'globus_password':
-                    self.config[i] = inputs.get(i)
-                elif i == 'source_endpoint':
-                    self.config[i] = inputs.get(i)
-                elif i == 'destination_endpoint':
+                else:
                     self.config[i] = inputs.get(i)
 
         for i in self.inputs:
@@ -99,20 +97,18 @@ class Transfer(object):
                     return -1
         self.status = 'valid'
         return 0
-    
+
     def postvalidate(self):
         print 'transfer postvalidate'
 
     def activate_endpoint(self, api_client, endpoint, username, password):
         code, reason, result = api_client.endpoint_autoactivate(endpoint, if_expires_in=2880)
-        print code, reason, result
         if result["code"] == "AutoActivationFailed":
             reqs = result
             myproxy_hostname = None
             for r in result['DATA']:
                 if r['type'] == 'myproxy' and r['name'] == 'hostname':
                     myproxy_hostname = r['value']
-                    print 'myproxy_hostname: ', myproxy_hostname
             reqs.set_requirement_value("myproxy", "hostname", myproxy_hostname)
             reqs.set_requirement_value("myproxy", "username", username)
             reqs.set_requirement_value("myproxy", "passphrase", password)
@@ -136,16 +132,12 @@ class Transfer(object):
 
     def execute(self):
         print_message('Starting transfer job from {src} to {dst}'.format(
-            src=self.config.get('source_endpoint').get('comment'),
-            dst=self.config.get('destination_endpoint').get('comment')
+            src=self.config.get('source_endpoint'),
+            dst=self.config.get('destination_endpoint')
         ), 'ok')
         # Map legacy endpoint names to UUIDs
-        srcendpoint = self.config.get('source_endpoint').get('uuid')
-        dstendpoint = self.config.get('destination_endpoint').get('uuid')
-        if '#' in srcendpoint:
-            srcendpoint = self.config.get('source_endpoint').get('comment')
-        if '#' in dstendpoint:
-            dstendpoint = self.config.get('destination_endpoint').get('comment')
+        srcendpoint = self.config.get('source_endpoint')
+        dstendpoint = self.config.get('destination_endpoint')
 
         # Get access token (This method of getting an acces token is deprecated and should be replaced by OAuth2 calls).
         globus_username = self.config.get('globus_username')
@@ -154,11 +146,11 @@ class Transfer(object):
 
         # Create a transfer submission
         api_client = TransferAPIClient(globus_username, goauth=auth_result.token)
-        source_user = self.config.get('source_endpoint').get('username')
-        source_pass = self.config.get('source_endpoint').get('password')
+        source_user = self.config.get('source_username')
+        source_pass = self.config.get('source_password')
         self.activate_endpoint(api_client, srcendpoint, source_user, source_pass)
-        dst_user = self.config.get('destination_endpoint').get('username')
-        dst_pass = self.config.get('destination_endpoint').get('password')
+        dst_user = self.config.get('destination_username')
+        dst_pass = self.config.get('destination_password')
         self.activate_endpoint(api_client, dstendpoint, dst_user, dst_pass)
 
         code, message, data = api_client.transfer_submission_id()
@@ -166,32 +158,30 @@ class Transfer(object):
         deadline = datetime.utcnow() + timedelta(days=10)
         transfer_task = globus_transfer(submission_id, srcendpoint, dstendpoint, deadline)
 
-        # Add srcpath to the transfer task
-        source_path = self.config.get('source_endpoint').get('path')
-        destination_path = self.config.get('destination_endpoint').get('path')
-        if source_path:
-            transfer_task.add_item(
-                source_path,
-                self.get_destination_path(
-                    source_path,
-                    destination_path,
-                    self.config.get('recursive')),
-                recursive=self.config.get('recursive'))
+        # # Add srcpath to the transfer task
+        # source_path = self.config.get('source_path')
+        # destination_path = self.config.get('destination_path')
+        # if source_path:
+        #     transfer_task.add_item(
+        #         source_path,
+        #         self.get_destination_path(
+        #             source_path,
+        #             destination_path,
+        #             self.config.get('recursive')),
+        #         recursive=self.config.get('recursive'))
         # Add srclist to the transfer task
         source_list = self.config.get('file_list')
         if source_list:
             try:
-                with open(source_list) as f:
-                    srcpath = [line.rstrip('\n') for line in f.readlines()]
-                    for path in srcpath:
-                        dst_path = self.get_destination_path(
-                            path,
-                            self.config.get('destination_endpoint').get('path'),
-                            self.config.get('recursive'))
-                        transfer_task.add_item(
-                            path,
-                            dst_path,
-                            recursive=self.config.get('recursive'))
+                for path in source_list:
+                    dst_path = self.get_destination_path(
+                        path,
+                        self.config.get('destination_path'),
+                        self.config.get('recursive'))
+                    transfer_task.add_item(
+                        path,
+                        dst_path,
+                        recursive=self.config.get('recursive'))
             except IOError as e:
                 print_debug(e)
                 print_message('Error opening source list')
