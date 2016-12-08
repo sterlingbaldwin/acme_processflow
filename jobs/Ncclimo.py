@@ -107,3 +107,9 @@ class Climo(object):
                 self.config[i] = config.get(i)
         self.status = 'valid'
         return 0
+
+    def postvalidate(self):
+        """
+            Post execution validation
+        """
+        print "post validation"
