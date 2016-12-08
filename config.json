@@ -12,5 +12,8 @@
     "source_endpoint": "b9d02196-6d04-11e5-ba46-22000b92c6ec",
     "destination_endpoint": "43d64772-a82e-11e5-99d3-22000b96db58",
     "source_path": "/global/homes/s/sbaldwin/test",
-    "output_pattern": "\\.txt"
+    "output_pattern": "\\.txt",
+    "simulation_start_year": 1,
+    "simulation_end_year": 6,
+    "set_frequency": 5
 }
