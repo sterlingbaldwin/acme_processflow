@@ -2,7 +2,6 @@
 # pylint: disable=C0111
 # pylint: disable=C0301
 import os, sys, json
-from optparse import OptionParser
 from datetime import datetime, timedelta
 import time
 from uuid import uuid4
