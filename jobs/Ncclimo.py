@@ -17,6 +17,7 @@ class Climo(object):
         self.status = 'unvarified'
         self.type = 'climo'
         self.uuid = uuid4().hex
+        self.yearset = config.get('yearset', 0)
         self.outputs = {
             'status': self.status,
             'climos': '',
@@ -31,30 +32,32 @@ class Climo(object):
             'input_directory': '',
             'climo_output_directory': '',
             'regrid_output_directory': '',
-            'regrid_map_path': ''
+            'regrid_map_path': '',
+            'yearset': '',
         }
         self.proc = None
+        self.prevalidate(config)
 
     def execute(self):
         """
             Calls ncclimo in a subprocess
         """
         cmd = [
-            'ncclimo',
-            '-c', self.inputs['caseId'],
-            '-a', self.inputs['annual_mode'],
-            '-s', self.inputs['start_year'],
-            '-e', self.inputs['end_year'],
-            '-i', self.inputs['input_directory'],
-            '-r', self.inputs['regrid_map_path'],
-            '-o', self.inputs['climo_output_directory'],
-            '-O', self.inputs['regrid_output_directory']
+            '/export/baldwin32/scripts/ncclimo',
+            '-c', self.config['caseId'],
+            '-a', self.config['annual_mode'],
+            '-s', self.config['start_year'],
+            '-e', self.config['end_year'],
+            '-i', self.config['input_directory'],
+            '-r', self.config['regrid_map_path'],
+            '-o', self.config['climo_output_directory'],
+            '-O', self.config['regrid_output_directory']
         ]
         self.proc = Popen(
             cmd,
             stdout=PIPE,
             stderr=PIPE,
-            shell=True)
+            shell=False)
         self.status = 'running'
         done = 2
         console_output = ''
@@ -66,6 +69,7 @@ class Climo(object):
             lines = self.proc.stderr.readlines()
             for line in lines:
                 console_output += line
+            print console_output
             if done < 0:
                 break
             sleep(1)
