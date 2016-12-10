@@ -22,6 +22,7 @@ class Diagnostic(object):
         self.proc = None
         self.type = 'diagnostic'
         self.status = 'unvalidated'
+        self.yearset = config.get('yearset', 0)
         self.uuid = uuid4().hex
         self.inputs = {
             '--model': '',
