@@ -13,12 +13,10 @@ from shutil import copy, rmtree
 from getpass import getpass
 from jobs.Diagnostic import Diagnostic
 from jobs.Transfer import Transfer
+from jobs.Ncclimo import Climo
 from Monitor import Monitor
 from util import print_debug
 from util import print_message
-
-global debug
-debug = False
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-c', '--config', help='Path to configuration file')
@@ -68,33 +66,7 @@ def setup(parser):
                 config[field] = raw_input('{0}: '.format(field))
     return config
 
-def handle_transfer(transfer_job):
-    if debug:
-        print_message("starting transfer job", 'ok')
-    transfer_job.execute()
-    for file in monitor.get_new_files():
-        copy(
-            src='{tmp}/{file}'.format(tmp=tmpdir, file=file),
-            dst=config.get('data_cache_path') + '/'
-        )
-    rmtree(tmpdir)
-    if debug:
-        print_message("transfer job complete", 'ok')
-
-if __name__ == "__main__":
-
-    # Initialize the job list
-    job_list = {}
-    job_counter = 0
-
-    # Read in parameters from config
-    config = setup(parser)
-    if config == -1:
-        print "Error in setup, exiting"
-        sys.exit()
-    year_sets = (int(config.get('simulation_end_year')) - int(config.get('simulation_start_year'))) / int(config.get('set_frequency'))
-    job_sets = [{'status': 'no data'} for i in range(year_sets)]
-    # Setup remote monitoring system
+def monitor_check():
     monitor = Monitor({
         'remote_host': config.get('compute_host'),
         'remote_dir': config.get('source_path'),
@@ -116,8 +88,37 @@ if __name__ == "__main__":
         # find which year set the data belongs to
         for f in monitor.get_new_files():
             index = re.search("[0-9][0-9][0-9][0-9]", f).start()
-            year_set = int(floor(int(f[index: index + 4]) / config.get('set_frequency')))
-            year_sets[year_set].status = 'data in transit'
+            year = int(f[index: index + 4])
+            year_set = int(floor(year / config.get('set_frequency')))
+            if year_sets[year_set].status == 'no data':
+                # Change year set state
+                year_sets[year_set].status = 'data in transit'
+                # Spawn jobs for that yearset
+                climo = Climo({
+                    'start_year': year_set,
+                    'end_year': year_set + 5,
+                    'caseId': config.get('experiment'),
+                    'anual_mode': 'sdd',
+                    'regrid_map_path': os.getcwd() + '/resources/map_ne30np4_to_fv129x256_aave.20150901.nc',
+                    'input_directory': os.getcwd() + '/cache/',
+                    'climo_output_directory': os.getcwd() + '/output',
+                    'regrid_output_directory': os.getcwd() + 'output/regrid/',
+                    'yearset': year_set
+                })
+                job_counter += 1
+                job_list[job_counter] = climo
+                diag = Diagnostic({
+                    '--model': os.getcwd() + '/cache',
+                    '--obs': os.getcwd() + '/resources/obs_for_diagnostics',
+                    '--outputdir': os.getcwd() + '/output/diagnostics',
+                    '--package': 'amwg',
+                    '--set': '5',
+                    '--archive': 'False',
+                    'yearset': year_set
+                })
+                job_counter += 1
+                job_list[job_counter] = diag
+
 
         file_list = ['{path}/{file}'.format(path=config.get('source_path'), file=f)  for f in monitor.get_new_files()]
         tmpdir = os.getcwd() + '/tmp/'
@@ -139,6 +140,44 @@ if __name__ == "__main__":
         job_list[job_counter] = t
         thread = threading.Thread(target=handle_transfer, args=t)
         thread.start()
+
+def handle_transfer(transfer_job):
+    if debug:
+        print_message("starting transfer job", 'ok')
+    transfer_job.execute()
+    for file in monitor.get_new_files():
+        copy(
+            src='{tmp}/{file}'.format(tmp=tmpdir, file=file),
+            dst=config.get('data_cache_path') + '/'
+        )
+    rmtree(tmpdir)
+    if debug:
+        print_message("transfer job complete", 'ok')
+
+if __name__ == "__main__":
+    global debug
+    global job_list
+    global job_counter
+    global config
+    debug = False
+    # Initialize the job list
+    job_list = {}
+    job_counter = 0
+
+    # Read in parameters from config
+    config = setup(parser)
+    if config == -1:
+        print "Error in setup, exiting"
+        sys.exit()
+    year_sets = (int(config.get('simulation_end_year')) - int(config.get('simulation_start_year'))) / int(config.get('set_frequency'))
+    job_sets = [{'status': 'no data'} for i in range(year_sets)]
+    
+    # Main loop
+    while True:
+        # Setup remote monitoring system
+        monitor_check()
+        # Check if a year_set is ready to run
+        sleep(10)
 
 
 
