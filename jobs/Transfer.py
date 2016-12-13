@@ -59,6 +59,9 @@ class Transfer(object):
             print_debug(e)
             raise
 
+    def get_file_list(self):
+        return self.inputs.get('file_list')
+
     def __str__(self):
         return pformat({
             'config': self.config,
