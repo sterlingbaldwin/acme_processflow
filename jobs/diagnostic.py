@@ -24,20 +24,22 @@ class Diagnostic(object):
         self.status = 'unvalidated'
         self.yearset = config.get('yearset', 0)
         self.uuid = uuid4().hex
+        self.depends_on = []
         self.inputs = {
             '--model': '',
             '--obs': '',
             '--outputdir': '',
             '--package': '',
             '--set': '',
-            '--archive': ''
+            '--archive': '',
+            'depends_on': ''
         }
         self.outputs = {
             'output_path': '',
             'console_output': '',
             'status': self.status
         }
-        self.validate(config)
+        self.prevalidate(config)
 
     def __str__(self):
         return pformat({
@@ -45,7 +47,16 @@ class Diagnostic(object):
             'status': self.status
         }, indent=4)
 
+    def get_type(self):
+        """
+            Returns job type
+        """
+        return self.type
+
     def save(self, conf_path):
+        """
+            Saves job configuration to a json file at conf_path
+        """
         try:
             with open(conf_path, 'r') as infile:
                 config = json.load(infile)
@@ -155,7 +166,7 @@ class Diagnostic(object):
         """
         if self.status == 'valid':
             return 0
-        inputs = config.get('inputs')
+        inputs = config
         for i in inputs:
             if i not in self.inputs:
                 print_message('Unexpected argument: {}, {}'.format(i, config[i]))
@@ -172,6 +183,10 @@ class Diagnostic(object):
                     self.config['--set'] = inputs[i]
                 elif i == '--archive':
                     self.config['--archive'] = inputs[i]
+                elif i == 'depends_on':
+                    self.depends_on = inputs[i]
+                else:
+                    self.config[i] = inputs[i]
 
         for i in self.inputs:
             if i not in self.config:
