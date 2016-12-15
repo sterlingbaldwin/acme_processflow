@@ -38,6 +38,12 @@ class Climo(object):
         self.proc = None
         self.prevalidate(config)
 
+    def get_type(self):
+        """
+            Returns job type
+        """
+        return self.type
+
     def execute(self):
         """
             Calls ncclimo in a subprocess
@@ -79,6 +85,9 @@ class Climo(object):
         self.status = 'complete'
 
     def save(self, conf_path):
+        """
+            Saves job configuration to a json file at conf_path
+        """
         try:
             with open(conf_path, 'r') as infile:
                 config = json.load(infile)
