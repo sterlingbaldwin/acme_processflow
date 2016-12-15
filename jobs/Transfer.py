@@ -46,6 +46,9 @@ class Transfer(object):
         self.msg = None
 
     def save(self, conf_path):
+        """
+            Saves job configuration to a json file at conf_path
+        """
         try:
             with open(conf_path, 'r') as infile:
                 config = json.load(infile)
@@ -58,6 +61,12 @@ class Transfer(object):
             print_message('Error saving configuration file')
             print_debug(e)
             raise
+
+    def get_type(self):
+        """
+            Returns job type
+        """
+        return self.type
 
     def get_file_list(self):
         return self.inputs.get('file_list')
@@ -74,18 +83,17 @@ class Transfer(object):
         """
         if self.status == 'valid':
             return 0
-        inputs = config
-        for i in inputs:
+        for i in config:
             if i not in self.inputs:
-                print_message("Unexpected arguement: {}, {}".format(i, inputs[i]))
+                print_message("Unexpected arguement: {}, {}".format(i, config[i]))
             else:
                 if i == 'recursive':
-                    if inputs.get(i) == 'True':
+                    if config.get(i) == 'True':
                         self.config[i] = True
                     else:
                         self.config[i] = False
                 else:
-                    self.config[i] = inputs.get(i)
+                    self.config[i] = config.get(i)
 
         for i in self.inputs:
             if i not in self.config:
