@@ -16,5 +16,9 @@
     "simulation_start_year": 1,
     "simulation_end_year": 6,
     "set_frequency": 5,
-    "experiment": "20161117.beta0.A_WCYCL1850.ne30_oEC.edison"
+    "experiment": "20161117.beta0.A_WCYCL1850.ne30_oEC.edison",
+    "diag_viewer_username": "",
+    "diag_viewer_password": "",
+    "diag_viewer_server": "",
+    "obs_for_diagnostics_path": ""
 }
