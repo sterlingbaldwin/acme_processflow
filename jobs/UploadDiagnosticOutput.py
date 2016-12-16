@@ -2,7 +2,7 @@ from uuid import uuid4
 from diagsviewer import DiagnosticsViewerClient
 from util import print_debug
 from util import print_message
-
+from pprint import pformat
 
 class UploadDiagnosticOutput(object):
     def __init__(self, config):
@@ -29,6 +29,12 @@ class UploadDiagnosticOutput(object):
             Returns job type
         """
         return self.type
+
+    def __str__(self):
+        return pformat({
+        'config': self.config,
+        'status': self.status
+    }, indent=4)
 
     def save(self, conf_path):
         """
