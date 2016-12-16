@@ -77,10 +77,8 @@ def setup(parser):
     return config
 
 def monitor_check(monitor):
-    # global job_list
-    global job_counter
-    # global config
-    # global file_list
+    global job_sets
+
     monitor.check()
     new_files = monitor.get_new_files()
     checked_new_files = []
@@ -88,6 +86,7 @@ def monitor_check(monitor):
         key = filename_to_file_list_key(f)
         if not file_list[key] == 'data ready':
             checked_new_files.append(f)
+    # if there are any new files
     if checked_new_files:
         if debug:
             print_message('Found new files: {}\n setting up transfer'.format(
@@ -96,23 +95,29 @@ def monitor_check(monitor):
         # find which year set the data belongs to
         for f in new_files:
             year_set = filename_to_year_set(f)
-            for key in job_sets:
-                if key.get('year_set') == year_set:
-                    if key.get('status') == 'no data':
-                        # Change year set state
-                        key['status'] = 'data in transit'
+            for job_set in job_sets:
+                print_message(job_set)
+                if job_set.get('year_set') == year_set:
+                    # if before we got here, the job_set didnt have any data, now that we have some data
+                    # we create the processing jobs and add them to the job_sets list of jobs
+                    if job_set.get('status') == 'no data':
+                        # Change job_sets' state
+                        job_set['status'] = 'data in transit'
                         # Spawn jobs for that yearset
+                        # first initialize the climo job
                         climo_output_dir = config.get('output_path') + '/year_set_' + str(year_set)
                         if not os.path.exists(climo_output_dir):
                             os.makedirs(climo_output_dir)
                         regrid_output_dir = config.get('output_path') + '/regrid'
                         if not os.path.exists(regrid_output_dir):
                             os.makedirs(regrid_output_dir)
+                        climo_start_year = config.get('simulation_start_year') + ((year_set - 1) * config.get('set_frequency'))
+                        climo_end_year = climo_start_year + config.get('set_frequency') - 1
                         climo_config = {
-                            'start_year': year_set,
-                            'end_year': year_set + 5,
+                            'start_year': climo_start_year,
+                            'end_year': climo_end_year,
                             'caseId': config.get('experiment'),
-                            'anual_mode': 'sdd',
+                            'annual_mode': 'sdd',
                             'regrid_map_path': config.get('regrid_map_path'),
                             'input_directory': config.get('data_cache_path') + '/year_set_' + str(year_set),
                             'climo_output_directory': climo_output_dir,
@@ -120,8 +125,10 @@ def monitor_check(monitor):
                             'yearset': year_set
                         }
                         climo = Climo(climo_config)
-                        job_counter += 1
-                        job_list[job_counter] = climo
+                        job_set['jobs'].append(climo)
+                        print_message('adding climo job')
+
+                        # second init the diagnostic job
                         diag_output_path = config.get('output_path') + '/diagnostics/year_set_' + str(year_set)
                         if not os.path.exists(diag_output_path):
                             os.makedirs(diag_output_path)
@@ -133,28 +140,33 @@ def monitor_check(monitor):
                             '--set': '5',
                             '--archive': 'False',
                             'yearset': year_set,
-                            'depends_on': job_counter
+                            'depends_on': len(job_set['jobs']) - 1 # set the diag job to wait for the climo job to finish befor running
                         }
                         diag = Diagnostic(diag_config)
-                        job_counter += 1
-                        job_list[job_counter] = diag
+                        job_set['jobs'].append(diag)
+                        print_message('adding diag job')
+
+                        # third init the upload job
                         upload = UploadDiagnosticOutput({
                             'path': diag_config.get('--outputdir'),
                             'username': config.get('diag_viewer_username'),
                             'password': config.get('diag_viewer_password'),
                             'server': config.get('diag_viewer_server'),
-                            'depends_on': job_counter
+                            'depends_on': len(job_set['jobs']) - 1 # set the upload job to wait for the diag job to finish
                         })
-                        job_counter += 1
-                        job_list[job_counter] = upload
+                        job_set['jobs'].append(upload)
+                        print_message('adding upload job')
 
+                        # finally init the publication job
+                        # TODO: create the publication job class and add it here
 
-        if debug:
-            for key in job_sets:
-                print_message("Yearset: {ys} status: {status}".format(
-                    ys=key.get('year_set'),
-                    status=key.get('status')
-                ), 'ok')
+        # if debug:
+        #     for job_set in job_sets:
+        #         print_message("Yearset: {ys} status: {status}, jobs: \n{}".format(
+        #             ys=job_set.get('year_set'),
+        #             status=job_set.get('status'),
+        #             jobs=pformat(job_set.get('jobs'))
+        #         ), 'ok')
 
 
         f_list = ['{path}/{file}'.format(path=config.get('source_path'), file=f)  for f in checked_new_files]
@@ -173,17 +185,13 @@ def monitor_check(monitor):
             'destination_path': tmpdir,
             'recursive': 'False'
         })
-        job_counter += 1
-        job_list[job_counter] = t
         thread = threading.Thread(target=handle_transfer, args=(t, checked_new_files))
         thread.start()
 
 def handle_transfer(transfer_job, f_list):
-    if debug:
-        print_message("starting transfer job for given files:", 'ok')
-        print pformat(f_list)
-    # change job_sets status for this set to 'data in transit'
-    # TODO
+    # if debug:
+    #     print_message("starting transfer job for given files:", 'ok')
+    #     print pformat(f_list)
 
     # start the transfer job
     transfer_job.execute()
@@ -197,12 +205,6 @@ def handle_transfer(transfer_job, f_list):
         src = os.path.join(tmpdir, f)
         if not os.path.exists(new_path):
             os.mkdir(new_path)
-
-        if debug:
-            print_message('copying from {src} to {dst}'.format(
-                src=src,
-                dst=new_path
-            ), 'ok')
 
         # copy the file to the correct year set folder
         try:
@@ -275,11 +277,6 @@ def check_year_sets():
             status = 'data ready'
         else:
             status = s['status']
-        if debug:
-            print_message('setting {year_set} status to {status}'.format(
-                year_set=s['year_set'],
-                status=status
-            ))
         s['status'] = status
 
 def check_for_inplace_data():
@@ -298,23 +295,30 @@ def start_ready_job_sets():
     """
         Iterates over the job sets, and starts ready jobs
     """
-    # TODO: get the jobs starting 
-    # the best way to do this is to change their execute functions to submit to a SLURM queue
-    # for s in job_sets:
-    #     if s['status'] = 'data ready':
-    #         for job in job_list:
-    #             if job.get_type == 'climo':
-                    
-                    
-
+    # TODO: get the jobs starting
+    # iterate over the job_sets
+    started_job = False
+    for job_set in job_sets:
+        # if the job state is ready, but hasnt started yet
+        if job_set['status'] == 'data ready':
+            for job in job_set['jobs']:
+                # if the job is a climo, and it hasnt been started yet, start it
+                if job.get_type() == 'climo' and job.status == 'valid':
+                    job_id = job.execute(batch=True)
+                    started_job = True
+                    # TODO: setup a queue monitoring system
+                # if the job isnt a climo, and the job that it depends on is done, start it
+                elif job.get_type != 'climo' and job_set['jobs'][job.depends_on].status == 'complete':
+                    job_id = job.execute(batch=True)
+                    started_job = True
+    if started_job:
+        # monitor the job
+        print 'placeholder'
 
 if __name__ == "__main__":
 
     file_list = {}
     debug = False
-    # Initialize the job list
-    job_list = {}
-    job_counter = 0
 
     # Read in parameters from config
     config = setup(parser)
@@ -331,7 +335,7 @@ if __name__ == "__main__":
             freq=config.get('set_frequency')
         ), 'ok')
     # initialize the job_sets dict
-    job_sets = [{'status': 'no data', 'year_set': i} for i in range(1, year_sets+1)]
+    job_sets = [{'status': 'no data', 'year_set': i, 'jobs': []} for i in range(1, year_sets+1)]
     start_year = config.get("simulation_start_year")
     end_year = config.get("simulation_end_year")
     sim_length = end_year - start_year + 1
@@ -373,7 +377,9 @@ if __name__ == "__main__":
         # Check if a year_set is ready to run
         check_year_sets()
         if debug:
-            print_message(pformat(job_sets))
+            for job_set in job_sets:
+                for job in job_set['jobs']:
+                    print_message(str(job))
         sleep(10)
 
 
