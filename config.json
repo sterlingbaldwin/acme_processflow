@@ -20,5 +20,6 @@
     "diag_viewer_username": "",
     "diag_viewer_password": "",
     "diag_viewer_server": "",
-    "obs_for_diagnostics_path": ""
+    "obs_for_diagnostics_path": "",
+    "regrid_map_path": "/export/baldwin32/projects/acme_workflow/resources/map_ne30np4_to_fv129x256_aave.20150901.nc"
 }
