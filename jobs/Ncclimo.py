@@ -18,6 +18,7 @@ class Climo(object):
         self.type = 'climo'
         self.uuid = uuid4().hex
         self.yearset = config.get('yearset', 0)
+        self.job_id = 0
         self.outputs = {
             'status': self.status,
             'climos': '',
@@ -36,6 +37,11 @@ class Climo(object):
             'yearset': '',
         }
         self.proc = None
+        self.slurm_args = {
+            'num_cores': '-n 16', # 16 cores
+            'run_time': '0-01:00', # 1 hour run time
+            'num_machines': '-N 1', # run on one machine
+        }
         self.prevalidate(config)
 
     def get_type(self):
@@ -44,7 +50,7 @@ class Climo(object):
         """
         return self.type
 
-    def execute(self):
+    def execute(self, batch=False):
         """
             Calls ncclimo in a subprocess
         """
@@ -57,32 +63,52 @@ class Climo(object):
             '-i', self.config['input_directory'],
             '-r', self.config['regrid_map_path'],
             '-o', self.config['climo_output_directory'],
-            '-O', self.config['regrid_output_directory']
+            '-O', self.config['regrid_output_directory'],
         ]
-        self.proc = Popen(
-            cmd,
-            stdout=PIPE,
-            stderr=PIPE,
-            shell=False)
-        self.status = 'running'
-        done = 2
-        console_output = ''
-        while done != 0:
-            done = self.proc.poll()
-            lines = self.proc.stdout.readlines()
-            for line in lines:
-                console_output += line
-            lines = self.proc.stderr.readlines()
-            for line in lines:
-                console_output += line
-            print console_output
-            if done < 0:
-                break
-            sleep(1)
-            self.outputs['console_output'] = console_output
-            print console_output
+        if not batch:
+            # Not running in batch mode
+            self.proc = Popen(
+                cmd,
+                stdout=PIPE,
+                stderr=PIPE,
+                shell=False)
+            self.status = 'running'
+            done = 2
+            console_output = ''
+            while done != 0:
+                done = self.proc.poll()
+                lines = self.proc.stdout.readlines()
+                for line in lines:
+                    console_output += line
+                lines = self.proc.stderr.readlines()
+                for line in lines:
+                    console_output += line
+                print console_output
+                if done < 0:
+                    break
+                sleep(1)
+                self.outputs['console_output'] = console_output
+                print console_output
 
-        self.status = 'complete'
+            self.status = 'complete'
+        else:
+            # Submitting the job to SLURM
+            cmd.append('-p mpi')
+            run_script = './run_scripts/ncclimo_job_' + str(self.uuid)
+            with open(run_script, 'w') as batchfile:
+                batchfile.write('#!/bin/bash\n')
+                slurm_prefix = '\n'.join(['#SBATCH ' + self.slurm_args[s] for s in self.slurm_args]) + '\n'
+                batchfile.write(slurm_prefix)
+                slurm_command = ' '.join(cmd)
+                batchfile.write(slurm_command)
+            slurm_cmd = ['sbatch', run_script]
+            self.proc = Popen(slurm_cmd, stdout=PIPE)
+            out = self.proc.communicate()
+            self.status = 'running'
+            index = out[0].find('job') + 4
+            self.job_id = int(out[0][index:].strip())
+            return self.job_id
+
 
     def save(self, conf_path):
         """
