@@ -19,6 +19,7 @@ class Climo(object):
         self.uuid = uuid4().hex
         self.yearset = config.get('yearset', 0)
         self.job_id = 0
+        self.depends_on = []
         self.outputs = {
             'status': self.status,
             'climos': '',
@@ -39,7 +40,7 @@ class Climo(object):
         self.proc = None
         self.slurm_args = {
             'num_cores': '-n 16', # 16 cores
-            'run_time': '0-01:00', # 1 hour run time
+            'run_time': '-t 0-01:00', # 1 hour run time
             'num_machines': '-N 1', # run on one machine
         }
         self.prevalidate(config)
@@ -58,8 +59,8 @@ class Climo(object):
             '/export/baldwin32/scripts/ncclimo',
             '-c', self.config['caseId'],
             '-a', self.config['annual_mode'],
-            '-s', self.config['start_year'],
-            '-e', self.config['end_year'],
+            '-s', str(self.config['start_year']),
+            '-e', str(self.config['end_year']),
             '-i', self.config['input_directory'],
             '-r', self.config['regrid_map_path'],
             '-o', self.config['climo_output_directory'],
@@ -93,8 +94,10 @@ class Climo(object):
             self.status = 'complete'
         else:
             # Submitting the job to SLURM
-            cmd.append('-p mpi')
+            # cmd.append('-p mpi')
             run_script = './run_scripts/ncclimo_job_' + str(self.uuid)
+            self.slurm_args['error_file'] = '-e {error_file}'.format(error_file=run_script + '.err')
+            self.slurm_args['output_file'] = '-o {output_file}'.format(output_file=run_script + '.out')
             with open(run_script, 'w') as batchfile:
                 batchfile.write('#!/bin/bash\n')
                 slurm_prefix = '\n'.join(['#SBATCH ' + self.slurm_args[s] for s in self.slurm_args]) + '\n'
@@ -102,13 +105,30 @@ class Climo(object):
                 slurm_command = ' '.join(cmd)
                 batchfile.write(slurm_command)
             slurm_cmd = ['sbatch', run_script]
-            self.proc = Popen(slurm_cmd, stdout=PIPE)
-            out = self.proc.communicate()
-            self.status = 'running'
-            index = out[0].find('job') + 4
-            self.job_id = int(out[0][index:].strip())
+            started = False
+            retry_count = 5
+            while not started:
+                self.proc = Popen(slurm_cmd, stdout=PIPE)
+                output = self.proc.communicate()[0]
+                print_message('+++++ STARTING CLIMO JOB +++++\n{}'.format(output))
+                if 'Submitted batch job' in output or retry_count <= 0:
+                    started = True
+                    if retry_count <= 0:
+                        print_message("Error starting climo job")
+                        print_message(output)
+                        self.job_id = 0
+                        break
+                else:
+                    retry_count -= 1
+                    continue
+                self.status = 'running'
+                index = output.find('job') + 4
+                self.job_id = int(output[index:].strip())
+                print_message('+++++ job_id: {} *****'.format(self.job_id))
             return self.job_id
 
+    def set_status(self, status):
+        self.status = status
 
     def save(self, conf_path):
         """
@@ -129,8 +149,10 @@ class Climo(object):
 
     def __str__(self):
         return pformat({
+            'type': self.type,
             'config': self.config,
-            'status': self.status
+            'status': self.status,
+            'depends_on': self.depends_on
         }, indent=4)
 
     def prevalidate(self, config):
