@@ -13,6 +13,8 @@ from shutil import copy, rmtree
 from getpass import getpass
 from time import sleep
 from pprint import pformat
+from subprocess import Popen, PIPE
+
 from jobs.Diagnostic import Diagnostic
 from jobs.Transfer import Transfer
 from jobs.Ncclimo import Climo
@@ -133,14 +135,14 @@ def monitor_check(monitor):
                         if not os.path.exists(diag_output_path):
                             os.makedirs(diag_output_path)
                         diag_config = {
-                            '--model': config.get('data_cache_path') + '/year_set_' + str(year_set),
+                            '--model': climo_output_dir,
                             '--obs': config.get('obs_for_diagnostics_path'),
                             '--outputdir': diag_output_path,
                             '--package': 'amwg',
                             '--set': '5',
                             '--archive': 'False',
                             'yearset': year_set,
-                            'depends_on': len(job_set['jobs']) - 1 # set the diag job to wait for the climo job to finish befor running
+                            'depends_on': [len(job_set['jobs']) - 1] # set the diag job to wait for the climo job to finish befor running
                         }
                         diag = Diagnostic(diag_config)
                         job_set['jobs'].append(diag)
@@ -148,11 +150,11 @@ def monitor_check(monitor):
 
                         # third init the upload job
                         upload = UploadDiagnosticOutput({
-                            'path': diag_config.get('--outputdir'),
+                            'path_to_diagnostic': diag_config.get('--outputdir'),
                             'username': config.get('diag_viewer_username'),
                             'password': config.get('diag_viewer_password'),
                             'server': config.get('diag_viewer_server'),
-                            'depends_on': len(job_set['jobs']) - 1 # set the upload job to wait for the diag job to finish
+                            'depends_on': [len(job_set['jobs']) - 1] # set the upload job to wait for the diag job to finish
                         })
                         job_set['jobs'].append(upload)
                         print_message('adding upload job')
@@ -185,10 +187,11 @@ def monitor_check(monitor):
             'destination_path': tmpdir,
             'recursive': 'False'
         })
-        thread = threading.Thread(target=handle_transfer, args=(t, checked_new_files))
+        thread = threading.Thread(target=handle_transfer, args=(t, checked_new_files, thread_kill_event))
+        thread_list.append(thread)
         thread.start()
 
-def handle_transfer(transfer_job, f_list):
+def handle_transfer(transfer_job, f_list, event):
     # if debug:
     #     print_message("starting transfer job for given files:", 'ok')
     #     print pformat(f_list)
@@ -220,8 +223,6 @@ def handle_transfer(transfer_job, f_list):
 
         # update the file_list for this file to reflect that the transfer is complete
         key = filename_to_file_list_key(f)
-        if debug:
-            print_message('setting {key} status to data ready'.format(key=key))
         file_list[key] = 'data ready'
     if debug:
         print_message("transfer job complete", 'ok')
@@ -295,29 +296,89 @@ def start_ready_job_sets():
     """
         Iterates over the job sets, and starts ready jobs
     """
+    global thread_list
     # TODO: get the jobs starting
     # iterate over the job_sets
-    started_job = False
+    print_message('=========== Checking for ready jobs =================', 'ok')
     for job_set in job_sets:
         # if the job state is ready, but hasnt started yet
+        print_message('job_set status: {}'.format(job_set['status']))
         if job_set['status'] == 'data ready':
             for job in job_set['jobs']:
                 # if the job is a climo, and it hasnt been started yet, start it
+                print_message('job type: {0}, job_status: {1}'.format(job.get_type(), job.status), 'ok')
                 if job.get_type() == 'climo' and job.status == 'valid':
                     job_id = job.execute(batch=True)
-                    started_job = True
+                    job.set_status('starting')
+                    print_message('Starting climo job for year_set {}'.format(job_set['year_set']), 'ok')
+                    thread = threading.Thread(target=monitor_job, args=(job_id, job, thread_kill_event))
+                    thread_list.append(thread)
+                    thread.start()
+                    return
                     # TODO: setup a queue monitoring system
                 # if the job isnt a climo, and the job that it depends on is done, start it
-                elif job.get_type != 'climo' and job_set['jobs'][job.depends_on].status == 'complete':
-                    job_id = job.execute(batch=True)
-                    started_job = True
-    if started_job:
-        # monitor the job
-        print 'placeholder'
+                elif job.get_type() != 'climo' and job.status == 'valid':
+                    ready = True
+                    for dependancy in job.depends_on:
+                        if job_set['jobs'][dependancy].status != 'complete':
+                            ready = False
+                    if ready:
+                        job_id = job.execute(batch=True)
+                        job.set_status('starting')
+                        print_message('Starting {0} job for year_set {1}'.format(job.get_type(), job_set['year_set']), 'ok')
+                        thread = threading.Thread(target=monitor_job, args=(job_id, job, thread_kill_event))
+                        thread_list.append(thread)
+                        thread.start()
+                        return
+                elif job.status == 'invalid':
+                    print_message('===== INVALID JOB =====\n{}'.format(str(job)))
+
+def monitor_job(job_id, job, event):
+    """
+        Monitor the slurm job, and update the status to 'complete' when it finishes
+    """
+    while True:
+        print_message('======= monitoring job {} ========='.format(job_id), 'ok')
+        if event.is_set():
+            return
+        cmd = ['squeue']
+        out = Popen(cmd, stdout=PIPE, stderr=PIPE).communicate()[0]
+        job_status = 'incomplete'
+        found_job = False
+        for line in out.split('\n'):
+            words = filter(None, line.split(' '))
+            print_message(words)
+            # the 0th word is the job_id, except for the first line
+            if len(words) == 0:
+                break
+            elif words[0] == 'JOBID':
+                continue
+            if int(words[0]) == job_id:
+                found_job = True
+                # the 4th word is the job status
+                for word in words:
+                    if word == 'R':
+                        job_status = 'running'
+                    elif word == 'PD':
+                        job_status = 'waiting in queue'
+                    else:
+                        job_status = 'question mark'
+            job.set_status(job_status)
+        if not found_job:
+            job_status = 'complete'
+            print_message(' ======= end job monitor, status: {}'.format(job_status))
+            job.set_status(job_status)
+            return
+        if job_status == 'complete':
+            break
+        sleep(10)
+
 
 if __name__ == "__main__":
 
     file_list = {}
+    thread_list = []
+    thread_kill_event = threading.Event()
     debug = False
 
     # Read in parameters from config
@@ -371,16 +432,26 @@ if __name__ == "__main__":
         print_message('unable to connect')
 
     # Main loop
-    while True:
-        # Setup remote monitoring system
-        monitor_check(monitor)
-        # Check if a year_set is ready to run
-        check_year_sets()
-        if debug:
-            for job_set in job_sets:
-                for job in job_set['jobs']:
-                    print_message(str(job))
-        sleep(10)
+    try:
+        while True:
+            # Setup remote monitoring system
+            monitor_check(monitor)
+            # Check if a year_set is ready to run
+            check_year_sets()
+            start_ready_job_sets()
+
+            if debug:
+                
+                for job_set in job_sets:
+                    for job in job_set['jobs']:
+                        print_message(str(job))
+            sleep(10)
+    except KeyboardInterrupt as e:
+        print_message('----- KEYBOARD INTERUPT -----')
+        print_message('cleaning up threads')
+        for t in thread_list:
+            thread_kill_event.set()
+            t.join()
 
 
 
