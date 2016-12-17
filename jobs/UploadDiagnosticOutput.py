@@ -32,9 +32,11 @@ class UploadDiagnosticOutput(object):
 
     def __str__(self):
         return pformat({
-        'config': self.config,
-        'status': self.status
-    }, indent=4)
+            'type': self.type,
+            'config': self.config,
+            'status': self.status,
+            'depends_on': self.depends_on
+        }, indent=4)
 
     def save(self, conf_path):
         """
@@ -66,6 +68,7 @@ class UploadDiagnosticOutput(object):
             else:
                 if i == 'depends_on':
                     self.depends_on = config.get(i)
+                    self.config[i] = config[i]
                 else:
                     self.config[i] = config[i]
         for i in self.inputs:
@@ -88,7 +91,7 @@ class UploadDiagnosticOutput(object):
             return
         self.status = 'complete'
 
-    def execute(self):
+    def execute(self, batch=False):
         """
             Upload the files in the given directory to the DiagnosticViewer on the given server
         """
@@ -112,3 +115,6 @@ class UploadDiagnosticOutput(object):
             return -1
         self.outputs['dataset_id'] = dataset_id
         self.status = 'complete'
+
+    def set_status(self, status):
+        self.status = status
