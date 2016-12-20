@@ -152,7 +152,8 @@ class Climo(object):
             'type': self.type,
             'config': self.config,
             'status': self.status,
-            'depends_on': self.depends_on
+            'depends_on': self.depends_on,
+            'uuid': self.uuid
         }, indent=4)
 
     def prevalidate(self, config):
