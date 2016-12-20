@@ -24,6 +24,9 @@ from util import print_debug
 from util import print_message
 
 
+from jobs.TestJob import TestJob
+
+
 parser = argparse.ArgumentParser()
 parser.add_argument('-c', '--config', help='Path to configuration file')
 parser.add_argument('-d', '--debug', help="Run in debug mode", action='store_true')
@@ -98,13 +101,30 @@ def monitor_check(monitor):
         for f in new_files:
             year_set = filename_to_year_set(f)
             for job_set in job_sets:
-                print_message(job_set)
                 if job_set.get('year_set') == year_set:
                     # if before we got here, the job_set didnt have any data, now that we have some data
                     # we create the processing jobs and add them to the job_sets list of jobs
                     if job_set.get('status') == 'no data':
                         # Change job_sets' state
                         job_set['status'] = 'data in transit'
+                        """
+                        # some test jobs
+                        test_1 = TestJob({})
+                        job_set['jobs'].append(test_1)
+                        print_message('Creating test job 1')
+
+                        test_2 = TestJob({
+                            'depends_on': [len(job_set['jobs']) - 1]
+                        })
+                        job_set['jobs'].append(test_2)
+                        print_message('Creating test job 2')
+
+                        test_3 = TestJob({
+                            'depends_on': [len(job_set['jobs']) - 1]
+                        })
+                        job_set['jobs'].append(test_3)
+                        print_message('Creating test job 3')
+                        """
                         # Spawn jobs for that yearset
                         # first initialize the climo job
                         climo_output_dir = config.get('output_path') + '/year_set_' + str(year_set)
@@ -115,13 +135,14 @@ def monitor_check(monitor):
                             os.makedirs(regrid_output_dir)
                         climo_start_year = config.get('simulation_start_year') + ((year_set - 1) * config.get('set_frequency'))
                         climo_end_year = climo_start_year + config.get('set_frequency') - 1
+                        model_path = os.path.join(config.get('data_cache_path'), 'year_set_' + str(year_set))
                         climo_config = {
                             'start_year': climo_start_year,
                             'end_year': climo_end_year,
                             'caseId': config.get('experiment'),
                             'annual_mode': 'sdd',
                             'regrid_map_path': config.get('regrid_map_path'),
-                            'input_directory': config.get('data_cache_path') + '/year_set_' + str(year_set),
+                            'input_directory': model_path,
                             'climo_output_directory': climo_output_dir,
                             'regrid_output_directory': regrid_output_dir,
                             'yearset': year_set
@@ -302,7 +323,7 @@ def start_ready_job_sets():
     print_message('=========== Checking for ready jobs =================', 'ok')
     for job_set in job_sets:
         # if the job state is ready, but hasnt started yet
-        print_message('job_set status: {}'.format(job_set['status']))
+        # print_message('job_set status: {}'.format(job_set['status']))
         if job_set['status'] == 'data ready':
             for job in job_set['jobs']:
                 # if the job is a climo, and it hasnt been started yet, start it
@@ -342,29 +363,60 @@ def monitor_job(job_id, job, event):
         if event.is_set():
             return
         cmd = ['squeue']
+        count = 5
         out = Popen(cmd, stdout=PIPE, stderr=PIPE).communicate()[0]
+        if 'error' in out:
+            valid = False
+        else:
+            valid = True
+        while not valid and count >= 0:
+            out = Popen(cmd, stdout=PIPE, stderr=PIPE).communicate()[0]
+            if 'error' in out:
+                valid = False
+                count -= 1
+            else:
+                valid = True
+        if not valid:
+            print_message('-------- Unable to communicate with SLURM controller ----------')
+            return
+
         job_status = 'incomplete'
         found_job = False
+        valid = False
         for line in out.split('\n'):
             words = filter(None, line.split(' '))
-            print_message(words)
+            if debug:
+                print_message(words, 'ok')
             # the 0th word is the job_id, except for the first line
             if len(words) == 0:
                 break
             elif words[0] == 'JOBID':
+                # if we dont see the line '['JOBID', 'PARTITION', 'NAME', 'USER', 'ST', 'TIME', 'NODES', 'NODELIST(REASON)']' then we know squeue didnt work right
+                valid = True
                 continue
-            if int(words[0]) == job_id:
+            try:
+                line_id = int(words[0])
+            except Exception as e:
+                print_message('Unable to convert {} into an int'.format(words[0]))
+                continue
+            if line_id == job_id:
                 found_job = True
                 # the 4th word is the job status
                 for word in words:
                     if word == 'R':
                         job_status = 'running'
+                        break
                     elif word == 'PD':
                         job_status = 'waiting in queue'
+                        break
                     else:
                         job_status = 'question mark'
+            if debug:
+                print_message('setting job status to {}'.format(job_status))
             job.set_status(job_status)
         if not found_job:
+            if not valid:
+                continue
             job_status = 'complete'
             print_message(' ======= end job monitor, status: {}'.format(job_status))
             job.set_status(job_status)
@@ -440,11 +492,10 @@ if __name__ == "__main__":
             check_year_sets()
             start_ready_job_sets()
 
-            if debug:
-                
-                for job_set in job_sets:
-                    for job in job_set['jobs']:
-                        print_message(str(job))
+            # if debug:
+            #     for job_set in job_sets:
+            #         for job in job_set['jobs']:
+            #             print_message(str(job))
             sleep(10)
     except KeyboardInterrupt as e:
         print_message('----- KEYBOARD INTERUPT -----')
