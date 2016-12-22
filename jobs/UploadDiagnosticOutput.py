@@ -3,6 +3,8 @@ from diagsviewer import DiagnosticsViewerClient
 from util import print_debug
 from util import print_message
 from pprint import pformat
+import json
+
 
 class UploadDiagnosticOutput(object):
     def __init__(self, config):
@@ -109,7 +111,8 @@ class UploadDiagnosticOutput(object):
             return -1
         self.outputs['id'] = client_id
         try:
-            dataset_id = client.upload_package(self.inputs.get('path_to_diagnostic'))
+            print_message('uploading diagnostic package from {}'.format(self.config.get('path_to_diagnostic')))
+            dataset_id = client.upload_package(self.config.get('path_to_diagnostic'))
         except Exception as e:
             print_debug(e)
             print_message('Error uploading diagnostic set to server')

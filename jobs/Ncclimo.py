@@ -1,13 +1,19 @@
 # pylint: disable=C0103
 # pylint: disable=C0111
 # pylint: disable=C0301
-from util import print_debug
-from util import print_message
-from uuid import uuid4
+import os
+import re
 import json
+
+from uuid import uuid4
 from pprint import pformat
 from subprocess import Popen, PIPE
 from time import sleep
+
+from util import print_debug
+from util import print_message
+
+
 class Climo(object):
     """
         A wrapper around ncclimo, used to compute the climotologies from raw output data
@@ -40,7 +46,7 @@ class Climo(object):
         self.proc = None
         self.slurm_args = {
             'num_cores': '-n 16', # 16 cores
-            'run_time': '-t 0-01:00', # 1 hour run time
+            'run_time': '-t 0-02:00', # 1 hour run time
             'num_machines': '-N 1', # run on one machine
         }
         self.prevalidate(config)
@@ -168,6 +174,18 @@ class Climo(object):
             else:
                 self.config[i] = config.get(i)
         self.status = 'valid'
+
+        # after checking that the job is valid to run,
+        # check if the output already exists and the job actually needs to run
+        if os.path.exists(self.config.get('climo_output_directory')):
+            contents = os.listdir(self.config.get('climo_output_directory'))
+            if len(contents) <= 10:
+                return 0
+            else:
+                for i in contents:
+                    if not re.match(self.config.get('caseId'), i):
+                        return 0
+                self.status = 'complete'
         return 0
 
     def postvalidate(self):
