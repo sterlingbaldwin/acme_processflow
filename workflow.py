@@ -72,6 +72,7 @@ def setup(parser):
                 else:
                     config[field] = raw_input("{0} not specified in config, please enter: ".format(field))
     else:
+        parser.print_help()
         print 'No configuration file given, initiating manual setup'
         config = {}
         for field in required_fields:
@@ -127,15 +128,17 @@ def monitor_check(monitor):
                         """
                         # Spawn jobs for that yearset
                         # first initialize the climo job
-                        climo_output_dir = config.get('output_path') + '/year_set_' + str(year_set)
+                        climo_output_dir = os.path.join(config.get('output_path') + '/year_set_' + str(year_set))
                         if not os.path.exists(climo_output_dir):
+                            if debug:
+                                print_message("Creating climotology output directory {}".format(climo_output_dir))
                             os.makedirs(climo_output_dir)
-                        regrid_output_dir = config.get('output_path') + '/regrid'
+                        regrid_output_dir = config.get('output_path') + '/regrid/year_set_' + str(year_set)
                         if not os.path.exists(regrid_output_dir):
                             os.makedirs(regrid_output_dir)
                         climo_start_year = config.get('simulation_start_year') + ((year_set - 1) * config.get('set_frequency'))
                         climo_end_year = climo_start_year + config.get('set_frequency') - 1
-                        model_path = os.path.join(config.get('data_cache_path'), 'year_set_' + str(year_set))
+                        model_path = config.get('data_cache_path') + '/year_set_' + str(year_set)
                         climo_config = {
                             'start_year': climo_start_year,
                             'end_year': climo_end_year,
@@ -151,12 +154,12 @@ def monitor_check(monitor):
                         job_set['jobs'].append(climo)
                         print_message('adding climo job')
 
-                        # second init the diagnostic job
+                        # # second init the diagnostic job
                         diag_output_path = config.get('output_path') + '/diagnostics/year_set_' + str(year_set)
                         if not os.path.exists(diag_output_path):
                             os.makedirs(diag_output_path)
                         diag_config = {
-                            '--model': climo_output_dir,
+                            '--model': regrid_output_dir,
                             '--obs': config.get('obs_for_diagnostics_path'),
                             '--outputdir': diag_output_path,
                             '--package': 'amwg',
@@ -165,13 +168,13 @@ def monitor_check(monitor):
                             'yearset': year_set,
                             'depends_on': [len(job_set['jobs']) - 1] # set the diag job to wait for the climo job to finish befor running
                         }
-                        diag = Diagnostic(diag_config)
-                        job_set['jobs'].append(diag)
-                        print_message('adding diag job')
+                        # diag = Diagnostic(diag_config)
+                        # job_set['jobs'].append(diag)
+                        # print_message('adding diag job')
 
                         # third init the upload job
                         upload = UploadDiagnosticOutput({
-                            'path_to_diagnostic': diag_config.get('--outputdir'),
+                            'path_to_diagnostic': diag_output_path + '/amwg/',
                             'username': config.get('diag_viewer_username'),
                             'password': config.get('diag_viewer_password'),
                             'server': config.get('diag_viewer_server'),
@@ -279,10 +282,13 @@ def filename_to_year_set(filename):
 
 def check_year_sets():
     """
-        Sets the status of the job_set tracker if the data is ready
+        Checks the file_list, and sets the year_set status to ready if all the files are in place
     """
     if debug:
-        print_message('job_sets: \n{sets}'.format(sets=pformat(job_sets)))
+        print_message('job_sets:'.format(sets=pformat(job_sets)))
+        for s in job_sets:
+            for job in s['jobs']:
+                print_message('    {}'.format(str(job)))
     for s in job_sets:
         set_start_year = config.get('simulation_start_year') + ((s.get('year_set') - 1) * config.get('set_frequency'))
         set_end_year = set_start_year + config.get('set_frequency') - 1
@@ -354,21 +360,27 @@ def start_ready_job_sets():
                 elif job.status == 'invalid':
                     print_message('===== INVALID JOB =====\n{}'.format(str(job)))
 
-def monitor_job(job_id, job, event):
+def monitor_job(job_id, job, event=None):
     """
         Monitor the slurm job, and update the status to 'complete' when it finishes
     """
     while True:
         print_message('======= monitoring job {} ========='.format(job_id), 'ok')
-        if event.is_set():
+        # this function should only called in its own thread
+        # this check is hear in case the loop is stuck and the thread needs to be canceled
+        if event and event.is_set():
             return
         cmd = ['squeue']
         count = 5
         out = Popen(cmd, stdout=PIPE, stderr=PIPE).communicate()[0]
+
+        # sometimes there will be a communication error with the SLURM controller
+        # in which case the controller returns 'error: some message'
         if 'error' in out:
             valid = False
         else:
             valid = True
+        # re-request the queue status if there was an error
         while not valid and count >= 0:
             out = Popen(cmd, stdout=PIPE, stderr=PIPE).communicate()[0]
             if 'error' in out:
@@ -377,10 +389,11 @@ def monitor_job(job_id, job, event):
             else:
                 valid = True
         if not valid:
+            # if the controller errors 5 times in a row, its probably an unrecoverable error
             print_message('-------- Unable to communicate with SLURM controller ----------')
             return
 
-        job_status = 'incomplete'
+        job_status = 'running'
         found_job = False
         valid = False
         for line in out.split('\n'):
@@ -410,20 +423,32 @@ def monitor_job(job_id, job, event):
                         job_status = 'waiting in queue'
                         break
                     else:
-                        job_status = 'question mark'
-            if debug:
-                print_message('setting job status to {}'.format(job_status))
-            job.set_status(job_status)
+                        job_status = 'unrecognized state'
+            if debug and job_status != 'running' and job_status != 'waiting in queue':
+                print_message('Unrecognized job state: {}'.format(words[4]))
+            if job_status != job.status:
+                if debug:
+                    print_message('setting job status to {}'.format(job_status), 'ok')
+                job.set_status(job_status)
         if not found_job:
             if not valid:
+                # I might want to put a counter here, since if SLURM goes down entirely it would just loop forever
+                # but Ive seen it need to request 5-10 times before getting a response (rare, but its happened)
+                sleep(1)
                 continue
+            # if the job isnt in the queue anymore, that means its complete
             job_status = 'complete'
-            print_message(' ======= end job monitor, status: {}'.format(job_status))
+            print_message(' ======= end job monitor, status: {} ======='.format(job_status), 'ok')
             job.set_status(job_status)
             return
         if job_status == 'complete':
             break
-        sleep(10)
+        # instead of sleeping for 10 seconds, sleep for 1 second 10 times
+        # so that the event can be checked and quiting doesnt take 10 seconds
+        for i in range(10):
+            if event and event.is_set():
+                return
+            sleep(1)
 
 
 if __name__ == "__main__":
@@ -477,11 +502,12 @@ if __name__ == "__main__":
         'password': config.get('compute_password'),
         'pattern': config.get('output_pattern')
     })
-    print_message('attempting connection', 'ok')
+    print_message('attempting connection to {}'.format(config.get('compute_host')), 'ok')
     if monitor.connect() == 0:
         print_message('connected', 'ok')
     else:
-        print_message('unable to connect')
+        print_message('unable to connect, exiting')
+        sys.exit(1)
 
     # Main loop
     try:
