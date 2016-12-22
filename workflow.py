@@ -8,6 +8,8 @@ import sys
 import os
 import re
 import threading
+import atexit
+
 from math import floor
 from shutil import copy, rmtree
 from getpass import getpass
@@ -23,63 +25,97 @@ from Monitor import Monitor
 from util import print_debug
 from util import print_message
 
-
 from jobs.TestJob import TestJob
 
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-c', '--config', help='Path to configuration file')
-parser.add_argument('-d', '--debug', help="Run in debug mode", action='store_true')
+parser.add_argument('-d', '--debug', help='Run in debug mode', action='store_true')
+parser.add_argument('-s', '--state', help='Path to a json state file')
+
+@atexit.register
+def save_state():
+    try:
+        with open('workflow_state.json', 'w') as outfile:
+            state = {
+                'file_list': file_list,
+                'job_sets': job_sets,
+                'config': config
+            }
+            json.dump(state, outfile)
+    except IOError as e:
+        print_debug(e)
+        print_message("Error saving state file")
 
 def setup(parser):
     global debug
-    global job_list
-    global job_counter
     global config
     global file_list
+    global job_sets
+    global from_saved_state
+
     args = parser.parse_args()
     if args.debug:
         debug = True
         print_message('Running in debug mode', 'ok')
-    required_fields = [
-        "output_path",
-        "data_cache_path",
-        "compute_host",
-        "compute_username",
-        "compute_password",
-        "processing_host",
-        "processing_username",
-        "processing_password",
-        "globus_username",
-        "globus_password",
-        "source_endpoint",
-        "destination_endpoint",
-        "source_path",
-    ]
-    if args.config:
-        with open(args.config, 'r') as conf:
-            try:
-                config = json.load(conf)
-            except Exception as e:
-                print_debug(e)
-                print_message('Unable to read config file, is it properly formatted json?')
-                return -1
-
-        for field in required_fields:
-            if field not in config or len(config[field]) == 0:
-                if 'password' in field:
-                    config[field] = getpass("{0} not specified in config, please enter: ".format(field))
-                else:
-                    config[field] = raw_input("{0} not specified in config, please enter: ".format(field))
+    if args.state:
+        if debug:
+            print_message('Loading from saved state {}'.format(args.state))
+        try:
+            with open(args.state, 'r') as statefile:
+                state = json.load(statefile)
+            config = state.get('config')
+            file_list = state.get('file_list')
+            job_sets = state.get('job_sets')
+        except IOError as e:
+            print_debug(e)
+            print_message('Error loading state file')
+            sys.exit(1)
+        from_saved_state = True
+        if debug:
+            print_message('saved file_list: \n{}'.format(pformat(file_list)))
+            print_message('saved job_sets: \n{}'.format(pformat(job_sets)))
+            print_message('saved config: \n{}'.format(pformat(config)))
     else:
-        parser.print_help()
-        print 'No configuration file given, initiating manual setup'
-        config = {}
-        for field in required_fields:
-            if 'password' in field:
-                config[field] = getpass('{0}: '.format(field))
-            else:
-                config[field] = raw_input('{0}: '.format(field))
+        required_fields = [
+            "output_path",
+            "data_cache_path",
+            "compute_host",
+            "compute_username",
+            "compute_password",
+            "processing_host",
+            "processing_username",
+            "processing_password",
+            "globus_username",
+            "globus_password",
+            "source_endpoint",
+            "destination_endpoint",
+            "source_path",
+        ]
+        if args.config:
+            with open(args.config, 'r') as conf:
+                try:
+                    config = json.load(conf)
+                except Exception as e:
+                    print_debug(e)
+                    print_message('Unable to read config file, is it properly formatted json?')
+                    return -1
+
+            for field in required_fields:
+                if field not in config or len(config[field]) == 0:
+                    if 'password' in field:
+                        config[field] = getpass("{0} not specified in config, please enter: ".format(field))
+                    else:
+                        config[field] = raw_input("{0} not specified in config, please enter: ".format(field))
+        else:
+            parser.print_help()
+            print 'No configuration file given, initiating manual setup'
+            config = {}
+            for field in required_fields:
+                if 'password' in field:
+                    config[field] = getpass('{0}: '.format(field))
+                else:
+                    config[field] = raw_input('{0}: '.format(field))
     return config
 
 def monitor_check(monitor):
@@ -454,15 +490,18 @@ def monitor_job(job_id, job, event=None):
 if __name__ == "__main__":
 
     file_list = {}
+    job_sets = {}
+    config = {}
     thread_list = []
     thread_kill_event = threading.Event()
     debug = False
+    from_saved_state = False
 
     # Read in parameters from config
     config = setup(parser)
     if config == -1:
         print "Error in setup, exiting"
-        sys.exit()
+        sys.exit(1)
     # compute number of expected year sets
     year_sets = (int(config.get('simulation_end_year')) - (int(config.get('simulation_start_year') - 1))) / int(config.get('set_frequency'))
     if debug:
@@ -472,19 +511,21 @@ if __name__ == "__main__":
             ys=year_sets,
             freq=config.get('set_frequency')
         ), 'ok')
-    # initialize the job_sets dict
-    job_sets = [{'status': 'no data', 'year_set': i, 'jobs': []} for i in range(1, year_sets+1)]
-    start_year = config.get("simulation_start_year")
-    end_year = config.get("simulation_end_year")
-    sim_length = end_year - start_year + 1
-    # initialize the file_list
-    if debug:
-        print_message('initializing file_list with {num_years} years'.format(
-            num_years=sim_length))
-    for year in range(1, sim_length + 1):
-        for month in range(1, 13):
-            key = str(year) + '-' + str(month)
-            file_list[key] = 'no data'
+
+    if not from_saved_state:
+        # initialize the job_sets dict
+        job_sets = [{'status': 'no data', 'year_set': i, 'jobs': []} for i in range(1, year_sets+1)]
+        start_year = config.get("simulation_start_year")
+        end_year = config.get("simulation_end_year")
+        sim_length = end_year - start_year + 1
+        # initialize the file_list
+        if debug:
+            print_message('initializing file_list with {num_years} years'.format(
+                num_years=sim_length))
+        for year in range(1, sim_length + 1):
+            for month in range(1, 13):
+                key = str(year) + '-' + str(month)
+                file_list[key] = 'no data'
     # Check for any data already on the System
     check_for_inplace_data()
 
