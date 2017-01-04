@@ -18,7 +18,7 @@ from pprint import pformat
 
 class Transfer(object):
     """
-        Uses Globus to transfer files between DTNs
+    Uses Globus to transfer files between DTNs
     """
     def __init__(self, config=None):
         self.config = {}
@@ -47,7 +47,7 @@ class Transfer(object):
 
     def save(self, conf_path):
         """
-            Saves job configuration to a json file at conf_path
+        Saves job configuration to a json file at conf_path
         """
         try:
             with open(conf_path, 'r') as infile:
@@ -64,7 +64,7 @@ class Transfer(object):
 
     def get_type(self):
         """
-            Returns job type
+        Returns job type
         """
         return self.type
 
@@ -79,7 +79,7 @@ class Transfer(object):
 
     def prevalidate(self, config=None):
         """
-            Validates transfer inputs
+        Validates transfer inputs
         """
         if self.status == 'valid':
             return 0
@@ -96,10 +96,10 @@ class Transfer(object):
                     self.config[i] = config.get(i)
 
         for i in self.inputs:
-            if i not in self.config:
+            if i not in self.config or self.config[i] == None:
                 if i == 'file_list':
                     self.config[i] = ''
-                elif i == 'recurcive':
+                elif i == 'recursive':
                     self.config[i] = False
                 else:
                     print_message('Missing transfer argument {}'.format(i))
@@ -141,6 +141,10 @@ class Transfer(object):
         return dstpath
 
     def execute(self):
+        if self.status != 'valid':
+            print_message('--- Transfer job in invalid state ---')
+            print_message(str(self))
+            return
         print_message('Starting transfer job from {src} to {dst}'.format(
             src=self.config.get('source_endpoint'),
             dst=self.config.get('destination_endpoint')
@@ -215,7 +219,7 @@ class Transfer(object):
             print data['status']
             if data['status'] == 'SUCCEEDED':
                 print_message('progress %d/%d' % (data['files_transferred'], data['files']), 'ok')
-                self.status = 'success'
+                self.status = 'complete'
                 return ('success', '')
             elif data['status'] == 'FAILED':
                 self.status = 'error: ' + data.get('nice_status_details')
