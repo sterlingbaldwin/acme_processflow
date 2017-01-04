@@ -1,8 +1,10 @@
 from time import sleep
 from util import print_debug
 from util import print_message
-import paramiko
+from getpass import getpass
 
+import paramiko
+from paramiko import PasswordRequiredException
 
 class Monitor(object):
     """
@@ -48,11 +50,21 @@ class Monitor(object):
         self.client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
         if self.keyfile:
             try:
+                key = paramiko.RSAKey.from_private_key_file(self.keyfile)
                 self.client.connect(
                     port=22,
                     hostname=self.remote_host,
                     username=self.username,
-                    key_filename=self.keyfile
+                    pkey=key
+                )
+            except PasswordRequiredException as pwe:
+                keypass = getpass("Enter private key password: ")
+                key = paramiko.RSAKey.from_private_key_file(self.keyfile, password=keypass)
+                self.client.connect(
+                    port=22,
+                    hostname=self.remote_host,
+                    username=self.username,
+                    pkey=key
                 )
             except Exception as e:
                 print "Unable to connect to remote host with given private key"
