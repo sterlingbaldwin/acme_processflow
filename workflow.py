@@ -21,6 +21,8 @@ from jobs.Diagnostic import Diagnostic
 from jobs.Transfer import Transfer
 from jobs.Ncclimo import Climo
 from jobs.UploadDiagnosticOutput import UploadDiagnosticOutput
+from jobs.Publication import Publication
+from jobs.CMORjob import CMOREjob
 from Monitor import Monitor
 from util import print_debug
 from util import print_message
@@ -36,7 +38,11 @@ parser.add_argument('-s', '--state', help='Path to a json state file')
 @atexit.register
 def save_state():
     try:
-        with open('workflow_state.json', 'w') as outfile:
+        state_path = config.get('state')
+        if not state_path:
+            print_message('Error saving state, no state path specified')
+            return
+        with open(state_path, 'w') as outfile:
             state = {
                 'file_list': file_list,
                 'job_sets': job_sets,
@@ -48,6 +54,10 @@ def save_state():
         print_message("Error saving state file")
 
 def setup(parser):
+    """
+    Setup the config, file_list, and job_sets variables from either the config file passed from the parser
+    of from the previously saved state
+    """
     global debug
     global config
     global file_list
@@ -67,6 +77,7 @@ def setup(parser):
             config = state.get('config')
             file_list = state.get('file_list')
             job_sets = state.get('job_sets')
+            config['state_path'] = args.state
         except IOError as e:
             print_debug(e)
             print_message('Error loading state file')
@@ -91,6 +102,7 @@ def setup(parser):
             "source_endpoint",
             "destination_endpoint",
             "source_path",
+            "batch_system_type"
         ]
         if args.config:
             with open(args.config, 'r') as conf:
@@ -119,6 +131,14 @@ def setup(parser):
     return config
 
 def monitor_check(monitor):
+    """
+    Check the remote directory for new files that match the given pattern,
+    if there are any new files, create new transfer jobs. If they're in a new job_set,
+    spawn the jobs for that set.
+
+    inputs: 
+        monitor: a monitor object setup with a remote directory and an SSH session
+    """
     global job_sets
 
     monitor.check()
@@ -144,24 +164,7 @@ def monitor_check(monitor):
                     if job_set.get('status') == 'no data':
                         # Change job_sets' state
                         job_set['status'] = 'data in transit'
-                        """
-                        # some test jobs
-                        test_1 = TestJob({})
-                        job_set['jobs'].append(test_1)
-                        print_message('Creating test job 1')
 
-                        test_2 = TestJob({
-                            'depends_on': [len(job_set['jobs']) - 1]
-                        })
-                        job_set['jobs'].append(test_2)
-                        print_message('Creating test job 2')
-
-                        test_3 = TestJob({
-                            'depends_on': [len(job_set['jobs']) - 1]
-                        })
-                        job_set['jobs'].append(test_3)
-                        print_message('Creating test job 3')
-                        """
                         # Spawn jobs for that yearset
                         # first initialize the climo job
                         climo_output_dir = os.path.join(config.get('output_path') + '/year_set_' + str(year_set))
@@ -220,20 +223,18 @@ def monitor_check(monitor):
                         print_message('adding upload job')
 
                         # finally init the publication job
-                        # TODO: create the publication job class and add it here
-
-        # if debug:
-        #     for job_set in job_sets:
-        #         print_message("Yearset: {ys} status: {status}, jobs: \n{}".format(
-        #             ys=job_set.get('year_set'),
-        #             status=job_set.get('status'),
-        #             jobs=pformat(job_set.get('jobs'))
-        #         ), 'ok')
-
+                        publication_config = {
+                            'place': 'holder',
+                            'yearset': year_set,
+                            'depends_on': [len(job_set['jobs']) - 2] # wait for the diagnostic job to finish, but not the upload job
+                        }
+                        publish = Publication(publication_config)
+                        job_set['jobs'].append(publish)
+                        print_message('adding publication job')
 
         f_list = ['{path}/{file}'.format(path=config.get('source_path'), file=f)  for f in checked_new_files]
         tmpdir = os.getcwd() + '/tmp/'
-        t = Transfer({
+        transfer = Transfer({
             'file_list': f_list,
             'globus_username': config.get('globus_username'),
             'globus_password': config.get('globus_password'),
@@ -247,34 +248,42 @@ def monitor_check(monitor):
             'destination_path': tmpdir,
             'recursive': 'False'
         })
-        thread = threading.Thread(target=handle_transfer, args=(t, checked_new_files, thread_kill_event))
+        thread = threading.Thread(target=handle_transfer, args=(transfer, checked_new_files, thread_kill_event))
         thread_list.append(thread)
         thread.start()
 
 def handle_transfer(transfer_job, f_list, event):
-    # if debug:
-    #     print_message("starting transfer job for given files:", 'ok')
-    #     print pformat(f_list)
+    """
+    Wrapper around the transfer.execute() method, ment to be run inside a thread
 
+    inputs:
+        transfer_job: the transfer job to execute and monitor
+        f_list: the list of files being transfered
+        event: a thread event to handle shutting down from keyboard exception, not used in this case
+            but it needs to be there for any threads handlers
+    """
     # start the transfer job
     transfer_job.execute()
 
     # handle post processing for transfered data
     tmpdir = os.getcwd() + '/tmp/'
+    if not os.path.exists(tmpdir):
+        os.mkdir(tmpdir)
     for f in f_list:
         # check that a folder for this year set exists, if not make one
         year_set = filename_to_year_set(f)
         new_path = os.path.join(config.get('data_cache_path'), 'year_set_' + str(year_set))
-        src = os.path.join(tmpdir, f)
         if not os.path.exists(new_path):
             os.mkdir(new_path)
 
+        src = os.path.join(tmpdir, f)
         # copy the file to the correct year set folder
         try:
             copy(src=src, dst=new_path)
         except Exception as e:
             print_debug(e)
             print_message('Error moving file from {src} to {dst}'.format(src=src, dst=new_path))
+        # remove the old files
         try:
             os.remove(src)
         except Exception as e:
@@ -291,7 +300,7 @@ def handle_transfer(transfer_job, f_list, event):
 
 def filename_to_file_list_key(filename):
     """
-        Takes a filename and returns the key for the file_list
+    Takes a filename and returns the key for the file_list
     """
     # these offsets need to change if the output_pattern changes. This is unavoidable given the escape characters
     start_offset = 8
@@ -306,7 +315,7 @@ def filename_to_file_list_key(filename):
 
 def filename_to_year_set(filename):
     """
-        Takes a filename and returns the year_set that the file belongs to
+    Takes a filename and returns the year_set that the file belongs to
     """
     # these offsets need to change if the output_pattern changes. This is unavoidable given the escape characters
     start_offset = 8
@@ -318,7 +327,7 @@ def filename_to_year_set(filename):
 
 def check_year_sets():
     """
-        Checks the file_list, and sets the year_set status to ready if all the files are in place
+    Checks the file_list, and sets the year_set status to ready if all the files are in place
     """
     if debug:
         print_message('job_sets:'.format(sets=pformat(job_sets)))
@@ -345,8 +354,8 @@ def check_year_sets():
 
 def check_for_inplace_data():
     """
-        Checks the data cache for any files that might already be in place,
-        updates the file_list and job_sets accordingly
+    Checks the data cache for any files that might already be in place,
+    updates the file_list and job_sets accordingly
     """
     global file_list
     cache_path = config.get('data_cache_path')
@@ -357,10 +366,9 @@ def check_for_inplace_data():
 
 def start_ready_job_sets():
     """
-        Iterates over the job sets, and starts ready jobs
+    Iterates over the job sets, and starts ready jobs
     """
     global thread_list
-    # TODO: get the jobs starting
     # iterate over the job_sets
     print_message('=========== Checking for ready jobs =================', 'ok')
     for job_set in job_sets:
@@ -378,7 +386,6 @@ def start_ready_job_sets():
                     thread_list.append(thread)
                     thread.start()
                     return
-                    # TODO: setup a queue monitoring system
                 # if the job isnt a climo, and the job that it depends on is done, start it
                 elif job.get_type() != 'climo' and job.status == 'valid':
                     ready = True
@@ -398,36 +405,37 @@ def start_ready_job_sets():
 
 def monitor_job(job_id, job, event=None):
     """
-        Monitor the slurm job, and update the status to 'complete' when it finishes
+    Monitor the slurm job, and update the status to 'complete' when it finishes
+    This function should only be called from within a thread
     """
-    while True:
-        print_message('======= monitoring job {} ========='.format(job_id), 'ok')
-        # this function should only called in its own thread
-        # this check is hear in case the loop is stuck and the thread needs to be canceled
-        if event and event.is_set():
-            return
-        cmd = ['squeue']
+    def handle_slurm():
+        """
+        handle interfacing with the SLURM controller
+        Checkes the SLURM queue status and changes the job status appropriately
+        """
         count = 5
-        out = Popen(cmd, stdout=PIPE, stderr=PIPE).communicate()[0]
-
-        # sometimes there will be a communication error with the SLURM controller
-        # in which case the controller returns 'error: some message'
-        if 'error' in out:
-            valid = False
-        else:
-            valid = True
-        # re-request the queue status if there was an error
-        while not valid and count >= 0:
+        while count > 0:
+            cmd = ['squeue']
             out = Popen(cmd, stdout=PIPE, stderr=PIPE).communicate()[0]
+
+            # sometimes there will be a communication error with the SLURM controller
+            # in which case the controller returns 'error: some message'
             if 'error' in out:
                 valid = False
                 count -= 1
             else:
                 valid = True
+        # re-request the queue status if there was an error
+        while not valid:
+            out = Popen(cmd, stdout=PIPE, stderr=PIPE).communicate()[0]
+            if 'error' in out:
+                valid = False
+            else:
+                valid = True
         if not valid:
             # if the controller errors 5 times in a row, its probably an unrecoverable error
             print_message('-------- Unable to communicate with SLURM controller ----------')
-            return
+            return 'ERROR'
 
         job_status = 'running'
         found_job = False
@@ -440,7 +448,7 @@ def monitor_job(job_id, job, event=None):
             if len(words) == 0:
                 break
             elif words[0] == 'JOBID':
-                # if we dont see the line '['JOBID', 'PARTITION', 'NAME', 'USER', 'ST', 'TIME', 'NODES', 'NODELIST(REASON)']' then we know squeue didnt work right
+                # if we dont see the line '['JOBID', 'PARTITION', 'NAME', 'USER', 'ST', 'TIME', 'NODES', 'NODELIST(REASON)']' at least onece then we know squeue didnt work right
                 valid = True
                 continue
             try:
@@ -465,27 +473,58 @@ def monitor_job(job_id, job, event=None):
             if job_status != job.status:
                 if debug:
                     print_message('setting job status to {}'.format(job_status), 'ok')
-                job.set_status(job_status)
+                return job_status
         if not found_job:
             if not valid:
                 # I might want to put a counter here, since if SLURM goes down entirely it would just loop forever
                 # but Ive seen it need to request 5-10 times before getting a response (rare, but its happened)
                 sleep(1)
-                continue
+                return None
             # if the job isnt in the queue anymore, that means its complete
             job_status = 'complete'
             print_message(' ======= end job monitor, status: {} ======='.format(job_status), 'ok')
-            job.set_status(job_status)
-            return
+
+            return job_status
         if job_status == 'complete':
-            break
+            return job_status
+
+    def handle_pbs():
+        print 'dealing with pbs'
+        cmd = ['qstat']
+        out = Popen(cmd, stdout=PIPE, stderr=PIPE).communicate()[0]
+        # do some work
+        job_status = 'DANGER WILL ROBENSON'
+        return job_status
+
+    def handle_none():
+        print 'you should really be running this with slurm'
+
+
+
+    while True:
+        print_message('======= monitoring job {0} ========='.format(job_id), 'ok')
+        # this check is hear in case the loop is stuck and the thread needs to be canceled
+        if event and event.is_set():
+            return
+        batch_system = config.get('batch_system_type')
+        count = 5
+        if batch_system == 'slurm':
+            status = handle_slurm()
+        elif batch_system == 'pbs':
+            status = handle_pbs()
+        elif batch_system == 'none':
+            cmd = ['']
+            # TODO: figure out how to get this working
+
+        if not status:
+            continue
+
         # instead of sleeping for 10 seconds, sleep for 1 second 10 times
         # so that the event can be checked and quiting doesnt take 10 seconds
         for i in range(10):
             if event and event.is_set():
                 return
             sleep(1)
-
 
 if __name__ == "__main__":
 
@@ -502,6 +541,7 @@ if __name__ == "__main__":
     if config == -1:
         print "Error in setup, exiting"
         sys.exit(1)
+
     # compute number of expected year sets
     year_sets = (int(config.get('simulation_end_year')) - (int(config.get('simulation_start_year') - 1))) / int(config.get('set_frequency'))
     if debug:
@@ -526,6 +566,7 @@ if __name__ == "__main__":
             for month in range(1, 13):
                 key = str(year) + '-' + str(month)
                 file_list[key] = 'no data'
+
     # Check for any data already on the System
     check_for_inplace_data()
 
@@ -536,6 +577,7 @@ if __name__ == "__main__":
         print_message('printing file list', 'ok')
         for key in sorted(file_list):
             print_message(key + ': ' + file_list[key], 'ok')
+
     monitor = Monitor({
         'remote_host': config.get('compute_host'),
         'remote_dir': config.get('source_path'),
@@ -559,14 +601,13 @@ if __name__ == "__main__":
             check_year_sets()
             start_ready_job_sets()
 
-            # if debug:
-            #     for job_set in job_sets:
-            #         for job in job_set['jobs']:
-            #             print_message(str(job))
             sleep(10)
     except KeyboardInterrupt as e:
         print_message('----- KEYBOARD INTERUPT -----')
-        print_message('cleaning up threads')
+        if config.get('state_path', 'ok'):
+            print_message('saving state')
+            save_state()
+        print_message('cleaning up threads', 'ok')
         for t in thread_list:
             thread_kill_event.set()
             t.join()

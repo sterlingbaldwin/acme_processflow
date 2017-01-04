@@ -16,7 +16,7 @@ from util import print_message
 
 class Climo(object):
     """
-        A wrapper around ncclimo, used to compute the climotologies from raw output data
+    A wrapper around ncclimo, used to compute the climotologies from raw output data
     """
     def __init__(self, config):
         self.config = {}
@@ -53,13 +53,13 @@ class Climo(object):
 
     def get_type(self):
         """
-            Returns job type
+        Returns job type
         """
         return self.type
 
     def execute(self, batch=False):
         """
-            Calls ncclimo in a subprocess
+        Calls ncclimo in a subprocess
         """
         cmd = [
             '/export/baldwin32/scripts/ncclimo',
@@ -138,7 +138,7 @@ class Climo(object):
 
     def save(self, conf_path):
         """
-            Saves job configuration to a json file at conf_path
+        Saves job configuration to a json file at conf_path
         """
         try:
             with open(conf_path, 'r') as infile:
@@ -164,7 +164,7 @@ class Climo(object):
 
     def prevalidate(self, config):
         """
-            Prerun validation for inputs
+        Prerun validation for inputs
         """
         if self.status == 'valid':
             return 0
@@ -190,6 +190,6 @@ class Climo(object):
 
     def postvalidate(self):
         """
-            Post execution validation
+        Post execution validation
         """
         print "post validation"

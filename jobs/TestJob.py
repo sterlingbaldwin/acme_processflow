@@ -9,7 +9,7 @@ from pprint import pformat
 class TestJob(object):
     def __init__(self, config):
         """
-            Setup class attributes
+        Setup class attributes
         """
         self.inputs = {}
         self.outputs = {}
@@ -33,14 +33,14 @@ class TestJob(object):
 
     def get_type(self):
         """
-            Returns job type
+        Returns job type
         """
         return self.type
 
     def prevalidate(self, config):
         """
-            Iterate over given config dictionary making sure all the inputs are set
-            and rejecting any inputs that arent in the input dict
+        Iterate over given config dictionary making sure all the inputs are set
+        and rejecting any inputs that arent in the input dict
         """
         depends = config.get('depends_on')
         if depends:
@@ -49,16 +49,19 @@ class TestJob(object):
 
     def postvalidate(self):
         """
-            Check that what the job was supposed to do actually happened
+        Check that what the job was supposed to do actually happened
         """
         print 'postvalidate'
 
     def set_status(self, status):
+        """
+        Sets the status field to the string input status
+        """
         self.status = status
 
     def execute(self, batch=False):
         """
-            Perform the actual work
+        Perform the actual work
         """
         if not batch:
             sleep(30)

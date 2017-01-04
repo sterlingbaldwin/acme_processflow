@@ -9,7 +9,7 @@ import json
 class UploadDiagnosticOutput(object):
     def __init__(self, config):
         """
-            Setup class attributes
+        Setup class attributes
         """
         self.inputs = {
             'path_to_diagnostic': '',
@@ -28,7 +28,7 @@ class UploadDiagnosticOutput(object):
 
     def get_type(self):
         """
-            Returns job type
+        Returns job type
         """
         return self.type
 
@@ -43,7 +43,7 @@ class UploadDiagnosticOutput(object):
 
     def save(self, conf_path):
         """
-            Saves job configuration to a json file at conf_path
+        Saves job configuration to a json file at conf_path
         """
         try:
             with open(conf_path, 'r') as infile:
@@ -60,8 +60,8 @@ class UploadDiagnosticOutput(object):
 
     def prevalidate(self, config=None):
         """
-            Iterate over given config dictionary making sure all the inputs are set
-            and rejecting any inputs that arent in the input dict
+        Iterate over given config dictionary making sure all the inputs are set
+        and rejecting any inputs that arent in the input dict
         """
         if self.status == 'valid':
             return 0
@@ -84,7 +84,7 @@ class UploadDiagnosticOutput(object):
 
     def postvalidate(self):
         """
-            Check that what the job was supposed to do actually happened
+        Check that what the job was supposed to do actually happened
         """
         if not self.outputs.get('dataset_id'):
             self.status = 'error'
@@ -96,7 +96,7 @@ class UploadDiagnosticOutput(object):
 
     def execute(self, batch=False):
         """
-            Upload the files in the given directory to the DiagnosticViewer on the given server
+        Upload the files in the given directory to the DiagnosticViewer on the given server
         """
         client = DiagnosticsViewerClient(
             server=self.config.get('server'),
