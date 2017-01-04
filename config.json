@@ -4,6 +4,7 @@
     "compute_host": "edison.nersc.gov",
     "compute_username": "sbaldwin",
     "compute_password": "",
+    "compute_keyfile": "",
     "processing_host": "aims4.llnl.gov",
     "processing_username": "baldwin32",
     "processing_password": "",
@@ -21,5 +22,6 @@
     "diag_viewer_password": "",
     "diag_viewer_server": "",
     "obs_for_diagnostics_path": "",
-    "regrid_map_path": "/export/baldwin32/projects/acme_workflow/resources/map_ne30np4_to_fv129x256_aave.20150901.nc"
+    "regrid_map_path": "/export/baldwin32/projects/acme_workflow/resources/map_ne30np4_to_fv129x256_aave.20150901.nc",
+    "batch_system_type": "slurm"
 }
