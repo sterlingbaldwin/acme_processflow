@@ -29,7 +29,6 @@ from util import print_message
 
 from jobs.TestJob import TestJob
 
-
 parser = argparse.ArgumentParser()
 parser.add_argument('-c', '--config', help='Path to configuration file')
 parser.add_argument('-d', '--debug', help='Run in debug mode', action='store_true')
@@ -38,9 +37,8 @@ parser.add_argument('-s', '--state', help='Path to a json state file')
 @atexit.register
 def save_state():
     try:
-        state_path = config.get('state')
+        state_path = config.get('state_path')
         if not state_path:
-            print_message('Error saving state, no state path specified')
             return
         with open(state_path, 'w') as outfile:
             state = {
@@ -69,31 +67,35 @@ def setup(parser):
         debug = True
         print_message('Running in debug mode', 'ok')
     if args.state:
-        if debug:
-            print_message('Loading from saved state {}'.format(args.state))
-        try:
-            with open(args.state, 'r') as statefile:
-                state = json.load(statefile)
-            config = state.get('config')
-            file_list = state.get('file_list')
-            job_sets = state.get('job_sets')
+        if not os.path.exists(args.state):
             config['state_path'] = args.state
-        except IOError as e:
-            print_debug(e)
-            print_message('Error loading state file')
-            sys.exit(1)
-        from_saved_state = True
-        if debug:
-            print_message('saved file_list: \n{}'.format(pformat(file_list)))
-            print_message('saved job_sets: \n{}'.format(pformat(job_sets)))
-            print_message('saved config: \n{}'.format(pformat(config)))
-    else:
+        else:
+            try:
+                with open(args.state, 'r') as statefile:
+                    state = json.load(statefile)
+                if debug:
+                    print_message('Loading from saved state {}'.format(args.state))
+                config = state.get('config')
+                file_list = state.get('file_list')
+                job_sets = state.get('job_sets')
+                config['state_path'] = args.state
+            except IOError as e:
+                print_debug(e)
+                print_message('Error loading state file')
+                sys.exit(1)
+            from_saved_state = True
+            if debug:
+                print_message('saved file_list: \n{}'.format(pformat(file_list)))
+                print_message('saved job_sets: \n{}'.format(pformat(job_sets)))
+                print_message('saved config: \n{}'.format(pformat(config)))
+    if not from_saved_state:
         required_fields = [
             "output_path",
             "data_cache_path",
             "compute_host",
             "compute_username",
             "compute_password",
+            "compute_keyfile",
             "processing_host",
             "processing_username",
             "processing_password",
@@ -105,16 +107,20 @@ def setup(parser):
             "batch_system_type"
         ]
         if args.config:
-            with open(args.config, 'r') as conf:
-                try:
+            try:
+                with open(args.config, 'r') as conf:
                     config = json.load(conf)
-                except Exception as e:
-                    print_debug(e)
-                    print_message('Unable to read config file, is it properly formatted json?')
-                    return -1
+            except Exception as e:
+                print_debug(e)
+                print_message('Unable to read config file, is it properly formatted json?')
+                return -1
 
             for field in required_fields:
                 if field not in config or len(config[field]) == 0:
+                    if field == 'compute_password' and config.get('compute_keyfile'):
+                        continue
+                    if field == 'compute_keyfile' and config.get('compute_password'):
+                        continue
                     if 'password' in field:
                         config[field] = getpass("{0} not specified in config, please enter: ".format(field))
                     else:
@@ -146,7 +152,7 @@ def monitor_check(monitor):
     checked_new_files = []
     for f in new_files:
         key = filename_to_file_list_key(f)
-        if not file_list[key] == 'data ready':
+        if file_list.get(key) and not file_list[key] == 'data ready':
             checked_new_files.append(f)
     # if there are any new files
     if checked_new_files:
@@ -207,9 +213,9 @@ def monitor_check(monitor):
                             'yearset': year_set,
                             'depends_on': [len(job_set['jobs']) - 1] # set the diag job to wait for the climo job to finish befor running
                         }
-                        # diag = Diagnostic(diag_config)
-                        # job_set['jobs'].append(diag)
-                        # print_message('adding diag job')
+                        diag = Diagnostic(diag_config)
+                        job_set['jobs'].append(diag)
+                        print_message('adding diag job')
 
                         # third init the upload job
                         upload = UploadDiagnosticOutput({
@@ -223,14 +229,14 @@ def monitor_check(monitor):
                         print_message('adding upload job')
 
                         # finally init the publication job
-                        publication_config = {
-                            'place': 'holder',
-                            'yearset': year_set,
-                            'depends_on': [len(job_set['jobs']) - 2] # wait for the diagnostic job to finish, but not the upload job
-                        }
-                        publish = Publication(publication_config)
-                        job_set['jobs'].append(publish)
-                        print_message('adding publication job')
+                        # publication_config = {
+                        #     'place': 'holder',
+                        #     'yearset': year_set,
+                        #     'depends_on': [len(job_set['jobs']) - 2] # wait for the diagnostic job to finish, but not the upload job
+                        # }
+                        # publish = Publication(publication_config)
+                        # job_set['jobs'].append(publish)
+                        # print_message('adding publication job')
 
         f_list = ['{path}/{file}'.format(path=config.get('source_path'), file=f)  for f in checked_new_files]
         tmpdir = os.getcwd() + '/tmp/'
@@ -265,6 +271,8 @@ def handle_transfer(transfer_job, f_list, event):
     # start the transfer job
     transfer_job.execute()
 
+    if transfer_job.status != 'complete':
+        print_message('Faild to transfer files correctly')
     # handle post processing for transfered data
     tmpdir = os.getcwd() + '/tmp/'
     if not os.path.exists(tmpdir):
@@ -392,6 +400,7 @@ def start_ready_job_sets():
                     for dependancy in job.depends_on:
                         if job_set['jobs'][dependancy].status != 'complete':
                             ready = False
+                            break
                     if ready:
                         job_id = job.execute(batch=True)
                         job.set_status('starting')
@@ -413,8 +422,10 @@ def monitor_job(job_id, job, event=None):
         handle interfacing with the SLURM controller
         Checkes the SLURM queue status and changes the job status appropriately
         """
+        print_message('checking SLURM queue status')
         count = 5
-        while count > 0:
+        valid = False
+        while count > 0 and not valid:
             cmd = ['squeue']
             out = Popen(cmd, stdout=PIPE, stderr=PIPE).communicate()[0]
 
@@ -425,13 +436,8 @@ def monitor_job(job_id, job, event=None):
                 count -= 1
             else:
                 valid = True
-        # re-request the queue status if there was an error
-        while not valid:
-            out = Popen(cmd, stdout=PIPE, stderr=PIPE).communicate()[0]
-            if 'error' in out:
-                valid = False
-            else:
-                valid = True
+            print out, count
+
         if not valid:
             # if the controller errors 5 times in a row, its probably an unrecoverable error
             print_message('-------- Unable to communicate with SLURM controller ----------')
@@ -514,6 +520,7 @@ def monitor_job(job_id, job, event=None):
             status = handle_pbs()
         elif batch_system == 'none':
             cmd = ['']
+            handle_none()
             # TODO: figure out how to get this working
 
         if not status:
@@ -578,13 +585,21 @@ if __name__ == "__main__":
         for key in sorted(file_list):
             print_message(key + ': ' + file_list[key], 'ok')
 
-    monitor = Monitor({
+    monitor_config = {
         'remote_host': config.get('compute_host'),
         'remote_dir': config.get('source_path'),
         'username': config.get('compute_username'),
-        'password': config.get('compute_password'),
         'pattern': config.get('output_pattern')
-    })
+    }
+    if config.get('compute_password'):
+        monitor_config['password'] = config.get('compute_password')
+    if config.get('compute_keyfile'):
+        monitor_config['keyfile'] = config.get('compute_keyfile')
+    else:
+        print_message('No password or keyfile path given for compute resource, please add to your config and try again')
+        sys.exit(1)
+    monitor = Monitor(monitor_config)
+
     print_message('attempting connection to {}'.format(config.get('compute_host')), 'ok')
     if monitor.connect() == 0:
         print_message('connected', 'ok')
@@ -604,8 +619,8 @@ if __name__ == "__main__":
             sleep(10)
     except KeyboardInterrupt as e:
         print_message('----- KEYBOARD INTERUPT -----')
-        if config.get('state_path', 'ok'):
-            print_message('saving state')
+        if config.get('state_path'):
+            print_message('saving state', 'ok')
             save_state()
         print_message('cleaning up threads', 'ok')
         for t in thread_list:
