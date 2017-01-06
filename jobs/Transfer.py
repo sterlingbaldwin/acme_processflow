@@ -159,18 +159,51 @@ class Transfer(object):
         auth_result = get_access_token(globus_username, globus_password)
 
         # Create a transfer submission
-        api_client = TransferAPIClient(globus_username, goauth=auth_result.token)
-        source_user = self.config.get('source_username')
-        source_pass = self.config.get('source_password')
-        self.activate_endpoint(api_client, srcendpoint, source_user, source_pass)
-        dst_user = self.config.get('destination_username')
-        dst_pass = self.config.get('destination_password')
-        self.activate_endpoint(api_client, dstendpoint, dst_user, dst_pass)
+        successful_activation = False
+        for i in range(5):
+            api_client = TransferAPIClient(globus_username, goauth=auth_result.token)
+            source_user = self.config.get('source_username')
+            source_pass = self.config.get('source_password')
+            try:
+                self.activate_endpoint(api_client, srcendpoint, source_user, source_pass)
+            except Exception as e:
+                print_debug(e)
+                print_message('Error activating source endpoing')
+            else:
+                successful_activation = True
+                break
+        if not successful_activation:
+            print_message('Unable to activate source endpoint after five attempts, exiting')
+            self.status = 'error'
+            return
 
-        code, message, data = api_client.transfer_submission_id()
-        submission_id = data["value"]
-        deadline = datetime.utcnow() + timedelta(days=10)
-        transfer_task = globus_transfer(submission_id, srcendpoint, dstendpoint, deadline)
+        successful_activation = False
+        for i in range(5):
+            dst_user = self.config.get('destination_username')
+            dst_pass = self.config.get('destination_password')
+            try:
+                self.activate_endpoint(api_client, dstendpoint, dst_user, dst_pass)
+            except Exception as e:
+                print_debug(e)
+                print_message('Error activating destination endpoint')
+            else:
+                successful_activation = True
+                break
+        if not successful_activation:
+            print_message('Unable to activate destination endpoint after five attempts, exiting')
+            self.status = 'error'
+            return
+
+        try:
+            code, message, data = api_client.transfer_submission_id()
+            submission_id = data["value"]
+            deadline = datetime.utcnow() + timedelta(days=10)
+            transfer_task = globus_transfer(submission_id, srcendpoint, dstendpoint, deadline)
+        except Exception as e:
+            print_debug(e)
+            print_message('Error creating transfer task')
+            self.status = 'error'
+            return
 
         # # Add srcpath to the transfer task
         # source_path = self.config.get('source_path')
@@ -211,6 +244,7 @@ class Transfer(object):
         except Exception as e:
             print_message("Could not submit the transfer. Error: %s" % str(e))
             print_debug(e)
+            self.status = 'error'
             return
 
         # Check a status of the transfer every minute (60 secs)
@@ -226,4 +260,4 @@ class Transfer(object):
                 return ('error', data['nice_status_details'])
             elif data['status'] == 'ACTIVE':
                 print_message('progress %d/%d' % (data['files_transferred'], data['files']), 'ok')
-            time.sleep(5)
+            time.sleep(60)
