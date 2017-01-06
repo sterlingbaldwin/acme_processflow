@@ -136,6 +136,90 @@ def setup(parser):
                     config[field] = raw_input('{0}: '.format(field))
     return config
 
+def add_jobs(year_set, job_set):
+    global job_sets
+
+    # each required job is a key, the value is if its in the job list already or not
+    required_jobs = {
+        'climo': False,
+        'diagnostic': False,
+        'upload_diagnostic_output': False,
+    }
+    for job in job_set['jobs']:
+        if not required_jobs[job.get_type()]:
+            required_jobs[job.get_type()] = True
+
+    # first initialize the climo job
+    if not required_jobs['climo']:
+        climo_output_dir = os.path.join(config.get('output_path') + '/year_set_' + str(year_set))
+        if not os.path.exists(climo_output_dir):
+            if debug:
+                print_message("Creating climotology output directory {}".format(climo_output_dir))
+            os.makedirs(climo_output_dir)
+        regrid_output_dir = config.get('output_path') + '/regrid/year_set_' + str(year_set)
+        if not os.path.exists(regrid_output_dir):
+            os.makedirs(regrid_output_dir)
+        climo_start_year = config.get('simulation_start_year') + ((year_set - 1) * config.get('set_frequency'))
+        climo_end_year = climo_start_year + config.get('set_frequency') - 1
+        model_path = config.get('data_cache_path') + '/year_set_' + str(year_set)
+        climo_config = {
+            'start_year': climo_start_year,
+            'end_year': climo_end_year,
+            'caseId': config.get('experiment'),
+            'annual_mode': 'sdd',
+            'regrid_map_path': config.get('regrid_map_path'),
+            'input_directory': model_path,
+            'climo_output_directory': climo_output_dir,
+            'regrid_output_directory': regrid_output_dir,
+            'yearset': year_set
+        }
+        climo = Climo(climo_config)
+        job_set['jobs'].append(climo)
+
+    # second init the diagnostic job
+    if not required_jobs['diagnostic']:
+        diag_output_path = config.get('output_path') + '/diagnostics/year_set_' + str(year_set)
+        if not os.path.exists(diag_output_path):
+            os.makedirs(diag_output_path)
+        diag_config = {
+            '--model': regrid_output_dir,
+            '--obs': config.get('obs_for_diagnostics_path'),
+            '--outputdir': diag_output_path,
+            '--package': 'amwg',
+            '--set': '5',
+            '--archive': 'False',
+            'yearset': year_set,
+            'depends_on': [len(job_set['jobs']) - 1] # set the diag job to wait for the climo job to finish befor running
+        }
+        diag = Diagnostic(diag_config)
+        job_set['jobs'].append(diag)
+
+    # third init the upload job
+    if not required_jobs['upload_diagnostic_output']:
+        upload = UploadDiagnosticOutput({
+            'path_to_diagnostic': diag_output_path + '/amwg/',
+            'username': config.get('diag_viewer_username'),
+            'password': config.get('diag_viewer_password'),
+            'server': config.get('diag_viewer_server'),
+            'depends_on': [len(job_set['jobs']) - 1] # set the upload job to wait for the diag job to finish
+        })
+        job_set['jobs'].append(upload)
+
+    # finally init the publication job
+    # if not required_jobs['publication']:
+    #     publication_config = {
+    #         'place': 'holder',
+    #         'yearset': year_set,
+    #         'depends_on': [len(job_set['jobs']) - 2] # wait for the diagnostic job to finish, but not the upload job
+    #     }
+    #     publish = Publication(publication_config)
+    #     job_set['jobs'].append(publish)
+    #     print_message('adding publication job')
+
+    return job_set
+
+
+
 def monitor_check(monitor):
     """
     Check the remote directory for new files that match the given pattern,
@@ -172,71 +256,7 @@ def monitor_check(monitor):
                         job_set['status'] = 'data in transit'
 
                         # Spawn jobs for that yearset
-                        # first initialize the climo job
-                        climo_output_dir = os.path.join(config.get('output_path') + '/year_set_' + str(year_set))
-                        if not os.path.exists(climo_output_dir):
-                            if debug:
-                                print_message("Creating climotology output directory {}".format(climo_output_dir))
-                            os.makedirs(climo_output_dir)
-                        regrid_output_dir = config.get('output_path') + '/regrid/year_set_' + str(year_set)
-                        if not os.path.exists(regrid_output_dir):
-                            os.makedirs(regrid_output_dir)
-                        climo_start_year = config.get('simulation_start_year') + ((year_set - 1) * config.get('set_frequency'))
-                        climo_end_year = climo_start_year + config.get('set_frequency') - 1
-                        model_path = config.get('data_cache_path') + '/year_set_' + str(year_set)
-                        climo_config = {
-                            'start_year': climo_start_year,
-                            'end_year': climo_end_year,
-                            'caseId': config.get('experiment'),
-                            'annual_mode': 'sdd',
-                            'regrid_map_path': config.get('regrid_map_path'),
-                            'input_directory': model_path,
-                            'climo_output_directory': climo_output_dir,
-                            'regrid_output_directory': regrid_output_dir,
-                            'yearset': year_set
-                        }
-                        climo = Climo(climo_config)
-                        job_set['jobs'].append(climo)
-                        print_message('adding climo job')
-
-                        # # second init the diagnostic job
-                        diag_output_path = config.get('output_path') + '/diagnostics/year_set_' + str(year_set)
-                        if not os.path.exists(diag_output_path):
-                            os.makedirs(diag_output_path)
-                        diag_config = {
-                            '--model': regrid_output_dir,
-                            '--obs': config.get('obs_for_diagnostics_path'),
-                            '--outputdir': diag_output_path,
-                            '--package': 'amwg',
-                            '--set': '5',
-                            '--archive': 'False',
-                            'yearset': year_set,
-                            'depends_on': [len(job_set['jobs']) - 1] # set the diag job to wait for the climo job to finish befor running
-                        }
-                        diag = Diagnostic(diag_config)
-                        job_set['jobs'].append(diag)
-                        print_message('adding diag job')
-
-                        # third init the upload job
-                        upload = UploadDiagnosticOutput({
-                            'path_to_diagnostic': diag_output_path + '/amwg/',
-                            'username': config.get('diag_viewer_username'),
-                            'password': config.get('diag_viewer_password'),
-                            'server': config.get('diag_viewer_server'),
-                            'depends_on': [len(job_set['jobs']) - 1] # set the upload job to wait for the diag job to finish
-                        })
-                        job_set['jobs'].append(upload)
-                        print_message('adding upload job')
-
-                        # finally init the publication job
-                        # publication_config = {
-                        #     'place': 'holder',
-                        #     'yearset': year_set,
-                        #     'depends_on': [len(job_set['jobs']) - 2] # wait for the diagnostic job to finish, but not the upload job
-                        # }
-                        # publish = Publication(publication_config)
-                        # job_set['jobs'].append(publish)
-                        # print_message('adding publication job')
+                        job_set = add_jobs(year_set, job_set)
 
         f_list = ['{path}/{file}'.format(path=config.get('source_path'), file=f)  for f in checked_new_files]
         tmpdir = os.getcwd() + '/tmp/'
@@ -346,16 +366,18 @@ def check_year_sets():
         set_start_year = config.get('simulation_start_year') + ((s.get('year_set') - 1) * config.get('set_frequency'))
         set_end_year = set_start_year + config.get('set_frequency') - 1
         if debug:
-            print_message('set_start_yaer: {0}'.format(set_start_year), 'ok')
-            print_message('set_end_year: {0}'.format(set_end_year), 'ok')
+            print_message('set_start_year: {0}'.format(set_start_year), 'ok')
+            print_message('set_end_year  : {0}'.format(set_end_year), 'ok')
         ready = True
         for year in range(set_start_year, set_end_year + 1):
             for month in range(1, 13):
                 key = str(year) + '-' + str(month)
-                if file_list[key] != 'data ready':
+                if file_list.get(key) and file_list[key] != 'data ready':
                     ready = False
         if ready:
             status = 'data ready'
+            year_set = floor(set_start_year / config.get('set_frequency')) + 1
+            s = add_jobs(year_set, s)
         else:
             status = s['status']
         s['status'] = status
@@ -422,7 +444,7 @@ def monitor_job(job_id, job, event=None):
         handle interfacing with the SLURM controller
         Checkes the SLURM queue status and changes the job status appropriately
         """
-        print_message('checking SLURM queue status')
+        print_message('checking SLURM queue status', 'ok')
         count = 5
         valid = False
         while count > 0 and not valid:
@@ -488,11 +510,9 @@ def monitor_job(job_id, job, event=None):
                 return None
             # if the job isnt in the queue anymore, that means its complete
             job_status = 'complete'
-            print_message(' ======= end job monitor, status: {} ======='.format(job_status), 'ok')
 
-            return job_status
-        if job_status == 'complete':
-            return job_status
+        print_message(' ======= end job monitor, status: {} ======='.format(job_status), 'ok')
+        return job_status
 
     def handle_pbs():
         print 'dealing with pbs'
@@ -504,8 +524,7 @@ def monitor_job(job_id, job, event=None):
 
     def handle_none():
         print 'you should really be running this with slurm'
-
-
+        return 'Zug zug'
 
     while True:
         print_message('======= monitoring job {0} ========='.format(job_id), 'ok')
@@ -520,11 +539,20 @@ def monitor_job(job_id, job, event=None):
             status = handle_pbs()
         elif batch_system == 'none':
             cmd = ['']
-            handle_none()
+            status = handle_none()
             # TODO: figure out how to get this working
 
         if not status:
+            if event and event.is_set():
+                return
             continue
+
+        if job.status != status:
+            if debug:
+                print_message('Setting job status: {0}'.format(status))
+            job.status = status
+        if status == 'complete' or status == 'error':
+            break
 
         # instead of sleeping for 10 seconds, sleep for 1 second 10 times
         # so that the event can be checked and quiting doesnt take 10 seconds
