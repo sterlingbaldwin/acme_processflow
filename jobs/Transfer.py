@@ -3,6 +3,7 @@
 # pylint: disable=C0301
 import os, sys, json
 from datetime import datetime, timedelta
+from shutil import copy, rmtree
 import time
 from uuid import uuid4
 from globusonline.transfer import api_client
@@ -13,7 +14,10 @@ from globusonline.transfer.api_client import x509_proxy
 from globusonline.transfer.api_client.goauth import get_access_token
 from util import print_debug
 from util import print_message
+from util import filename_to_year_set
 from pprint import pformat
+from subprocess import Popen, PIPE
+import threading
 
 
 class Transfer(object):
@@ -40,10 +44,16 @@ class Transfer(object):
             'destination_username': '',
             'destination_password': '',
             'source_path': '',
-            'destination_path': ''
+            'destination_path': '',
+            'final_destination_path': '',
+            'pattern': '',
+            'frequency': ''
         }
+        self.maximum_transfers = 60
         self.prevalidate(config)
         self.msg = None
+        self.thread_list = []
+        self.kill_thread_event = threading.Event()
 
     def save(self, conf_path):
         """
@@ -140,6 +150,47 @@ class Transfer(object):
                     return dstpath + basename
         return dstpath
 
+    def move_files_locally(self):
+        """
+        After the files have been moved from the remote host, they need to be moved
+        out of their temprary directory to their final destination. This should be run from
+        its own thread to not stop the rest of the program
+        """
+        print_message('MOVING FILES')
+        f_list = sorted(os.listdir(self.config.get('destination_path')))
+        if not f_list:
+            return
+        print_message('Moving {files} to {dst}'.format(
+            files=pformat(f_list),
+            dst=self.config.get('final_destination_path')
+        ))
+
+        for f in f_list:
+            # check that a folder for this year set exists, if not make one
+            year_set = filename_to_year_set(f, self.config.get('pattern'), self.config.get('frequency'))
+            print_message('file: {file} is in year_set: {ys}'.format(
+                file=f,
+                ys=year_set
+            ))
+            new_path = os.path.join(self.config.get('final_destination_path'), 'year_set_' + str(year_set))
+            if not os.path.exists(new_path):
+                os.mkdir(new_path)
+
+            src = os.path.join(self.config.get('destination_path'), f)
+            # copy the file to the correct year set folder
+            try:
+                copy(src=src, dst=new_path)
+            except Exception as e:
+                print_debug(e)
+                print_message('Error moving file from {src} to {dst}'.format(src=src, dst=new_path))
+            # remove the old files
+            try:
+                os.remove(src)
+            except Exception as e:
+                print_debug(e)
+                print_message('Error removing file {0}'.format(src))
+
+
     def execute(self):
         if self.status != 'valid':
             print_message('--- Transfer job in invalid state ---')
@@ -205,35 +256,27 @@ class Transfer(object):
             self.status = 'error'
             return
 
-        # # Add srcpath to the transfer task
-        # source_path = self.config.get('source_path')
-        # destination_path = self.config.get('destination_path')
-        # if source_path:
-        #     transfer_task.add_item(
-        #         source_path,
-        #         self.get_destination_path(
-        #             source_path,
-        #             destination_path,
-        #             self.config.get('recursive')),
-        #         recursive=self.config.get('recursive'))
-        # Add srclist to the transfer task
-        source_list = self.config.get('file_list')
-        if source_list:
-            try:
-                for path in source_list:
-                    dst_path = self.get_destination_path(
-                        path,
-                        self.config.get('destination_path'),
-                        self.config.get('recursive'))
-                    transfer_task.add_item(
-                        path,
-                        dst_path,
-                        recursive=self.config.get('recursive'))
-            except IOError as e:
-                print_debug(e)
-                print_message('Error opening source list')
-                self.status = 'error: cannot open source list'
-                return
+        # only add the first n transfers up to the max
+        source_list = self.config.get('file_list')[:self.maximum_transfers]
+        if not source_list:
+            print_message('Unable to transfer files without a source list')
+            self.status = 'error'
+            return
+        try:
+            for path in source_list:
+                dst_path = self.get_destination_path(
+                    path,
+                    self.config.get('destination_path'),
+                    self.config.get('recursive'))
+                transfer_task.add_item(
+                    path,
+                    dst_path,
+                    recursive=self.config.get('recursive'))
+        except IOError as e:
+            print_debug(e)
+            print_message('Error opening source list')
+            self.status = 'error: cannot open source list'
+            return
 
         # Start the transfer
         task_id = None
@@ -248,11 +291,14 @@ class Transfer(object):
             return
 
         # Check a status of the transfer every minute (60 secs)
+        number_transfered = 0
         while True:
             code, reason, data = api_client.task(task_id)
-            print data['status']
+            print_message('transfer status: {}'.format(data['status']))
             if data['status'] == 'SUCCEEDED':
                 print_message('progress %d/%d' % (data['files_transferred'], data['files']), 'ok')
+                if data['files_transferred'] > number_transfered:
+                    self.move_files_locally()
                 self.status = 'complete'
                 return ('success', '')
             elif data['status'] == 'FAILED':
@@ -260,4 +306,8 @@ class Transfer(object):
                 return ('error', data['nice_status_details'])
             elif data['status'] == 'ACTIVE':
                 print_message('progress %d/%d' % (data['files_transferred'], data['files']), 'ok')
-            time.sleep(60)
+                if data['files_transferred'] > number_transfered:
+                    number_transfered = data['files_transferred']
+                    thread = threading.Thread(target=self.move_files_locally)
+                    thread.start()
+            time.sleep(10)
