@@ -85,5 +85,8 @@ All fields can be specified in the config file, or if left out (for example pass
         "obs_for_diagnostics_path": "/export/baldwin32/data/obs_for_diagnostics/",
 
         # The path to the regrid map used in generating climos, a copy should be included in the repo
-        "regrid_map_path": "/export/baldwin32/projects/acme_workflow/resources/map_ne30np4_to_fv129x256_aave.20150901.nc"
+        "regrid_map_path": "/export/baldwin32/projects/acme_workflow/resources/map_ne30np4_to_fv129x256_aave.20150901.nc",
+
+        # The type of batch system that this will be run under. Allowed values are 'slurm', 'pbs', or 'none'
+        "batch_system_type": "slurm"
     }
