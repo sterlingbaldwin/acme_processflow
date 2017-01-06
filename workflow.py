@@ -24,8 +24,11 @@ from jobs.UploadDiagnosticOutput import UploadDiagnosticOutput
 from jobs.Publication import Publication
 from jobs.CMORjob import CMOREjob
 from Monitor import Monitor
+
 from util import print_debug
 from util import print_message
+from util import filename_to_file_list_key
+from util import filename_to_year_set
 
 from jobs.TestJob import TestJob
 
@@ -235,7 +238,7 @@ def monitor_check(monitor):
     new_files = monitor.get_new_files()
     checked_new_files = []
     for f in new_files:
-        key = filename_to_file_list_key(f)
+        key = filename_to_file_list_key(f, config.get('output_pattern'))
         if file_list.get(key) and not file_list[key] == 'data ready':
             checked_new_files.append(f)
     # if there are any new files
@@ -246,7 +249,7 @@ def monitor_check(monitor):
 
         # find which year set the data belongs to
         for f in new_files:
-            year_set = filename_to_year_set(f)
+            year_set = filename_to_year_set(f, config.get('output_pattern'), config.get('set_frequency'))
             for job_set in job_sets:
                 if job_set.get('year_set') == year_set:
                     # if before we got here, the job_set didnt have any data, now that we have some data
@@ -272,7 +275,10 @@ def monitor_check(monitor):
             'destination_endpoint': config.get('destination_endpoint'),
             'source_path': config.get('source_path'),
             'destination_path': tmpdir,
-            'recursive': 'False'
+            'recursive': 'False',
+            'final_destination_path': os.path.join(config.get('data_cache_path')),
+            'pattern': config.get('output_pattern'),
+            'frequency': config.get('set_frequency')
         })
         thread = threading.Thread(target=handle_transfer, args=(transfer, checked_new_files, thread_kill_event))
         thread_list.append(thread)
@@ -298,60 +304,13 @@ def handle_transfer(transfer_job, f_list, event):
     if not os.path.exists(tmpdir):
         os.mkdir(tmpdir)
     for f in f_list:
-        # check that a folder for this year set exists, if not make one
-        year_set = filename_to_year_set(f)
-        new_path = os.path.join(config.get('data_cache_path'), 'year_set_' + str(year_set))
-        if not os.path.exists(new_path):
-            os.mkdir(new_path)
-
-        src = os.path.join(tmpdir, f)
-        # copy the file to the correct year set folder
-        try:
-            copy(src=src, dst=new_path)
-        except Exception as e:
-            print_debug(e)
-            print_message('Error moving file from {src} to {dst}'.format(src=src, dst=new_path))
-        # remove the old files
-        try:
-            os.remove(src)
-        except Exception as e:
-            print_debug(e)
-            print_message('Error removing file {0}'.format(src))
-
         # update the file_list for this file to reflect that the transfer is complete
-        key = filename_to_file_list_key(f)
-        file_list[key] = 'data ready'
+        list_key = filename_to_file_list_key(f, config.get('output_pattern'))
+        file_list[list_key] = 'data ready'
     if debug:
         print_message("transfer job complete", 'ok')
         print_message('file_list status: ', 'ok')
         print_message(pformat(file_list), 'ok')
-
-def filename_to_file_list_key(filename):
-    """
-    Takes a filename and returns the key for the file_list
-    """
-    # these offsets need to change if the output_pattern changes. This is unavoidable given the escape characters
-    start_offset = 8
-    end_offset = 12
-    month_start_offset = end_offset + 1
-    month_end_offset = month_start_offset + 2
-    index = re.search(config.get('output_pattern'), filename).start()
-    year = int(filename[index + start_offset: index + end_offset])
-    month = int(filename[index + month_start_offset: index + month_end_offset])
-    key = "{year}-{month}".format(year=year, month=month)
-    return key
-
-def filename_to_year_set(filename):
-    """
-    Takes a filename and returns the year_set that the file belongs to
-    """
-    # these offsets need to change if the output_pattern changes. This is unavoidable given the escape characters
-    start_offset = 8
-    end_offset = 12
-    index = re.search(config.get('output_pattern'), filename).start()
-    year = int(filename[index + start_offset: index + end_offset])
-    year_set = int(floor(year / config.get('set_frequency'))) + 1
-    return year_set
 
 def check_year_sets():
     """
@@ -376,7 +335,7 @@ def check_year_sets():
                     ready = False
         if ready:
             status = 'data ready'
-            year_set = floor(set_start_year / config.get('set_frequency')) + 1
+            year_set = int(floor(set_start_year / config.get('set_frequency')) + 1)
             s = add_jobs(year_set, s)
         else:
             status = s['status']
@@ -391,7 +350,7 @@ def check_for_inplace_data():
     cache_path = config.get('data_cache_path')
     for folder in os.listdir(cache_path):
         for f in os.listdir(os.path.join(cache_path, folder)):
-            key = filename_to_file_list_key(f)
+            key = filename_to_file_list_key(f, config.get('output_pattern'))
             file_list[key] = 'data ready'
 
 def start_ready_job_sets():
