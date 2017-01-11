@@ -3,6 +3,7 @@ from math import floor
 import sys
 import traceback
 import re
+import os
 
 def print_debug(e):
     print '1', e.__doc__
@@ -51,11 +52,26 @@ def filename_to_year_set(filename, pattern, freq):
     Takes a filename and returns the year_set that the file belongs to
     """
     # these offsets need to change if the output_pattern changes. This is unavoidable given the escape characters
-    start_offset = 8
-    end_offset = 12
-    index = re.search(pattern, filename).start()
-    year = int(filename[index + start_offset: index + end_offset])
+    pattern_format = 'YYYY-MM'
+    file_format = '.nc'
+    if not filename.endswith(file_format):
+        print_message('unable to find year set, unexpected file format')
+        return 0
+    file_date = filename[ -(len(pattern_format) + len(file_format)): - len(file_format)]
+    year = int(file_date[:4])
     if year % freq == 0:
         return int(year / freq)
     else:
         return int(year / freq) + 1
+
+def create_symlink_dir(src, dst):
+    """
+    Create a directory, and fill it with symlinks to all the items in the source directory
+    """
+    dir_contents = os.listdir(src)
+    if not os.path.exists(dst):
+        os.makedirs(dst)
+    for f in dir_contents:
+        source = os.path.join(src, f)
+        destination = os.path.join(dst, f)
+        os.symlink(source, destination)
