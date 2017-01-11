@@ -64,14 +64,13 @@ def filename_to_year_set(filename, pattern, freq):
     else:
         return int(year / freq) + 1
 
-def create_symlink_dir(src, dst):
+def create_symlink_dir(src_dir, src_list, dst):
     """
     Create a directory, and fill it with symlinks to all the items in the source directory
     """
-    dir_contents = os.listdir(src)
     if not os.path.exists(dst):
         os.makedirs(dst)
-    for f in dir_contents:
-        source = os.path.join(src, f)
+    for f in src_list:
+        source = os.path.join(src_dir, f)
         destination = os.path.join(dst, f)
         os.symlink(source, destination)
