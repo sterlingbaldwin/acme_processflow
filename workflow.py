@@ -29,8 +29,12 @@ from util import print_debug
 from util import print_message
 from util import filename_to_file_list_key
 from util import filename_to_year_set
+from util import create_symlink_dir
+from util import file_list_cmp
 
 from jobs.TestJob import TestJob
+
+import pdb
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-c', '--config', help='Path to configuration file')
@@ -88,7 +92,7 @@ def setup(parser):
                 sys.exit(1)
             from_saved_state = True
             if debug:
-                print_message('saved file_list: \n{}'.format(pformat(file_list)))
+                print_message('saved file_list: \n{}'.format(pformat(sorted(file_list, cmp=file_list_cmp))))
                 print_message('saved job_sets: \n{}'.format(pformat(job_sets)))
                 print_message('saved config: \n{}'.format(pformat(config)))
     if not from_saved_state:
@@ -143,6 +147,7 @@ def add_jobs(year_set, job_set):
     global job_sets
 
     # each required job is a key, the value is if its in the job list already or not
+    # this is here incase the jobs have already been added
     required_jobs = {
         'climo': False,
         'diagnostic': False,
@@ -154,24 +159,40 @@ def add_jobs(year_set, job_set):
 
     # first initialize the climo job
     if not required_jobs['climo']:
-        climo_output_dir = os.path.join(config.get('output_path') + '/year_set_' + str(year_set))
+        climo_output_dir = os.path.join(config.get('output_path'))
         if not os.path.exists(climo_output_dir):
             if debug:
                 print_message("Creating climotology output directory {}".format(climo_output_dir))
             os.makedirs(climo_output_dir)
-        regrid_output_dir = config.get('output_path') + '/regrid/year_set_' + str(year_set)
+        regrid_output_dir = config.get('output_path') + '/regrid/'
         if not os.path.exists(regrid_output_dir):
             os.makedirs(regrid_output_dir)
+
+        # Setup variables for climo job
         climo_start_year = config.get('simulation_start_year') + ((year_set - 1) * config.get('set_frequency'))
         climo_end_year = climo_start_year + config.get('set_frequency') - 1
-        model_path = config.get('data_cache_path') + '/year_set_' + str(year_set)
+        # create a temp directory, and fill it with symlinks to the actual data
+        key_list = []
+        for year in range(climo_start_year, climo_end_year + 1):
+            for month in range(13):
+                key_list.append('{0}-{1}'.format(year, month))
+        climo_file_list = [file_name_list.get(x) for x in key_list]
+        climo_temp_dir = os.path.join(os.getcwd(), 'tmp_climo', 'year_set_' + str(year_set))
+        if not os.path.exists(climo_temp_dir):
+            os.makedirs(climo_temp_dir)
+        create_symlink_dir(
+            src_dir=config.get('data_cache_path'),
+            src_list=climo_file_list,
+            dst=climo_temp_dir
+        )
+        # create the configuration object for the climo job
         climo_config = {
             'start_year': climo_start_year,
             'end_year': climo_end_year,
             'caseId': config.get('experiment'),
             'annual_mode': 'sdd',
             'regrid_map_path': config.get('regrid_map_path'),
-            'input_directory': model_path,
+            'input_directory': climo_temp_dir,
             'climo_output_directory': climo_output_dir,
             'regrid_output_directory': regrid_output_dir,
             'yearset': year_set
@@ -184,8 +205,18 @@ def add_jobs(year_set, job_set):
         diag_output_path = config.get('output_path') + '/diagnostics/year_set_' + str(year_set)
         if not os.path.exists(diag_output_path):
             os.makedirs(diag_output_path)
+        # create a temp directory full of just the regridded output we need for this diagnostic job
+        diag_temp_dir = os.path.join(os.getcwd(), 'tmp_diag', 'year_set_' + str(year_set))
+        if not os.path.exists(diag_temp_dir):
+            os.makedirs(diag_temp_dir)
+        create_symlink_dir(
+            src_dir=regrid_output_dir,
+            src_list=climo_file_list,
+            dst=diag_temp_dir
+        )
+        # create the configuration object for the diag job
         diag_config = {
-            '--model': regrid_output_dir,
+            '--model': diag_temp_dir,
             '--obs': config.get('obs_for_diagnostics_path'),
             '--outputdir': diag_output_path,
             '--package': 'amwg',
@@ -233,7 +264,12 @@ def monitor_check(monitor):
         monitor: a monitor object setup with a remote directory and an SSH session
     """
     global job_sets
+    global active_transfers
 
+    # if there are already three or more transfers in progress
+    # hold off on starting any new ones until they complete
+    if active_transfers >= 3:
+        return
     monitor.check()
     new_files = monitor.get_new_files()
     checked_new_files = []
@@ -241,12 +277,12 @@ def monitor_check(monitor):
         key = filename_to_file_list_key(f, config.get('output_pattern'))
         if file_list.get(key) and not file_list[key] == 'data ready':
             checked_new_files.append(f)
+
     # if there are any new files
     if checked_new_files:
         if debug:
             print_message('Found new files: {}\n setting up transfer'.format(
                 pformat(checked_new_files, indent=4)), 'ok')
-
         # find which year set the data belongs to
         for f in new_files:
             year_set = filename_to_year_set(f, config.get('output_pattern'), config.get('set_frequency'))
@@ -262,8 +298,8 @@ def monitor_check(monitor):
                         job_set = add_jobs(year_set, job_set)
 
         f_list = ['{path}/{file}'.format(path=config.get('source_path'), file=f)  for f in checked_new_files]
-        tmpdir = os.getcwd() + '/tmp/'
-        transfer = Transfer({
+        # tmpdir = os.getcwd() + '/tmp/'
+        transfer_config = {
             'file_list': f_list,
             'globus_username': config.get('globus_username'),
             'globus_password': config.get('globus_password'),
@@ -274,17 +310,23 @@ def monitor_check(monitor):
             'source_endpoint': config.get('source_endpoint'),
             'destination_endpoint': config.get('destination_endpoint'),
             'source_path': config.get('source_path'),
-            'destination_path': tmpdir,
+            'destination_path': config.get('data_cache_path') + '/',
             'recursive': 'False',
-            'final_destination_path': os.path.join(config.get('data_cache_path')),
+            'final_destination_path': config.get('data_cache_path'),
             'pattern': config.get('output_pattern'),
             'frequency': config.get('set_frequency')
-        })
+        }
+        transfer = Transfer(transfer_config)
         thread = threading.Thread(target=handle_transfer, args=(transfer, checked_new_files, thread_kill_event))
         thread_list.append(thread)
         thread.start()
+        active_transfers += 1
+    else:
+        if debug:
+            print_message('No new files found', 'ok')
 
 def handle_transfer(transfer_job, f_list, event):
+    global active_transfers
     """
     Wrapper around the transfer.execute() method, ment to be run inside a thread
 
@@ -299,6 +341,8 @@ def handle_transfer(transfer_job, f_list, event):
 
     if transfer_job.status != 'complete':
         print_message('Faild to transfer files correctly')
+    # the transfer is complete, so we can decrement the active_transfers counter
+    active_transfers -= 1
     # handle post processing for transfered data
     tmpdir = os.getcwd() + '/tmp/'
     if not os.path.exists(tmpdir):
@@ -307,10 +351,12 @@ def handle_transfer(transfer_job, f_list, event):
         # update the file_list for this file to reflect that the transfer is complete
         list_key = filename_to_file_list_key(f, config.get('output_pattern'))
         file_list[list_key] = 'data ready'
+        file_name_list[list_key] = f
     if debug:
         print_message("transfer job complete", 'ok')
         print_message('file_list status: ', 'ok')
-        print_message(pformat(file_list), 'ok')
+        for key in sorted(file_list, cmp=file_list_cmp):
+            print_message('{key}: {val}'.format(key=key, val=file_list[key]), 'ok')
 
 def check_year_sets():
     """
@@ -347,11 +393,14 @@ def check_for_inplace_data():
     updates the file_list and job_sets accordingly
     """
     global file_list
+    global file_name_list
     cache_path = config.get('data_cache_path')
-    for folder in os.listdir(cache_path):
-        for f in os.listdir(os.path.join(cache_path, folder)):
-            key = filename_to_file_list_key(f, config.get('output_pattern'))
-            file_list[key] = 'data ready'
+    if not os.path.exists(cache_path):
+        os.makedirs(cache_path)
+    for climo_file in os.listdir(cache_path):
+        key = filename_to_file_list_key(climo_file, config.get('output_pattern'))
+        file_list[key] = 'data ready'
+        file_name_list[key] = climo_file
 
 def start_ready_job_sets():
     """
@@ -379,7 +428,7 @@ def start_ready_job_sets():
                 elif job.get_type() != 'climo' and job.status == 'valid':
                     ready = True
                     for dependancy in job.depends_on:
-                        if job_set['jobs'][dependancy].status != 'complete':
+                        if job_set['jobs'][dependancy].status != 'COMPLETE':
                             ready = False
                             break
                     if ready:
@@ -407,68 +456,35 @@ def monitor_job(job_id, job, event=None):
         count = 5
         valid = False
         while count > 0 and not valid:
-            cmd = ['squeue']
+            cmd = ['scontrol', 'show', 'job', str(job_id)]
             out = Popen(cmd, stdout=PIPE, stderr=PIPE).communicate()[0]
-
             # sometimes there will be a communication error with the SLURM controller
             # in which case the controller returns 'error: some message'
-            if 'error' in out:
+            if 'error' in out or len(out.split('\n')) == 0:
                 valid = False
                 count -= 1
             else:
                 valid = True
-            print out, count
 
         if not valid:
             # if the controller errors 5 times in a row, its probably an unrecoverable error
             print_message('-------- Unable to communicate with SLURM controller ----------')
             return 'ERROR'
 
-        job_status = 'running'
-        found_job = False
-        valid = False
+        # we're looking for the JobState field, which is on the 4th line
+        # count = 0
+        # for line in out.split('\n'):
+        #     print '{0}: {1}'.format(count, line)
+        #     count += 1
+        job_status = None
         for line in out.split('\n'):
-            words = filter(None, line.split(' '))
-            if debug:
-                print_message(words, 'ok')
-            # the 0th word is the job_id, except for the first line
-            if len(words) == 0:
+            for word in line.split():
+                if 'JobState' in word:
+                    index = word.find('=')
+                    job_status = word[index + 1:]
+                    break
+            if job_status:
                 break
-            elif words[0] == 'JOBID':
-                # if we dont see the line '['JOBID', 'PARTITION', 'NAME', 'USER', 'ST', 'TIME', 'NODES', 'NODELIST(REASON)']' at least onece then we know squeue didnt work right
-                valid = True
-                continue
-            try:
-                line_id = int(words[0])
-            except Exception as e:
-                print_message('Unable to convert {} into an int'.format(words[0]))
-                continue
-            if line_id == job_id:
-                found_job = True
-                # the 4th word is the job status
-                for word in words:
-                    if word == 'R':
-                        job_status = 'running'
-                        break
-                    elif word == 'PD':
-                        job_status = 'waiting in queue'
-                        break
-                    else:
-                        job_status = 'unrecognized state'
-            if debug and job_status != 'running' and job_status != 'waiting in queue':
-                print_message('Unrecognized job state: {}'.format(words[4]))
-            if job_status != job.status:
-                if debug:
-                    print_message('setting job status to {}'.format(job_status), 'ok')
-                return job_status
-        if not found_job:
-            if not valid:
-                # I might want to put a counter here, since if SLURM goes down entirely it would just loop forever
-                # but Ive seen it need to request 5-10 times before getting a response (rare, but its happened)
-                sleep(1)
-                return None
-            # if the job isnt in the queue anymore, that means its complete
-            job_status = 'complete'
 
         print_message(' ======= end job monitor, status: {} ======='.format(job_status), 'ok')
         return job_status
@@ -487,11 +503,10 @@ def monitor_job(job_id, job, event=None):
 
     while True:
         print_message('======= monitoring job {0} ========='.format(job_id), 'ok')
-        # this check is hear in case the loop is stuck and the thread needs to be canceled
+        # this check is here in case the loop is stuck and the thread needs to be canceled
         if event and event.is_set():
             return
         batch_system = config.get('batch_system_type')
-        count = 5
         if batch_system == 'slurm':
             status = handle_slurm()
         elif batch_system == 'pbs':
@@ -510,7 +525,7 @@ def monitor_job(job_id, job, event=None):
             if debug:
                 print_message('Setting job status: {0}'.format(status))
             job.status = status
-        if status == 'complete' or status == 'error':
+        if status == 'COMPLETE' or status == 'error':
             break
 
         # instead of sleeping for 10 seconds, sleep for 1 second 10 times
@@ -522,13 +537,22 @@ def monitor_job(job_id, job, event=None):
 
 if __name__ == "__main__":
 
+    # A list of all the expected fiels
     file_list = {}
+    # A list of all the file names
+    file_name_list = {}
+    # Describes the state of each job jet
     job_sets = {}
+    # The master configuration object
     config = {}
+    # A list of all the threads
     thread_list = []
+    # An event to kill the threads on terminal exception
     thread_kill_event = threading.Event()
     debug = False
     from_saved_state = False
+    # The number of active globus transfers
+    active_transfers = 0
 
     # Read in parameters from config
     config = setup(parser)
@@ -560,16 +584,17 @@ if __name__ == "__main__":
             for month in range(1, 13):
                 key = str(year) + '-' + str(month)
                 file_list[key] = 'no data'
+                file_name_list[key] = ''
 
     # Check for any data already on the System
     check_for_inplace_data()
-
+    check_year_sets()
     if debug:
         print_message('printing year sets', 'ok')
         for key in job_sets:
             print_message(str(key['year_set']) + ': ' + key['status'], 'ok')
         print_message('printing file list', 'ok')
-        for key in sorted(file_list):
+        for key in sorted(file_list, cmp=file_list_cmp):
             print_message(key + ': ' + file_list[key], 'ok')
 
     monitor_config = {
