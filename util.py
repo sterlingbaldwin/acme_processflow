@@ -66,11 +66,37 @@ def filename_to_year_set(filename, pattern, freq):
 
 def create_symlink_dir(src_dir, src_list, dst):
     """
-    Create a directory, and fill it with symlinks to all the items in the source directory
+    Create a directory, and fill it with symlinks to all the items in src_list
     """
     if not os.path.exists(dst):
         os.makedirs(dst)
     for f in src_list:
+        if not f or not src_list:
+            continue
         source = os.path.join(src_dir, f)
         destination = os.path.join(dst, f)
+        if os.path.lexists(destination):
+            continue
         os.symlink(source, destination)
+
+def file_list_cmp(a, b):
+    """
+    A custom comparator function for the file_list object
+    """
+    a_index = a.find('-')
+    b_index = b.find('-')
+    a_year = int(a[:a_index])
+    b_year = int(b[:b_index])
+    if a_year > b_year:
+        return 1
+    elif a_year < b_year:
+        return -1
+    else:
+        a_month = int(a[a_index + 1:])
+        b_month = int(b[b_index + 1:])
+        if a_month > b_month:
+            return 1
+        elif a_month < b_month:
+            return -1
+        else:
+            return 0
