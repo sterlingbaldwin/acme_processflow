@@ -49,7 +49,7 @@ class Transfer(object):
             'pattern': '',
             'frequency': ''
         }
-        self.maximum_transfers = 60
+        self.maximum_transfers = 0
         self.prevalidate(config)
         self.msg = None
         self.thread_list = []
@@ -116,6 +116,8 @@ class Transfer(object):
                     self.status = 'invalid'
                     return -1
         self.status = 'valid'
+        # the maximum number of files to transfer at one time, set to a single year_set assuming 12 files per year
+        self.maximum_transfers = self.config.get('frequency') * 12
         return 0
 
     def postvalidate(self):
@@ -133,7 +135,10 @@ class Transfer(object):
             reqs.set_requirement_value("myproxy", "username", username)
             reqs.set_requirement_value("myproxy", "passphrase", password)
             reqs.set_requirement_value("myproxy", "lifetime_in_hours", "168")
-            code, reason, result = api_client.endpoint_activate(endpoint, reqs)
+            try:
+                code, reason, result = api_client.endpoint_activate(endpoint, reqs)
+            except:
+                raise
             if code != 200:
                 msg = "Could not activate the endpoint: %s. Error: %s - %s" % (endpoint, result["code"], result["message"])
                 print msg
@@ -150,45 +155,31 @@ class Transfer(object):
                     return dstpath + basename
         return dstpath
 
-    def move_files_locally(self):
+    def move_file_locally(self, file_name):
         """
         After the files have been moved from the remote host, they need to be moved
         out of their temprary directory to their final destination. This should be run from
         its own thread to not stop the rest of the program
         """
-        print_message('MOVING FILES')
-        f_list = sorted(os.listdir(self.config.get('destination_path')))
-        if not f_list:
-            return
-        print_message('Moving {files} to {dst}'.format(
-            files=pformat(f_list),
-            dst=self.config.get('final_destination_path')
-        ))
+        print_message('MOVING FILE {0}'.format(file_name))
+        # check that a folder for this year set exists, if not make one
+        new_path = self.config.get('final_destination_path')
+        if not os.path.exists(new_path):
+            os.mkdir(new_path)
 
-        for f in f_list:
-            # check that a folder for this year set exists, if not make one
-            year_set = filename_to_year_set(f, self.config.get('pattern'), self.config.get('frequency'))
-            print_message('file: {file} is in year_set: {ys}'.format(
-                file=f,
-                ys=year_set
-            ))
-            new_path = os.path.join(self.config.get('final_destination_path'), 'year_set_' + str(year_set))
-            if not os.path.exists(new_path):
-                os.mkdir(new_path)
-
-            src = os.path.join(self.config.get('destination_path'), f)
-            # copy the file to the correct year set folder
-            try:
-                copy(src=src, dst=new_path)
-            except Exception as e:
-                print_debug(e)
-                print_message('Error moving file from {src} to {dst}'.format(src=src, dst=new_path))
-            # remove the old files
-            try:
-                os.remove(src)
-            except Exception as e:
-                print_debug(e)
-                print_message('Error removing file {0}'.format(src))
+        src = os.path.join(self.config.get('destination_path'), file_name)
+        # copy the file to the final destination
+        try:
+            copy(src=src, dst=new_path)
+        except Exception as e:
+            print_debug(e)
+            print_message('Error moving file from {src} to {dst}'.format(src=src, dst=new_path))
+        # remove the old files
+        try:
+            os.remove(src)
+        except Exception as e:
+            print_debug(e)
+            print_message('Error removing file {0}'.format(src))
 
 
     def execute(self):
@@ -292,22 +283,36 @@ class Transfer(object):
 
         # Check a status of the transfer every minute (60 secs)
         number_transfered = 0
+        files_transferred = []
         while True:
             code, reason, data = api_client.task(task_id)
             print_message('transfer status: {}'.format(data['status']))
+            # if the transfer is done, move any files that havent already been 
+            # moved to their final destination
             if data['status'] == 'SUCCEEDED':
                 print_message('progress %d/%d' % (data['files_transferred'], data['files']), 'ok')
-                if data['files_transferred'] > number_transfered:
-                    self.move_files_locally()
+                # if data['files_transferred'] > number_transfered:
+                #     directory_contents = os.listdir(self.config.get('destination_path'))
+                #     for f in directory_contents:
+                #         if f in self.config.get('file_list') and f not in files_transferred:
+                #             files_transferred.append(f)
+                #             number_transfered = data['files_transferred']
+                #             self.move_file_locally(file_name=f)
+
                 self.status = 'complete'
                 return ('success', '')
             elif data['status'] == 'FAILED':
                 self.status = 'error: ' + data.get('nice_status_details')
                 return ('error', data['nice_status_details'])
+
             elif data['status'] == 'ACTIVE':
                 print_message('progress %d/%d' % (data['files_transferred'], data['files']), 'ok')
-                if data['files_transferred'] > number_transfered:
-                    number_transfered = data['files_transferred']
-                    thread = threading.Thread(target=self.move_files_locally)
-                    thread.start()
+                # if data['files_transferred'] > number_transfered:
+                #     directory_contents = os.listdir(self.config.get('destination_path'))
+                #     for f in directory_contents:
+                #         if f in self.config.get('file_list') and f not in files_transferred:
+                #             files_transferred.append(f)
+                #             number_transfered = data['files_transferred']
+                #             thread = threading.Thread(target=self.move_file_locally, args=(f))
+                #             thread.start()
             time.sleep(10)
