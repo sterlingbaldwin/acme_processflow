@@ -110,6 +110,7 @@ class Monitor(object):
         files.strip()
         files = files.split()
         self.new_files = []
+        count = 0
         for f in files:
             if f not in self.known_files:
                 self.known_files.append(f)
