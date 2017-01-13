@@ -1,9 +1,13 @@
+import json
+import logging
+
 from uuid import uuid4
 from diagsviewer import DiagnosticsViewerClient
+from pprint import pformat
+
 from util import print_debug
 from util import print_message
-from pprint import pformat
-import json
+from util import format_debug
 
 
 class UploadDiagnosticOutput(object):
@@ -24,6 +28,7 @@ class UploadDiagnosticOutput(object):
         self.status = 'unvalidated'
         self.depends_on = []
         self.type = 'upload_diagnostic_output'
+        self.job_id = 0
         self.prevalidate(config)
 
     def get_type(self):
@@ -54,8 +59,8 @@ class UploadDiagnosticOutput(object):
                 config[self.uuid]['type'] = self.type
                 json.dump(config, outfile, indent=4)
         except Exception as e:
-            print_message('Error saving configuration file')
-            print_debug(e)
+            logging.error('Error saving configuration file')
+            logging.error(format_debug(e))
             raise
 
     def prevalidate(self, config=None):
@@ -67,7 +72,7 @@ class UploadDiagnosticOutput(object):
             return 0
         for i in config:
             if i not in self.inputs:
-                print_message('Unexpected arguement: {}, {}'.format(i, config[i]))
+                logging.info('Unexpected arguement to Upload_Diagnostic: %s, %s', i, config[i])
             else:
                 if i == 'depends_on':
                     self.depends_on = config.get(i)
@@ -76,7 +81,7 @@ class UploadDiagnosticOutput(object):
                     self.config[i] = config[i]
         for i in self.inputs:
             if i not in self.config:
-                print_message('Missing UploadDiagnosticOutput argument {}'.format(i))
+                logging.error('Missing UploadDiagnosticOutput argument %s', i)
                 self.status = 'invalid'
                 return -1
         self.status = 'valid'
@@ -106,16 +111,16 @@ class UploadDiagnosticOutput(object):
                 self.config.get('username'),
                 self.config.get('password'))
         except Exception as e:
-            print_debug(e)
-            print_message('Error connecting to server')
+            logging.error('Upload_Diagnostic unable error connecting to server')
+            logging.error(format_debug(e))
             return -1
         self.outputs['id'] = client_id
         try:
-            print_message('uploading diagnostic package from {}'.format(self.config.get('path_to_diagnostic')))
+            logging.info('uploading diagnostic package from %s', self.config.get('path_to_diagnostic'))
             dataset_id = client.upload_package(self.config.get('path_to_diagnostic'))
         except Exception as e:
-            print_debug(e)
-            print_message('Error uploading diagnostic set to server')
+            logging.error('Error uploading diagnostic set to server')
+            logging.error(format_debug(e))
             return -1
         self.outputs['dataset_id'] = dataset_id
         self.status = 'complete'

@@ -1,23 +1,29 @@
 # pylint: disable=C0103
 # pylint: disable=C0111
 # pylint: disable=C0301
-import os, sys, json
+import os
+import sys
+import json
+import time
+import logging
+
+from pprint import pformat
+from subprocess import Popen, PIPE
 from datetime import datetime, timedelta
 from shutil import copy, rmtree
-import time
 from uuid import uuid4
+
 from globusonline.transfer import api_client
 from globusonline.transfer.api_client import Transfer as globus_transfer
 from globusonline.transfer.api_client import TransferAPIClient
 from globusonline.transfer.api_client import TransferAPIError
 from globusonline.transfer.api_client import x509_proxy
 from globusonline.transfer.api_client.goauth import get_access_token
+
 from util import print_debug
 from util import print_message
 from util import filename_to_year_set
-from pprint import pformat
-from subprocess import Popen, PIPE
-import threading
+from util import format_debug
 
 
 class Transfer(object):
@@ -52,8 +58,7 @@ class Transfer(object):
         self.maximum_transfers = 0
         self.prevalidate(config)
         self.msg = None
-        self.thread_list = []
-        self.kill_thread_event = threading.Event()
+        self.job_id = 0
 
     def save(self, conf_path):
         """
@@ -140,8 +145,7 @@ class Transfer(object):
             except:
                 raise
             if code != 200:
-                msg = "Could not activate the endpoint: %s. Error: %s - %s" % (endpoint, result["code"], result["message"])
-                print msg
+                logging.error("Could not activate the endpoint: %s. Error: %s - %s", endpoint, result["code"], result["message"])
 
     def get_destination_path(self, srcpath, dstpath, recursive):
         '''
@@ -161,7 +165,7 @@ class Transfer(object):
         out of their temprary directory to their final destination. This should be run from
         its own thread to not stop the rest of the program
         """
-        print_message('MOVING FILE {0}'.format(file_name))
+        logging.info('Moving file locally %s', file_name)
         # check that a folder for this year set exists, if not make one
         new_path = self.config.get('final_destination_path')
         if not os.path.exists(new_path):
@@ -172,29 +176,26 @@ class Transfer(object):
         try:
             copy(src=src, dst=new_path)
         except Exception as e:
-            print_debug(e)
-            print_message('Error moving file from {src} to {dst}'.format(src=src, dst=new_path))
+            logging.error('Error moving file from %s to %s', src, new_path)
+            logging.error(format_debug(e))
+
         # remove the old files
         try:
             os.remove(src)
         except Exception as e:
-            print_debug(e)
-            print_message('Error removing file {0}'.format(src))
-
+            logging.error('Error removing file %s', src)
+            logging.error(format_debug(e))
 
     def execute(self):
         if self.status != 'valid':
-            print_message('--- Transfer job in invalid state ---')
-            print_message(str(self))
+            logging.error('Transfer job in invalid state')
+            logging.error(str(self))
             return
-        print_message('Starting transfer job from {src} to {dst}'.format(
-            src=self.config.get('source_endpoint'),
-            dst=self.config.get('destination_endpoint')
-        ), 'ok')
-        # Map legacy endpoint names to UUIDs
+
+        # Get source and destination UUIDs
         srcendpoint = self.config.get('source_endpoint')
         dstendpoint = self.config.get('destination_endpoint')
-
+        logging.info('Starting transfer job from %s to %s', srcendpoint, dstendpoint)
         # Get access token (This method of getting an acces token is deprecated and should be replaced by OAuth2 calls).
         globus_username = self.config.get('globus_username')
         globus_password = self.config.get('globus_password')
@@ -209,13 +210,13 @@ class Transfer(object):
             try:
                 self.activate_endpoint(api_client, srcendpoint, source_user, source_pass)
             except Exception as e:
-                print_debug(e)
-                print_message('Error activating source endpoing')
+                logging.error('Error activating source endpoing, attempt %s', int(i) + 1)
+                logging.error(format_debug(e))
             else:
                 successful_activation = True
                 break
         if not successful_activation:
-            print_message('Unable to activate source endpoint after five attempts, exiting')
+            logging.error('Unable to activate source endpoint after five attempts, exiting')
             self.status = 'error'
             return
 
@@ -226,13 +227,13 @@ class Transfer(object):
             try:
                 self.activate_endpoint(api_client, dstendpoint, dst_user, dst_pass)
             except Exception as e:
-                print_debug(e)
-                print_message('Error activating destination endpoint')
+                logging.error('Error activating destination endpoing, attempt %s', int(i) + 1)
+                logging.error(format_debug(e))
             else:
                 successful_activation = True
                 break
         if not successful_activation:
-            print_message('Unable to activate destination endpoint after five attempts, exiting')
+            logging.error('Unable to activate destination endpoint after five attempts, exiting')
             self.status = 'error'
             return
 
@@ -242,15 +243,15 @@ class Transfer(object):
             deadline = datetime.utcnow() + timedelta(days=10)
             transfer_task = globus_transfer(submission_id, srcendpoint, dstendpoint, deadline)
         except Exception as e:
-            print_debug(e)
-            print_message('Error creating transfer task')
+            logging.error('Error creating transfer task')
+            logging.error(format_debug(e))
             self.status = 'error'
             return
 
         # only add the first n transfers up to the max
         source_list = self.config.get('file_list')[:self.maximum_transfers]
         if not source_list:
-            print_message('Unable to transfer files without a source list')
+            logging.error('Unable to transfer files without a source list')
             self.status = 'error'
             return
         try:
@@ -264,9 +265,9 @@ class Transfer(object):
                     dst_path,
                     recursive=self.config.get('recursive'))
         except IOError as e:
-            print_debug(e)
-            print_message('Error opening source list')
-            self.status = 'error: cannot open source list'
+            logging.error('Error opening source list')
+            logging.error(format_debug(e))
+            self.status = 'error'
             return
 
         # Start the transfer
@@ -274,10 +275,10 @@ class Transfer(object):
         try:
             code, reason, data = api_client.transfer(transfer_task)
             task_id = data["task_id"]
-            print 'task_id %s' % task_id
+            logging.info('starting transfer with task id %s', task_id)
         except Exception as e:
-            print_message("Could not submit the transfer. Error: %s" % str(e))
-            print_debug(e)
+            logging.error("Could not submit the transfer")
+            logging.error(format_debug(e))
             self.status = 'error'
             return
 
@@ -286,11 +287,11 @@ class Transfer(object):
         files_transferred = []
         while True:
             code, reason, data = api_client.task(task_id)
-            print_message('transfer status: {}'.format(data['status']))
-            # if the transfer is done, move any files that havent already been 
+            logging.info('transfer status: %s', data['status'])
+            # if the transfer is done, move any files that havent already been
             # moved to their final destination
             if data['status'] == 'SUCCEEDED':
-                print_message('progress %d/%d' % (data['files_transferred'], data['files']), 'ok')
+                logging.info('progress %d/%d', data['files_transferred'], data['files'])
                 # if data['files_transferred'] > number_transfered:
                 #     directory_contents = os.listdir(self.config.get('destination_path'))
                 #     for f in directory_contents:
@@ -298,15 +299,15 @@ class Transfer(object):
                 #             files_transferred.append(f)
                 #             number_transfered = data['files_transferred']
                 #             self.move_file_locally(file_name=f)
-
-                self.status = 'complete'
+                self.status = 'COMPLETED'
                 return ('success', '')
             elif data['status'] == 'FAILED':
-                self.status = 'error: ' + data.get('nice_status_details')
+                logging.error('Error transfering files %s', data.get('nice_status_details'))
+                self.status = 'error'
                 return ('error', data['nice_status_details'])
 
             elif data['status'] == 'ACTIVE':
-                print_message('progress %d/%d' % (data['files_transferred'], data['files']), 'ok')
+                logging.info('progress %d/%d', data['files_transferred'], data['files'])
                 # if data['files_transferred'] > number_transfered:
                 #     directory_contents = os.listdir(self.config.get('destination_path'))
                 #     for f in directory_contents:

@@ -4,6 +4,7 @@
 import os
 import re
 import json
+import logging
 
 from uuid import uuid4
 from pprint import pformat
@@ -12,7 +13,7 @@ from time import sleep
 
 from util import print_debug
 from util import print_message
-
+from util import check_slurm_job_submission
 
 class Climo(object):
     """
@@ -79,7 +80,7 @@ class Climo(object):
                 stdout=PIPE,
                 stderr=PIPE,
                 shell=False)
-            self.status = 'running'
+            self.status = 'RUNNING'
             done = 2
             console_output = ''
             while done != 0:
@@ -97,11 +98,11 @@ class Climo(object):
                 self.outputs['console_output'] = console_output
                 print console_output
 
-            self.status = 'complete'
+            self.status = 'COMPLETED'
         else:
             # Submitting the job to SLURM
-            # cmd.append('-p mpi')
-            run_script = './run_scripts/ncclimo_job_' + str(self.uuid)
+            expected_name = 'ncclimo_job_' + str(self.uuid)
+            run_script = './run_scripts/' + expected_name
             self.slurm_args['error_file'] = '-e {error_file}'.format(error_file=run_script + '.err')
             self.slurm_args['output_file'] = '-o {output_file}'.format(output_file=run_script + '.out')
             with open(run_script, 'w') as batchfile:
@@ -112,25 +113,27 @@ class Climo(object):
                 batchfile.write(slurm_command)
             slurm_cmd = ['sbatch', run_script]
             started = False
-            retry_count = 5
-            while not started:
+            retry_count = 0
+            while not started and retry_count < 5:
                 self.proc = Popen(slurm_cmd, stdout=PIPE)
                 output = self.proc.communicate()[0]
-                print_message('+++++ STARTING CLIMO JOB +++++\n{}'.format(output))
-                if 'Submitted batch job' in output or retry_count <= 0:
-                    started = True
-                    if retry_count <= 0:
-                        print_message("Error starting climo job")
-                        print_message(output)
-                        self.job_id = 0
-                        break
+                started, job_id = check_slurm_job_submission(expected_name)
+                if started:
+                    self.status = 'RUNNING'
+                    self.job_id = job_id
+                    logging.info('Starting climo job with job_id %s', job_id)
+                    # print_message('+++++ STARTING CLIMO JOB {0} +++++'.format(self.job_id))
+                elif retry_count <= 0:
+                    logging.warning("Error starting climo job\n%s", output)
+                    print_message("Error starting climo job")
+                    print_message(output)
+                    self.job_id = 0
+                    break
                 else:
-                    retry_count -= 1
+                    logging.warning('Failed to start job trying again, attempt %s', str(retry_count))
+                    print_message('Failed to start job, trying again')
+                    retry_count += 1
                     continue
-                self.status = 'running'
-                index = output.find('job') + 4
-                self.job_id = int(output[index:].strip())
-                print_message('+++++ job_id: {} *****'.format(self.job_id))
             return self.job_id
 
     def set_status(self, status):
@@ -159,7 +162,8 @@ class Climo(object):
             'config': self.config,
             'status': self.status,
             'depends_on': self.depends_on,
-            'uuid': self.uuid
+            'uuid': self.uuid,
+            'job_id': self.job_id
         }, indent=4)
 
     def prevalidate(self, config):
