@@ -1,5 +1,5 @@
-from math import floor
-
+from time import sleep
+from subprocess import Popen, PIPE
 import sys
 import traceback
 import re
@@ -14,6 +14,16 @@ def print_debug(e):
     ex_type, ex, tb = sys.exc_info()
     print '6', traceback.print_tb(tb)
 
+def format_debug(e):
+    ex_type, ex, tb = sys.exc_info()
+    return '1: {doc} \n2: {exec_info} \n3: {exec_0} \n 4: {exec_1} \n5: {lineno} \n6: {stack}'.format(
+        doc=e.__doc__,
+        exec_info=sys.exc_info(),
+        exec_0=sys.exc_info()[0],
+        exec_1=sys.exc_info()[1],
+        lineno=traceback.tb_lineno(sys.exc_info()[2]),
+        stack=traceback.print_tb(tb)
+    )
 
 class colors:
     HEADER = '\033[95m'
@@ -100,3 +110,40 @@ def file_list_cmp(a, b):
             return -1
         else:
             return 0
+
+def thread_sleep(seconds, event):
+    for i in range(seconds):
+        if event and event.is_set():
+            return 1
+        sleep(1)
+    return 0
+
+def check_slurm_job_submission(expected_name):
+    """
+    Checks if a job with the expected_name is in the slurm queue
+    """
+    cmd = ['scontrol', 'show', 'job']
+    error_count = 0
+    job_id = 0
+    found_job = False
+    while error_count <= 10:
+        out = Popen(cmd, stdout=PIPE, stderr=PIPE).communicate()[0]
+        out = out.split('\n')
+        if 'error' in out[0]:
+            sleep(1)
+            error_count += 1
+            continue
+        for line in out:
+            for word in line.split():
+                if 'JobId' in word:
+                    index = word.find('=') + 1
+                    job_id = int(word[index:])
+                    continue
+                if 'Name' in word:
+                    index = word.find('=') + 1
+                    if word[index:] == expected_name:
+                        found_job = True
+                        break
+            if found_job and job_id:
+                return found_job, job_id
+    return found_job, job_id
