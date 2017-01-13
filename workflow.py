@@ -9,6 +9,7 @@ import os
 import re
 import threading
 import atexit
+import logging
 
 from math import floor
 from shutil import copy, rmtree
@@ -31,8 +32,8 @@ from util import filename_to_file_list_key
 from util import filename_to_year_set
 from util import create_symlink_dir
 from util import file_list_cmp
-
-from jobs.TestJob import TestJob
+from util import thread_sleep
+from util import format_debug
 
 import pdb
 
@@ -40,6 +41,8 @@ parser = argparse.ArgumentParser()
 parser.add_argument('-c', '--config', help='Path to configuration file')
 parser.add_argument('-d', '--debug', help='Run in debug mode', action='store_true')
 parser.add_argument('-s', '--state', help='Path to a json state file')
+
+logging.basicConfig(format='%(asctime)s:%(levelname)s: %(message)s', filename='workflow.log', level=logging.DEBUG)
 
 @atexit.register
 def save_state():
@@ -55,8 +58,10 @@ def save_state():
             }
             json.dump(state, outfile)
     except IOError as e:
-        print_debug(e)
-        print_message("Error saving state file")
+        logging.error("Error saving state file")
+        logging.error(format_debug(e))
+        # print_debug(e)
+        # print_message("Error saving state file")
 
 def setup(parser):
     """
@@ -82,13 +87,16 @@ def setup(parser):
                     state = json.load(statefile)
                 if debug:
                     print_message('Loading from saved state {}'.format(args.state))
+                    logging.info('Loading from saved state {}'.format(args.state))
                 config = state.get('config')
                 file_list = state.get('file_list')
                 job_sets = state.get('job_sets')
                 config['state_path'] = args.state
             except IOError as e:
-                print_debug(e)
-                print_message('Error loading state file')
+                logging.error('Error loading from state file {}'.format(args.state))
+                logging.error(format_debug(e))
+                # print_debug(e)
+                # print_message('Error loading state file')
                 sys.exit(1)
             from_saved_state = True
             if debug:
@@ -118,8 +126,10 @@ def setup(parser):
                 with open(args.config, 'r') as conf:
                     config = json.load(conf)
             except Exception as e:
-                print_debug(e)
-                print_message('Unable to read config file, is it properly formatted json?')
+                logging.error('Unable to read config file, is it properly formatted json?')
+                logging.error(format_debug(e))
+                # print_debug(e)
+                # print_message('Unable to read config file, is it properly formatted json?')
                 return -1
 
             for field in required_fields:
@@ -162,7 +172,7 @@ def add_jobs(year_set, job_set):
         climo_output_dir = os.path.join(config.get('output_path'))
         if not os.path.exists(climo_output_dir):
             if debug:
-                print_message("Creating climotology output directory {}".format(climo_output_dir))
+                logging.info("Creating climotology output directory {}".format(climo_output_dir))
             os.makedirs(climo_output_dir)
         regrid_output_dir = config.get('output_path') + '/regrid/'
         if not os.path.exists(regrid_output_dir):
@@ -197,15 +207,18 @@ def add_jobs(year_set, job_set):
             'regrid_output_directory': regrid_output_dir,
             'yearset': year_set
         }
+        logging.info('Adding Ncclimo job to the job list with config: %s', pformat(climo_config))
         climo = Climo(climo_config)
         job_set['jobs'].append(climo)
 
-    # second init the diagnostic job
+    # init the diagnostic job
     if not required_jobs['diagnostic']:
+        # create the output directory
         diag_output_path = config.get('output_path') + '/diagnostics/year_set_' + str(year_set)
         if not os.path.exists(diag_output_path):
             os.makedirs(diag_output_path)
-        # create a temp directory full of just the regridded output we need for this diagnostic job
+
+        # create a temp directory full of just symlinks to the regridded output we need for this diagnostic job
         diag_temp_dir = os.path.join(os.getcwd(), 'tmp_diag', 'year_set_' + str(year_set))
         if not os.path.exists(diag_temp_dir):
             os.makedirs(diag_temp_dir)
@@ -225,18 +238,21 @@ def add_jobs(year_set, job_set):
             'yearset': year_set,
             'depends_on': [len(job_set['jobs']) - 1] # set the diag job to wait for the climo job to finish befor running
         }
+        logging.info('Adding Diagnostic job to the job list with config: %s', pformat(diag_config))
         diag = Diagnostic(diag_config)
         job_set['jobs'].append(diag)
 
-    # third init the upload job
+    # init the upload job
     if not required_jobs['upload_diagnostic_output']:
-        upload = UploadDiagnosticOutput({
+        upload_config = {
             'path_to_diagnostic': diag_output_path + '/amwg/',
             'username': config.get('diag_viewer_username'),
             'password': config.get('diag_viewer_password'),
             'server': config.get('diag_viewer_server'),
             'depends_on': [len(job_set['jobs']) - 1] # set the upload job to wait for the diag job to finish
-        })
+        }
+        logging.info('Adding Upload job to the job list with config: %s', pformat(upload_config))
+        upload = UploadDiagnosticOutput(upload_config)
         job_set['jobs'].append(upload)
 
     # finally init the publication job
@@ -249,7 +265,6 @@ def add_jobs(year_set, job_set):
     #     publish = Publication(publication_config)
     #     job_set['jobs'].append(publish)
     #     print_message('adding publication job')
-
     return job_set
 
 
@@ -316,6 +331,7 @@ def monitor_check(monitor):
             'pattern': config.get('output_pattern'),
             'frequency': config.get('set_frequency')
         }
+        logging.info('Starting transfer with config: %s', pformat(transfer_config))
         transfer = Transfer(transfer_config)
         thread = threading.Thread(target=handle_transfer, args=(transfer, checked_new_files, thread_kill_event))
         thread_list.append(thread)
@@ -338,22 +354,22 @@ def handle_transfer(transfer_job, f_list, event):
     """
     # start the transfer job
     transfer_job.execute()
-
-    if transfer_job.status != 'complete':
-        print_message('Faild to transfer files correctly')
     # the transfer is complete, so we can decrement the active_transfers counter
     active_transfers -= 1
-    # handle post processing for transfered data
-    tmpdir = os.getcwd() + '/tmp/'
-    if not os.path.exists(tmpdir):
-        os.mkdir(tmpdir)
+
+    if transfer_job.status != 'COMPLETED':
+        logging.error('Failed to complete transfer job\n  %s', pformat(str(transfer_job)))
+        return
+        # print_message('Faild to transfer files correctly')
+
+    # update the file_list all the files that were transferred
     for f in f_list:
-        # update the file_list for this file to reflect that the transfer is complete
         list_key = filename_to_file_list_key(f, config.get('output_pattern'))
         file_list[list_key] = 'data ready'
         file_name_list[list_key] = f
     if debug:
-        print_message("transfer job complete", 'ok')
+        logging.info('trasfer of files %s completed', pformat(f_list))
+        logging.info('file_list status: %s', pformat(sorted(file_list, cmp=file_list_cmp)))
         print_message('file_list status: ', 'ok')
         for key in sorted(file_list, cmp=file_list_cmp):
             print_message('{key}: {val}'.format(key=key, val=file_list[key]), 'ok')
@@ -362,17 +378,9 @@ def check_year_sets():
     """
     Checks the file_list, and sets the year_set status to ready if all the files are in place
     """
-    if debug:
-        print_message('job_sets:'.format(sets=pformat(job_sets)))
-        for s in job_sets:
-            for job in s['jobs']:
-                print_message('    {}'.format(str(job)))
     for s in job_sets:
         set_start_year = config.get('simulation_start_year') + ((s.get('year_set') - 1) * config.get('set_frequency'))
         set_end_year = set_start_year + config.get('set_frequency') - 1
-        if debug:
-            print_message('set_start_year: {0}'.format(set_start_year), 'ok')
-            print_message('set_end_year  : {0}'.format(set_end_year), 'ok')
         ready = True
         for year in range(set_start_year, set_end_year + 1):
             for month in range(1, 13):
@@ -394,6 +402,7 @@ def check_for_inplace_data():
     """
     global file_list
     global file_name_list
+    global all_data
     cache_path = config.get('data_cache_path')
     if not os.path.exists(cache_path):
         os.makedirs(cache_path)
@@ -402,24 +411,37 @@ def check_for_inplace_data():
         file_list[key] = 'data ready'
         file_name_list[key] = climo_file
 
+    all_data = True
+    for key in file_list:
+        if file_list[key] != 'data ready':
+            all_data = False
+            break
+
 def start_ready_job_sets():
     """
     Iterates over the job sets, and starts ready jobs
     """
     global thread_list
     # iterate over the job_sets
-    print_message('=========== Checking for ready jobs =================', 'ok')
+    if debug:
+        print_message('== Checking for ready jobs ==', 'ok')
     for job_set in job_sets:
         # if the job state is ready, but hasnt started yet
-        # print_message('job_set status: {}'.format(job_set['status']))
+        if debug:
+            print_message('year_set {0}'.format(job_set.get('year_set')), 'ok')
         if job_set['status'] == 'data ready':
             for job in job_set['jobs']:
                 # if the job is a climo, and it hasnt been started yet, start it
-                print_message('job type: {0}, job_status: {1}'.format(job.get_type(), job.status), 'ok')
+                if debug:
+                    print_message('    job type: {0}, job_status: {1}, job_id: {2}'.format(
+                        job.get_type(),
+                        job.status,
+                        job.job_id), 'ok')
+
                 if job.get_type() == 'climo' and job.status == 'valid':
                     job_id = job.execute(batch=True)
                     job.set_status('starting')
-                    print_message('Starting climo job for year_set {}'.format(job_set['year_set']), 'ok')
+                    logging.info('Starting Ncclimo for year set %s', job_set['year_set'])
                     thread = threading.Thread(target=monitor_job, args=(job_id, job, thread_kill_event))
                     thread_list.append(thread)
                     thread.start()
@@ -428,18 +450,19 @@ def start_ready_job_sets():
                 elif job.get_type() != 'climo' and job.status == 'valid':
                     ready = True
                     for dependancy in job.depends_on:
-                        if job_set['jobs'][dependancy].status != 'COMPLETE':
+                        if job_set['jobs'][dependancy].status != 'COMPLETED':
                             ready = False
                             break
                     if ready:
                         job_id = job.execute(batch=True)
                         job.set_status('starting')
-                        print_message('Starting {0} job for year_set {1}'.format(job.get_type(), job_set['year_set']), 'ok')
+                        logging.info('Starting %s job for year_set %s', job.get_type(), job_set['year_set'])
                         thread = threading.Thread(target=monitor_job, args=(job_id, job, thread_kill_event))
                         thread_list.append(thread)
                         thread.start()
                         return
                 elif job.status == 'invalid':
+                    logging.error('Job in invalid state: \n%s', pformat(str(job)))
                     print_message('===== INVALID JOB =====\n{}'.format(str(job)))
 
 def monitor_job(job_id, job, event=None):
@@ -452,30 +475,28 @@ def monitor_job(job_id, job, event=None):
         handle interfacing with the SLURM controller
         Checkes the SLURM queue status and changes the job status appropriately
         """
-        print_message('checking SLURM queue status', 'ok')
-        count = 5
+        count = 0
         valid = False
-        while count > 0 and not valid:
+        while count < 10 and not valid:
             cmd = ['scontrol', 'show', 'job', str(job_id)]
             out = Popen(cmd, stdout=PIPE, stderr=PIPE).communicate()[0]
             # sometimes there will be a communication error with the SLURM controller
             # in which case the controller returns 'error: some message'
-            if 'error' in out or len(out.split('\n')) == 0:
+            if 'error' in out or len(out) == 0:
+                logging.info('Error communication with SLURM controller, attempt number %s', count)
                 valid = False
-                count -= 1
+                count += 1
+                if thread_sleep(1, event):
+                    return
             else:
                 valid = True
 
         if not valid:
             # if the controller errors 5 times in a row, its probably an unrecoverable error
-            print_message('-------- Unable to communicate with SLURM controller ----------')
-            return 'ERROR'
+            logging.info('SLURM controller not responding')
+            return None
 
-        # we're looking for the JobState field, which is on the 4th line
-        # count = 0
-        # for line in out.split('\n'):
-        #     print '{0}: {1}'.format(count, line)
-        #     count += 1
+        # loop through the scontrol output looking for the JobState field
         job_status = None
         for line in out.split('\n'):
             for word in line.split():
@@ -486,7 +507,14 @@ def monitor_job(job_id, job, event=None):
             if job_status:
                 break
 
-        print_message(' ======= end job monitor, status: {} ======='.format(job_status), 'ok')
+        logging.info('%s status: %s', job_id, job_status)
+        if debug:
+            print_message('{0} status: {1}'.format(job_id, job_status), 'ok')
+        if not job_status:
+            if debug:
+                print_message('Error parsing job output\n{0}'.format(out))
+            logging.warning('Unable to parse scontrol output: %s', out)
+            return None
         return job_status
 
     def handle_pbs():
@@ -501,8 +529,8 @@ def monitor_job(job_id, job, event=None):
         print 'you should really be running this with slurm'
         return 'Zug zug'
 
+    error_count = 0
     while True:
-        print_message('======= monitoring job {0} ========='.format(job_id), 'ok')
         # this check is here in case the loop is stuck and the thread needs to be canceled
         if event and event.is_set():
             return
@@ -517,23 +545,31 @@ def monitor_job(job_id, job, event=None):
             # TODO: figure out how to get this working
 
         if not status:
-            if event and event.is_set():
+            if error_count >= 10:
+                logging.error('Unable to communicate to controller after 10 attempts')
+                logging.error('Setting %s job with job_id %s to status error', job.get_type(), job_id)
+                job.status = 'error'
+                return
+            error_count += 1
+            if thread_sleep(1, event):
                 return
             continue
 
         if job.status != status:
             if debug:
-                print_message('Setting job status: {0}'.format(status))
+                if status != 'error':
+                    print_message('Setting job status: {0}'.format(status), 'ok')
+                else:
+                    print_message('Setting job status: {0}'.format(status))
+            logging.info('Setting %s job with job_id %s to status %s', job.get_type(), job_id, status)
             job.status = status
-        if status == 'COMPLETE' or status == 'error':
-            break
 
-        # instead of sleeping for 10 seconds, sleep for 1 second 10 times
-        # so that the event can be checked and quiting doesnt take 10 seconds
-        for i in range(10):
-            if event and event.is_set():
-                return
-            sleep(1)
+        # if the job is done, or there has been an error, exit
+        if status == 'COMPLETED' or status == 'error':
+            return
+        # wait for 10 seconds, or if the kill_thread event has been set, exit
+        if thread_sleep(10, event):
+            return
 
 if __name__ == "__main__":
 
@@ -553,7 +589,8 @@ if __name__ == "__main__":
     from_saved_state = False
     # The number of active globus transfers
     active_transfers = 0
-
+    # A flag to tell if we have all the data locally
+    all_data = False
     # Read in parameters from config
     config = setup(parser)
     if config == -1:
@@ -590,6 +627,11 @@ if __name__ == "__main__":
     check_for_inplace_data()
     check_year_sets()
     if debug:
+        for s in job_sets:
+            print_message('year_set {0}:'.format(s.get('year_set')), 'ok')
+            for job in s['jobs']:
+                print_message('    {}'.format(str(job)))
+    if debug:
         print_message('printing year sets', 'ok')
         for key in job_sets:
             print_message(str(key['year_set']) + ': ' + key['status'], 'ok')
@@ -597,37 +639,45 @@ if __name__ == "__main__":
         for key in sorted(file_list, cmp=file_list_cmp):
             print_message(key + ': ' + file_list[key], 'ok')
 
-    monitor_config = {
-        'remote_host': config.get('compute_host'),
-        'remote_dir': config.get('source_path'),
-        'username': config.get('compute_username'),
-        'pattern': config.get('output_pattern')
-    }
-    if config.get('compute_password'):
-        monitor_config['password'] = config.get('compute_password')
-    if config.get('compute_keyfile'):
-        monitor_config['keyfile'] = config.get('compute_keyfile')
-    else:
-        print_message('No password or keyfile path given for compute resource, please add to your config and try again')
-        sys.exit(1)
-    monitor = Monitor(monitor_config)
+        if all_data:
+            print_message('All data is local, disabling remote monitor')
+        else:
+            print_message('Data is missing, enabling remote monitor')
 
-    print_message('attempting connection to {}'.format(config.get('compute_host')), 'ok')
-    if monitor.connect() == 0:
-        print_message('connected', 'ok')
-    else:
-        print_message('unable to connect, exiting')
-        sys.exit(1)
+    # if all the data is local, dont start the monitor
+    if not all_data:
+        monitor_config = {
+            'remote_host': config.get('compute_host'),
+            'remote_dir': config.get('source_path'),
+            'username': config.get('compute_username'),
+            'pattern': config.get('output_pattern')
+        }
+        if config.get('compute_password'):
+            monitor_config['password'] = config.get('compute_password')
+        if config.get('compute_keyfile'):
+            monitor_config['keyfile'] = config.get('compute_keyfile')
+        else:
+            print_message('No password or keyfile path given for compute resource, please add to your config and try again')
+            sys.exit(1)
+        monitor = Monitor(monitor_config)
+
+        print_message('attempting connection to {}'.format(config.get('compute_host')), 'ok')
+        if monitor.connect() == 0:
+            print_message('connected', 'ok')
+        else:
+            print_message('unable to connect, exiting')
+            sys.exit(1)
 
     # Main loop
     try:
         while True:
             # Setup remote monitoring system
-            monitor_check(monitor)
+            if not all_data:
+                monitor_check(monitor)
             # Check if a year_set is ready to run
             check_year_sets()
             start_ready_job_sets()
-
+            check_for_inplace_data()
             sleep(10)
     except KeyboardInterrupt as e:
         print_message('----- KEYBOARD INTERUPT -----')
@@ -638,7 +688,3 @@ if __name__ == "__main__":
         for t in thread_list:
             thread_kill_event.set()
             t.join()
-
-
-
-
