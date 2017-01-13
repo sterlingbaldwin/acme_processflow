@@ -5,7 +5,7 @@ from getpass import getpass
 
 import paramiko
 from paramiko import PasswordRequiredException
-
+from paramiko import SSHException
 class Monitor(object):
     """
         A class to monitor a remote directory, and pull down any files matching the given regex
@@ -48,29 +48,7 @@ class Monitor(object):
         self.client = paramiko.SSHClient()
         self.client.load_system_host_keys()
         self.client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        if self.keyfile:
-            try:
-                key = paramiko.RSAKey.from_private_key_file(self.keyfile)
-                self.client.connect(
-                    port=22,
-                    hostname=self.remote_host,
-                    username=self.username,
-                    pkey=key
-                )
-            except PasswordRequiredException as pwe:
-                keypass = getpass("Enter private key password: ")
-                key = paramiko.RSAKey.from_private_key_file(self.keyfile, password=keypass)
-                self.client.connect(
-                    port=22,
-                    hostname=self.remote_host,
-                    username=self.username,
-                    pkey=key
-                )
-            except Exception as e:
-                print "Unable to connect to remote host with given private key"
-                print_debug(e)
-                return -1
-        else:
+        if self.keyfile and self.password:
             try:
                 self.client.connect(
                     port=22,
@@ -82,6 +60,52 @@ class Monitor(object):
                 print "Unable to connect to host with given username/password"
                 print_debug(e)
                 return -1
+        elif self.keyfile:
+            try:
+                key = paramiko.RSAKey.from_private_key_file(self.keyfile)
+                self.client.connect(
+                    port=22,
+                    hostname=self.remote_host,
+                    username=self.username,
+                    pkey=key
+                )
+            except PasswordRequiredException as pwe:
+
+                for attempt in range(3):
+                    success = False
+                    try:
+                        keypass = getpass("Enter private key password: ")
+                        key = paramiko.RSAKey.from_private_key_file(self.keyfile, password=keypass)
+                        success = True
+                    except SSHException as e:
+                        print_message('Unable to unlock key file, retry')
+                if not success:
+                    print_message('To many unlock attempts, exiting')
+                    return -1
+                self.client.connect(
+                    port=22,
+                    hostname=self.remote_host,
+                    username=self.username,
+                    pkey=key
+                )
+            except Exception as e:
+                print "Unable to connect to remote host with given private key"
+                print_debug(e)
+                return -1
+        elif self.password:
+            try:
+                self.client.connect(
+                    port=22,
+                    hostname=self.remote_host,
+                    username=self.username,
+                    password=self.password
+                )
+            except Exception as e:
+                print "Unable to connect to host with given username/password"
+                print_debug(e)
+                return -1
+        else:
+            return -1
         return 0
 
     def set_known_files(self, files):
