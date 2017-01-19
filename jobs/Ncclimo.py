@@ -99,24 +99,28 @@ class Climo(object):
                 print console_output
 
             self.status = 'COMPLETED'
+            return 0
         else:
             # Submitting the job to SLURM
             expected_name = 'ncclimo_job_' + str(self.uuid)
-            run_script = './run_scripts/' + expected_name
+            run_script = os.path.join(os.getcwd(), 'run_scripts', expected_name)
+
             self.slurm_args['error_file'] = '-e {error_file}'.format(error_file=run_script + '.err')
             self.slurm_args['output_file'] = '-o {output_file}'.format(output_file=run_script + '.out')
+
             with open(run_script, 'w') as batchfile:
                 batchfile.write('#!/bin/bash\n')
                 slurm_prefix = '\n'.join(['#SBATCH ' + self.slurm_args[s] for s in self.slurm_args]) + '\n'
                 batchfile.write(slurm_prefix)
                 slurm_command = ' '.join(cmd)
                 batchfile.write(slurm_command)
+
             slurm_cmd = ['sbatch', run_script]
             started = False
             retry_count = 0
             while not started and retry_count < 5:
                 self.proc = Popen(slurm_cmd, stdout=PIPE)
-                output = self.proc.communicate()[0]
+                output, err = self.proc.communicate()
                 started, job_id = check_slurm_job_submission(expected_name)
                 if started:
                     self.status = 'RUNNING'
@@ -181,16 +185,18 @@ class Climo(object):
 
         # after checking that the job is valid to run,
         # check if the output already exists and the job actually needs to run
-        if os.path.exists(self.config.get('climo_output_directory')):
-            contents = os.listdir(self.config.get('climo_output_directory'))
-            if len(contents) <= 10:
-                return 0
-            else:
-                for i in contents:
-                    if not re.match(self.config.get('caseId'), i):
-                        return 0
-                self.status = 'complete'
-        return 0
+        # if os.path.exists(self.config.get('climo_output_directory')):
+        #     contents = os.listdir(self.config.get('climo_output_directory'))
+        #     if len(contents) <= 10:
+        #         return 0
+        #     else:
+        #         for i in contents:
+        #             if os.path.isdir(self.config.get('climo_output_directory') + '/' + i):
+        #                 continue
+        #             if not re.match(self.config.get('caseId'), i):
+        #                 return 0
+        #         self.status = 'COMPLETED'
+        # return 0
 
     def postvalidate(self):
         """
