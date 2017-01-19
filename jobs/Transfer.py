@@ -53,7 +53,6 @@ class Transfer(object):
             'destination_path': '',
             'final_destination_path': '',
             'pattern': '',
-            'frequency': ''
         }
         self.maximum_transfers = 0
         self.prevalidate(config)
@@ -122,7 +121,8 @@ class Transfer(object):
                     return -1
         self.status = 'valid'
         # the maximum number of files to transfer at one time, set to a single year_set assuming 12 files per year
-        self.maximum_transfers = self.config.get('frequency') * 12
+        # self.maximum_transfers = self.config.get('frequency') * 12
+        self.maximum_transfers = 10
         return 0
 
     def postvalidate(self):
