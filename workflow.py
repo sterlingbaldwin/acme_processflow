@@ -42,14 +42,22 @@ parser.add_argument('-c', '--config', help='Path to configuration file')
 parser.add_argument('-d', '--debug', help='Run in debug mode', action='store_true')
 parser.add_argument('-s', '--state', help='Path to a json state file')
 
-logging.basicConfig(format='%(asctime)s:%(levelname)s: %(message)s', filename='workflow.log', level=logging.DEBUG)
+logging.basicConfig(
+    format='%(asctime)s:%(levelname)s: %(message)s',
+    datefmt='%m/%d/%Y %I:%M:%S %p',
+    filename='workflow.log',
+    filemode='w',
+    level=logging.DEBUG
+)
 
 @atexit.register
 def save_state():
+    state_path = config.get('state_path')
+    if not state_path:
+        print_message('no state path')
+        return
+    print_message('saving execution state to {0}'.format(state_path))
     try:
-        state_path = config.get('state_path')
-        if not state_path:
-            return
         with open(state_path, 'w') as outfile:
             state = {
                 'file_list': file_list,
@@ -78,10 +86,18 @@ def setup(parser):
     if args.debug:
         debug = True
         print_message('Running in debug mode', 'ok')
+    
+    config = {}
+
     if args.state:
-        if not os.path.exists(args.state):
-            config['state_path'] = args.state
+        state_path = os.path.abspath(args.state)
+        if not os.path.exists(state_path):
+            print_message('Ready to save state to {0}'.format(state_path))
+            config['state_path'] = state_path
+            from_saved_state = False
         else:
+            print_message('Restoring from previous state')
+            from_saved_state = True
             try:
                 with open(args.state, 'r') as statefile:
                     state = json.load(statefile)
@@ -98,11 +114,11 @@ def setup(parser):
                 # print_debug(e)
                 # print_message('Error loading state file')
                 sys.exit(1)
-            from_saved_state = True
             if debug:
                 print_message('saved file_list: \n{}'.format(pformat(sorted(file_list, cmp=file_list_cmp))))
                 print_message('saved job_sets: \n{}'.format(pformat(job_sets)))
                 print_message('saved config: \n{}'.format(pformat(config)))
+
     if not from_saved_state:
         required_fields = [
             "output_path",
@@ -124,12 +140,10 @@ def setup(parser):
         if args.config:
             try:
                 with open(args.config, 'r') as conf:
-                    config = json.load(conf)
+                    config.update(json.load(conf))
             except Exception as e:
                 logging.error('Unable to read config file, is it properly formatted json?')
                 logging.error(format_debug(e))
-                # print_debug(e)
-                # print_message('Unable to read config file, is it properly formatted json?')
                 return -1
 
             for field in required_fields:
@@ -174,22 +188,24 @@ def add_jobs(year_set, job_set):
             if debug:
                 logging.info("Creating climotology output directory {}".format(climo_output_dir))
             os.makedirs(climo_output_dir)
-        regrid_output_dir = config.get('output_path') + '/regrid/'
+        regrid_output_dir = os.path.join(config.get('output_path'), 'regrid')
         if not os.path.exists(regrid_output_dir):
             os.makedirs(regrid_output_dir)
 
         # Setup variables for climo job
-        climo_start_year = config.get('simulation_start_year') + ((year_set - 1) * config.get('set_frequency'))
-        climo_end_year = climo_start_year + config.get('set_frequency') - 1
+        # climo_start_year = config.get('simulation_start_year') + ((year_set - 1) * config.get('set_frequency'))
+        # climo_end_year = climo_start_year + config.get('set_frequency') - 1
+        climo_start_year = job_set.get('set_start_year')
+        climo_end_year = job_set.get('set_end_year')
+
         # create a temp directory, and fill it with symlinks to the actual data
         key_list = []
         for year in range(climo_start_year, climo_end_year + 1):
             for month in range(13):
                 key_list.append('{0}-{1}'.format(year, month))
+
         climo_file_list = [file_name_list.get(x) for x in key_list]
-        climo_temp_dir = os.path.join(os.getcwd(), 'tmp_climo', 'year_set_' + str(year_set))
-        if not os.path.exists(climo_temp_dir):
-            os.makedirs(climo_temp_dir)
+        climo_temp_dir = os.path.join(os.getcwd(), 'tmp', 'climo', 'year_set_' + str(year_set))
         create_symlink_dir(
             src_dir=config.get('data_cache_path'),
             src_list=climo_file_list,
@@ -207,19 +223,19 @@ def add_jobs(year_set, job_set):
             'regrid_output_directory': regrid_output_dir,
             'yearset': year_set
         }
-        logging.info('Adding Ncclimo job to the job list with config: %s', pformat(climo_config))
         climo = Climo(climo_config)
+        logging.info('Adding Ncclimo job to the job list with config: %s', str(climo_config))
         job_set['jobs'].append(climo)
 
     # init the diagnostic job
     if not required_jobs['diagnostic']:
         # create the output directory
-        diag_output_path = config.get('output_path') + '/diagnostics/year_set_' + str(year_set)
+        diag_output_path = os.path.join(config.get('output_path'), 'diagnostics', 'year_set_' + str(year_set))
         if not os.path.exists(diag_output_path):
             os.makedirs(diag_output_path)
 
         # create a temp directory full of just symlinks to the regridded output we need for this diagnostic job
-        diag_temp_dir = os.path.join(os.getcwd(), 'tmp_diag', 'year_set_' + str(year_set))
+        diag_temp_dir = os.path.join(os.getcwd(), 'tmp', 'diag', 'year_set_' + str(year_set))
         if not os.path.exists(diag_temp_dir):
             os.makedirs(diag_temp_dir)
         create_symlink_dir(
@@ -238,22 +254,23 @@ def add_jobs(year_set, job_set):
             'yearset': year_set,
             'depends_on': [len(job_set['jobs']) - 1] # set the diag job to wait for the climo job to finish befor running
         }
-        logging.info('Adding Diagnostic job to the job list with config: %s', pformat(diag_config))
         diag = Diagnostic(diag_config)
+        logging.info('Adding Diagnostic job to the job list with config: %s', str(diag_config))
         job_set['jobs'].append(diag)
 
     # init the upload job
     if not required_jobs['upload_diagnostic_output']:
         upload_config = {
-            'path_to_diagnostic': diag_output_path + '/amwg/',
+            'path_to_diagnostic': os.path.join(diag_output_path, 'amwg'),
             'username': config.get('diag_viewer_username'),
             'password': config.get('diag_viewer_password'),
             'server': config.get('diag_viewer_server'),
             'depends_on': [len(job_set['jobs']) - 1] # set the upload job to wait for the diag job to finish
         }
-        logging.info('Adding Upload job to the job list with config: %s', pformat(upload_config))
         upload = UploadDiagnosticOutput(upload_config)
+        logging.info('Adding Upload job to the job list with config: %s', str(upload_config))
         job_set['jobs'].append(upload)
+
 
     # finally init the publication job
     # if not required_jobs['publication']:
@@ -283,24 +300,30 @@ def monitor_check(monitor):
 
     # if there are already three or more transfers in progress
     # hold off on starting any new ones until they complete
-    if active_transfers >= 3:
+    if active_transfers > 1:
         return
     monitor.check()
     new_files = monitor.get_new_files()
     checked_new_files = []
     for f in new_files:
         key = filename_to_file_list_key(f, config.get('output_pattern'))
-        if file_list.get(key) and not file_list[key] == 'data ready':
+        status = file_list.get(key)
+        if status and status != 'data ready':
             checked_new_files.append(f)
 
     # if there are any new files
-    if checked_new_files:
+    if  not checked_new_files:
         if debug:
-            print_message('Found new files: {}\n setting up transfer'.format(
-                pformat(checked_new_files, indent=4)), 'ok')
-        # find which year set the data belongs to
-        for f in new_files:
-            year_set = filename_to_year_set(f, config.get('output_pattern'), config.get('set_frequency'))
+            print_message('No new files found', 'ok')
+        return
+
+    if debug:
+        print_message('Found new files:\n  {}'.format(
+            pformat(checked_new_files, indent=4)), 'ok')
+    # find which year set the data belongs to
+    for f in new_files:
+        for freq in config.get('set_frequency'):
+            year_set = filename_to_year_set(f, config.get('output_pattern'), freq)
             for job_set in job_sets:
                 if job_set.get('year_set') == year_set:
                     # if before we got here, the job_set didnt have any data, now that we have some data
@@ -312,34 +335,32 @@ def monitor_check(monitor):
                         # Spawn jobs for that yearset
                         job_set = add_jobs(year_set, job_set)
 
-        f_list = ['{path}/{file}'.format(path=config.get('source_path'), file=f)  for f in checked_new_files]
-        # tmpdir = os.getcwd() + '/tmp/'
-        transfer_config = {
-            'file_list': f_list,
-            'globus_username': config.get('globus_username'),
-            'globus_password': config.get('globus_password'),
-            'source_username': config.get('compute_username'),
-            'source_password': config.get('compute_password'),
-            'destination_username': config.get('processing_username'),
-            'destination_password': config.get('processing_password'),
-            'source_endpoint': config.get('source_endpoint'),
-            'destination_endpoint': config.get('destination_endpoint'),
-            'source_path': config.get('source_path'),
-            'destination_path': config.get('data_cache_path') + '/',
-            'recursive': 'False',
-            'final_destination_path': config.get('data_cache_path'),
-            'pattern': config.get('output_pattern'),
-            'frequency': config.get('set_frequency')
-        }
-        logging.info('Starting transfer with config: %s', pformat(transfer_config))
-        transfer = Transfer(transfer_config)
-        thread = threading.Thread(target=handle_transfer, args=(transfer, checked_new_files, thread_kill_event))
-        thread_list.append(thread)
-        thread.start()
-        active_transfers += 1
-    else:
-        if debug:
-            print_message('No new files found', 'ok')
+    # construct list of files to transfer
+    f_list = ['{path}/{file}'.format(path=config.get('source_path'), file=f)  for f in checked_new_files]
+
+    transfer_config = {
+        'file_list': f_list,
+        'globus_username': config.get('globus_username'),
+        'globus_password': config.get('globus_password'),
+        'source_username': config.get('compute_username'),
+        'source_password': config.get('compute_password'),
+        'destination_username': config.get('processing_username'),
+        'destination_password': config.get('processing_password'),
+        'source_endpoint': config.get('source_endpoint'),
+        'destination_endpoint': config.get('destination_endpoint'),
+        'source_path': config.get('source_path'),
+        'destination_path': config.get('data_cache_path') + '/',
+        'recursive': 'False',
+        'final_destination_path': config.get('data_cache_path'),
+        'pattern': config.get('output_pattern')
+    }
+    logging.info('Starting transfer with config: %s', pformat(transfer_config))
+    transfer = Transfer(transfer_config)
+    thread = threading.Thread(target=handle_transfer, args=(transfer, checked_new_files, thread_kill_event))
+    thread_list.append(thread)
+    thread.start()
+    active_transfers += 1
+
 
 def handle_transfer(transfer_job, f_list, event):
     global active_transfers
@@ -378,22 +399,67 @@ def check_year_sets():
     """
     Checks the file_list, and sets the year_set status to ready if all the files are in place
     """
-    for s in job_sets:
-        set_start_year = config.get('simulation_start_year') + ((s.get('year_set') - 1) * config.get('set_frequency'))
-        set_end_year = set_start_year + config.get('set_frequency') - 1
-        ready = True
-        for year in range(set_start_year, set_end_year + 1):
-            for month in range(1, 13):
-                key = str(year) + '-' + str(month)
-                if file_list.get(key) and file_list[key] != 'data ready':
-                    ready = False
-        if ready:
-            status = 'data ready'
-            year_set = int(floor(set_start_year / config.get('set_frequency')) + 1)
-            s = add_jobs(year_set, s)
-        else:
-            status = s['status']
-        s['status'] = status
+    global job_sets
+    sim_start_year = int(config.get('simulation_start_year'))
+    sim_end_year = int(config.get('simulation_end_year'))
+    number_of_sim_years = sim_end_year - (sim_start_year - 1)
+
+    incomplete_job_sets = [s for s in job_sets if s['status'] != 'COMPLETED']
+    for job_set in incomplete_job_sets:
+        # compute number of expected year sets
+
+        start_year = job_set.get('set_start_year')
+        end_year = job_set.get('set_end_year')
+
+        non_zero_data = False
+        data_ready = True
+        for i in range(start_year, end_year + 1):
+            for j in range(1, 13):
+                file_key = '{0}-{1}'.format(i, j)
+                status = file_list[file_key]
+                # if debug:
+                #     print_message('  {key}: {value}'.format(key=key, value=file_list[key]), 'ok')
+                if status == 'no data':
+                    data_ready = False
+                elif status == 'data ready':
+                    non_zero_data = True
+        if data_ready:
+            # if job_set['status'] == 'no data' or job_set['status'] == 'partial data':
+            job_set['status'] = 'data ready'
+            continue
+        if not data_ready and non_zero_data:
+            # if job_set['status'] == 'no data':
+            job_set['status'] = 'partial data'
+            continue
+        if not data_ready and not non_zero_data:
+            job_set['status'] = 'no data'
+
+    if debug:
+        for job_set in job_sets:
+            start_year = job_set.get('set_start_year')
+            end_year = job_set.get('set_end_year')
+            print_message('year_set: {0}: {1}'.format(job_set.get('year_set'), job_set.get('status')), 'ok')
+            for i in range(start_year, end_year + 1):
+                for j in range(1, 13):
+                    file_key = '{0}-{1}'.format(i, j)
+                    status = file_list[file_key]
+                    print_message('  {key}: {value}'.format(key=file_key, value=status), 'ok')
+
+        # ready = True
+        # for year in range(set_start_year, set_end_year + 1):
+        #     for month in range(1, 13):
+        #         key = str(year) + '-' + str(month)
+        #         if file_list.get(key) and file_list[key] != 'data ready':
+        #             ready = False
+        # if ready:
+        #     status = 'data ready'
+        #     year_set = int(floor(set_start_year / config.get('set_frequency')) + 1)
+        #     s = add_jobs(year_set, s)
+        # else:
+        #     status = s['status']
+        # s['status'] = status
+
+
 
 def check_for_inplace_data():
     """
@@ -403,13 +469,19 @@ def check_for_inplace_data():
     global file_list
     global file_name_list
     global all_data
+    global job_sets
+
     cache_path = config.get('data_cache_path')
+    pattern = config.get('output_pattern')
+
     if not os.path.exists(cache_path):
         os.makedirs(cache_path)
+        return
+
     for climo_file in os.listdir(cache_path):
-        key = filename_to_file_list_key(climo_file, config.get('output_pattern'))
-        file_list[key] = 'data ready'
-        file_name_list[key] = climo_file
+        file_key = filename_to_file_list_key(climo_file, pattern)
+        file_list[file_key] = 'data ready'
+        file_name_list[file_key] = climo_file
 
     all_data = True
     for key in file_list:
@@ -428,21 +500,25 @@ def start_ready_job_sets():
     for job_set in job_sets:
         # if the job state is ready, but hasnt started yet
         if debug:
-            print_message('year_set {0}'.format(job_set.get('year_set')), 'ok')
+            msg = 'year_set: {0} status: {1}'.format(job_set.get('year_set'), job_set.get('status'))
+            print_message(msg, 'ok')
+            logging.info(msg)
         if job_set['status'] == 'data ready':
             for job in job_set['jobs']:
                 # if the job is a climo, and it hasnt been started yet, start it
                 if debug:
-                    print_message('    job type: {0}, job_status: {1}, job_id: {2}'.format(
+                    msg = '    job type: {0}, job_status: {1}, job_id: {2}'.format(
                         job.get_type(),
                         job.status,
-                        job.job_id), 'ok')
+                        job.job_id)
+                    print_message(msg, 'ok')
+                    logging.info(msg)
 
                 if job.get_type() == 'climo' and job.status == 'valid':
                     job_id = job.execute(batch=True)
                     job.set_status('starting')
                     logging.info('Starting Ncclimo for year set %s', job_set['year_set'])
-                    thread = threading.Thread(target=monitor_job, args=(job_id, job, thread_kill_event))
+                    thread = threading.Thread(target=monitor_job, args=(job_id, job, job_set, thread_kill_event))
                     thread_list.append(thread)
                     thread.start()
                     return
@@ -457,7 +533,7 @@ def start_ready_job_sets():
                         job_id = job.execute(batch=True)
                         job.set_status('starting')
                         logging.info('Starting %s job for year_set %s', job.get_type(), job_set['year_set'])
-                        thread = threading.Thread(target=monitor_job, args=(job_id, job, thread_kill_event))
+                        thread = threading.Thread(target=monitor_job, args=(job_id, job, job_set, thread_kill_event))
                         thread_list.append(thread)
                         thread.start()
                         return
@@ -465,7 +541,7 @@ def start_ready_job_sets():
                     logging.error('Job in invalid state: \n%s', pformat(str(job)))
                     print_message('===== INVALID JOB =====\n{}'.format(str(job)))
 
-def monitor_job(job_id, job, event=None):
+def monitor_job(job_id, job, job_set, event=None):
     """
     Monitor the slurm job, and update the status to 'complete' when it finishes
     This function should only be called from within a thread
@@ -486,7 +562,7 @@ def monitor_job(job_id, job, event=None):
                 logging.info('Error communication with SLURM controller, attempt number %s', count)
                 valid = False
                 count += 1
-                if thread_sleep(1, event):
+                if thread_sleep(5, event):
                     return
             else:
                 valid = True
@@ -498,24 +574,30 @@ def monitor_job(job_id, job, event=None):
 
         # loop through the scontrol output looking for the JobState field
         job_status = None
+        run_time = None
         for line in out.split('\n'):
             for word in line.split():
                 if 'JobState' in word:
                     index = word.find('=')
                     job_status = word[index + 1:]
+                    continue
+                if 'RunTime' in word:
+                    index = word.find('=') + 1
+                    run_time = word[index:]
                     break
-            if job_status:
+            if job_status and run_time:
                 break
 
-        logging.info('%s status: %s', job_id, job_status)
-        if debug:
-            print_message('{0} status: {1}'.format(job_id, job_status), 'ok')
+        # if debug:
+        #     msg = '{0} status: {1}'.format(job_id, job_status)
+        #     print_message(msg, 'ok')
+        #     logging.info(msg)
         if not job_status:
             if debug:
                 print_message('Error parsing job output\n{0}'.format(out))
             logging.warning('Unable to parse scontrol output: %s', out)
-            return None
-        return job_status
+
+        return job_status, run_time
 
     def handle_pbs():
         print 'dealing with pbs'
@@ -536,7 +618,7 @@ def monitor_job(job_id, job, event=None):
             return
         batch_system = config.get('batch_system_type')
         if batch_system == 'slurm':
-            status = handle_slurm()
+            status, run_time = handle_slurm()
         elif batch_system == 'pbs':
             status = handle_pbs()
         elif batch_system == 'none':
@@ -545,13 +627,12 @@ def monitor_job(job_id, job, event=None):
             # TODO: figure out how to get this working
 
         if not status:
-            if error_count >= 10:
+            if error_count <= 10:
                 logging.error('Unable to communicate to controller after 10 attempts')
                 logging.error('Setting %s job with job_id %s to status error', job.get_type(), job_id)
                 job.status = 'error'
-                return
             error_count += 1
-            if thread_sleep(1, event):
+            if thread_sleep(5, event):
                 return
             continue
 
@@ -563,14 +644,38 @@ def monitor_job(job_id, job, event=None):
                     print_message('Setting job status: {0}'.format(status))
             logging.info('Setting %s job with job_id %s to status %s', job.get_type(), job_id, status)
             job.status = status
+            if status == 'RUNNING':
+                job_set['status'] = 'RUNNING'
 
         # if the job is done, or there has been an error, exit
-        if status == 'COMPLETED' or status == 'error':
+        if status == 'COMPLETED':
+            logging.info('%s job  with job_id %s completed after %s', job.get_type(), job_id, run_time)
+            job_set_done = True
+            for job in job_set['jobs']:
+                if job.status != 'COMPLETED':
+                    job_set_done = False
+                    break
+
+            if job_set_done:
+                job_set['status'] = 'COMPLETED'
+            return
+        if status == 'error':
+            logging.info('%s job  with job_id %s ERRORED after %s', job.get_type(), job_id, run_time)
             return
         # wait for 10 seconds, or if the kill_thread event has been set, exit
         if thread_sleep(10, event):
             return
 
+def is_all_done():
+    """
+    Check if all job_sets are done, and all processing has been completed
+    """
+    for job_set in job_sets:
+        print_message('job_set {0} status {1}'.format(job_set['year_set'], job_set['status']))
+        if job_set['status'] != 'COMPLETED':
+            return False
+
+    return True
 if __name__ == "__main__":
 
     # A list of all the expected fiels
@@ -593,56 +698,75 @@ if __name__ == "__main__":
     all_data = False
     # Read in parameters from config
     config = setup(parser)
+
     if config == -1:
         print "Error in setup, exiting"
         sys.exit(1)
 
     # compute number of expected year sets
-    year_sets = (int(config.get('simulation_end_year')) - (int(config.get('simulation_start_year') - 1))) / int(config.get('set_frequency'))
-    if debug:
-        print_message('start_year: {sy},\n     end_year: {ey},\n     set_frequency: {freq},\n     number of year_sets: {ys}'.format(
-            sy=config.get('simulation_start_year'),
-            ey=config.get('simulation_end_year'),
-            ys=year_sets,
-            freq=config.get('set_frequency')
-        ), 'ok')
-
+    sim_start_year = int(config.get('simulation_start_year'))
+    sim_end_year = int(config.get('simulation_end_year'))
+    number_of_sim_years = sim_end_year - (sim_start_year - 1)
     if not from_saved_state:
-        # initialize the job_sets dict
-        job_sets = [{'status': 'no data', 'year_set': i, 'jobs': []} for i in range(1, year_sets+1)]
-        start_year = config.get("simulation_start_year")
-        end_year = config.get("simulation_end_year")
-        sim_length = end_year - start_year + 1
-        # initialize the file_list
+        job_sets = []
+    for freq in config.get('set_frequency'):
+        freq = int(freq)
+        year_set = number_of_sim_years / freq
         if debug:
-            print_message('initializing file_list with {num_years} years'.format(
-                num_years=sim_length))
-        for year in range(1, sim_length + 1):
-            for month in range(1, 13):
-                key = str(year) + '-' + str(month)
-                file_list[key] = 'no data'
-                file_name_list[key] = ''
+            print_message(
+                ' set_frequency: {freq},\n     number of year_sets: {ys}\n'.format(
+                    ys=year_set,
+                    freq=freq),
+                'ok')
+
+        if not from_saved_state:
+            # initialize the job_sets dict
+            for i in range(1, year_set + 1):
+                set_start_year = sim_start_year + ((i - 1) * freq)
+                set_end_year = set_start_year + freq - 1
+                job_set = {
+                    'status': 'no data',
+                    'year_set': len(job_sets) + 1,
+                    'jobs': [],
+                    'set_start_year': set_start_year,
+                    'set_end_year': set_end_year
+                }
+                job_sets.append(job_set)
+
+    for job_set in job_sets:
+        print_message(job_set)
+
+    # initialize the file_list
+    if debug:
+        print_message('initializing file_list with {num_years} years'.format(
+            num_years=number_of_sim_years))
+
+    for year in range(1, number_of_sim_years + 1):
+        for month in range(1, 13):
+            key = str(year) + '-' + str(month)
+            file_list[key] = 'no data'
+            file_name_list[key] = ''
 
     # Check for any data already on the System
     check_for_inplace_data()
     check_year_sets()
-    if debug:
-        for s in job_sets:
-            print_message('year_set {0}:'.format(s.get('year_set')), 'ok')
-            for job in s['jobs']:
-                print_message('    {}'.format(str(job)))
-    if debug:
-        print_message('printing year sets', 'ok')
-        for key in job_sets:
-            print_message(str(key['year_set']) + ': ' + key['status'], 'ok')
-        print_message('printing file list', 'ok')
-        for key in sorted(file_list, cmp=file_list_cmp):
-            print_message(key + ': ' + file_list[key], 'ok')
+    # if debug:
+    #     for s in job_sets:
+    #         print_message('year_set {0}:'.format(s.get('year_set')), 'ok')
+    #         for job in s['jobs']:
+    #             print_message('    {}'.format(str(job)))
+    # if debug:
+    #     print_message('printing year sets', 'ok')
+    #     for key in job_sets:
+    #         print_message(str(key['year_set']) + ': ' + key['status'], 'ok')
+    #     print_message('printing file list', 'ok')
+    #     for key in sorted(file_list, cmp=file_list_cmp):
+    #         print_message(key + ': ' + file_list[key], 'ok')
 
-        if all_data:
-            print_message('All data is local, disabling remote monitor')
-        else:
-            print_message('Data is missing, enabling remote monitor')
+    #     if all_data:
+    #         print_message('All data is local, disabling remote monitor')
+    #     else:
+    #         print_message('Data is missing, enabling remote monitor')
 
     # if all the data is local, dont start the monitor
     if not all_data:
@@ -678,11 +802,13 @@ if __name__ == "__main__":
             check_year_sets()
             start_ready_job_sets()
             check_for_inplace_data()
+            if is_all_done():
+                print_message('All processing complete!')
+                sys.exit(0)
             sleep(10)
     except KeyboardInterrupt as e:
         print_message('----- KEYBOARD INTERUPT -----')
         if config.get('state_path'):
-            print_message('saving state', 'ok')
             save_state()
         print_message('cleaning up threads', 'ok')
         for t in thread_list:
