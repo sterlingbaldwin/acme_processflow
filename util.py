@@ -1,4 +1,5 @@
 from time import sleep
+import logging
 from subprocess import Popen, PIPE
 import sys
 import traceback
@@ -51,7 +52,11 @@ def filename_to_file_list_key(filename, pattern):
     end_offset = 12
     month_start_offset = end_offset + 1
     month_end_offset = month_start_offset + 2
-    index = re.search(pattern, filename).start()
+    index = re.search(pattern, filename)
+    if index:
+        index = index.start()
+    else:
+        return ''
     year = int(filename[index + start_offset: index + end_offset])
     month = int(filename[index + month_start_offset: index + month_end_offset])
     key = "{year}-{month}".format(year=year, month=month)
@@ -132,6 +137,7 @@ def check_slurm_job_submission(expected_name):
         if 'error' in out[0]:
             sleep(1)
             error_count += 1
+            logging.warning('Error checking job status for {0}'.format(expected_name))
             continue
         for line in out:
             for word in line.split():
@@ -143,7 +149,9 @@ def check_slurm_job_submission(expected_name):
                     index = word.find('=') + 1
                     if word[index:] == expected_name:
                         found_job = True
-                        break
-            if found_job and job_id:
-                return found_job, job_id
+
+                if found_job and job_id:
+                    return found_job, job_id
+        sleep(1)
+        error_count += 1
     return found_job, job_id
