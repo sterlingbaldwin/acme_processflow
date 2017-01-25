@@ -43,22 +43,78 @@ def print_message(message, status='error'):
     elif status == 'ok':
         print colors.OKGREEN + '[+] ' + colors.ENDC + str(message)
 
-def filename_to_file_list_key(filename, pattern):
+def render(variables, input_path, output_path, delimiter):
+    """
+    Takes an input file path, an output file path, a set of variables, and a delimiter.
+    For each instance of that delimiter wrapped around a substring, replaces the
+    substring with its matching element from the varialbes dict
+
+    An example variable dict and delimiter would be:
+
+    variables = {
+        'test_casename': '20161117.beta0.A_WCYCL1850S.ne30_oEC_ICG.edison',
+        'test_native_res': 'ne30',
+        'test_archive_dir': '/space2/test_data/ACME_simulations',
+        'test_short_term_archive': '0',
+        'test_begin_yr_climo': '6',
+        'test_end_yr_climo': '10'
+    }
+    delim = '%%'
+
+
+    """
+
+    rendered_string = ''
+
+
+    with open(input_path, 'r') as infile:
+        for line in infile.readlines():
+            match = re.search(delimiter + '[a-zA-Z_0-9]*' + delimiter, line)
+            if match:
+                delim_index = [m.start() for m in re.finditer(delimiter, line)]
+                if len(delim_index) < 2:
+                    print 'only one delimiter'
+                    continue
+
+                template_string = line[delim_index[0] + len(delimiter): delim_index[1]]
+                for item in variables:
+                    if item == template_string:
+                        rendered_start = line[:delim_index[0]]
+                        rendered_middle = variables[item]
+                        rendered_end = line[delim_index[0] + len(delimiter) + len(item) + len(delimiter):]
+                        rendered_string += rendered_start + rendered_middle + rendered_end
+                    else:
+                        continue
+            else:
+                rendered_string += line
+
+    with open(output_path, 'w') as outfile:
+        outfile.write(rendered_string)
+
+
+
+def filename_to_file_list_key(filename, output_pattern, date_pattern):
     """
     Takes a filename and returns the key for the file_list
     """
-    # these offsets need to change if the output_pattern changes. This is unavoidable given the escape characters
-    start_offset = 8
-    end_offset = 12
-    month_start_offset = end_offset + 1
-    month_end_offset = month_start_offset + 2
-    index = re.search(pattern, filename)
+    date_pattern.replace('Y', '0')
+    date_pattern.replace('M', '0')
+    date_pattern.replace('D', '0')
+    output_pattern.replace('Y', '[0-9]')
+    output_pattern.replace('M', '[0-9]')
+    output_pattern.replace('D', '[0-9]')
+    index = re.search(date_pattern, output_pattern)
     if index:
         index = index.start()
     else:
+        logging.error('unable to find pattern {0} in {1}'.format(date_pattern, output_pattern))
         return ''
-    year = int(filename[index + start_offset: index + end_offset])
-    month = int(filename[index + month_start_offset: index + month_end_offset])
+    # the YYYY field is 4 characters long, the month is two
+    year_offset = index + 4
+    # two characters for the month, and one for the - between year and month
+    month_offset = year_offset + 3
+    year = int(filename[index: year_offset])
+    month = int(filename[year_offset + 1: month_offset])
     key = "{year}-{month}".format(year=year, month=month)
     return key
 
