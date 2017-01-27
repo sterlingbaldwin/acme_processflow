@@ -10,9 +10,12 @@ import re
 import threading
 import atexit
 import logging
+import time
 
 from math import floor
-from shutil import copy, rmtree
+from shutil import copy
+from shutil import rmtree
+from shutil import move
 from getpass import getpass
 from time import sleep
 from pprint import pformat
@@ -23,7 +26,7 @@ from jobs.Transfer import Transfer
 from jobs.Ncclimo import Climo
 from jobs.UploadDiagnosticOutput import UploadDiagnosticOutput
 from jobs.Publication import Publication
-from jobs.CMORjob import CMOREjob
+from jobs.PrimaryDiagnostic import PrimaryDiagnostic
 from Monitor import Monitor
 
 from util import print_debug
@@ -86,7 +89,7 @@ def setup(parser):
     if args.debug:
         debug = True
         print_message('Running in debug mode', 'ok')
-    
+
     config = {}
 
     if args.state:
@@ -122,6 +125,7 @@ def setup(parser):
     if not from_saved_state:
         required_fields = [
             "output_path",
+            "output_pattern",
             "data_cache_path",
             "compute_host",
             "compute_username",
@@ -135,7 +139,8 @@ def setup(parser):
             "source_endpoint",
             "destination_endpoint",
             "source_path",
-            "batch_system_type"
+            "batch_system_type",
+            "experiment",
         ]
         if args.config:
             try:
@@ -156,6 +161,22 @@ def setup(parser):
                         config[field] = getpass("{0} not specified in config, please enter: ".format(field))
                     else:
                         config[field] = raw_input("{0} not specified in config, please enter: ".format(field))
+                if field == 'output_pattern':
+                    patterns = ['YYYY-MM', 'YYYY-MM-DD']
+                    output_pattern = config.get(field)
+                    for p in patterns:
+                        index = re.search(p, output_pattern)
+                        if index:
+                            start = index.start()
+                            end = start + len(p)
+                            date_pattern = output_pattern[start:end]
+                            config['output_pattern'] = config['output_pattern'][:start] + p + '.nc'
+                            config['date_pattern'] = date_pattern
+                    if not config.get('date_pattern'):
+                        msg = 'Unable to parse output_pattern {}, exiting'.format(output_pattern)
+                        print_message(msg)
+                        logging.error(msg)
+                        sys.exit(1)
         else:
             parser.print_help()
             print 'No configuration file given, initiating manual setup'
@@ -167,7 +188,7 @@ def setup(parser):
                     config[field] = raw_input('{0}: '.format(field))
     return config
 
-def add_jobs(year_set, job_set):
+def add_jobs(job_set):
     global job_sets
 
     # each required job is a key, the value is if its in the job list already or not
@@ -197,6 +218,7 @@ def add_jobs(year_set, job_set):
         # climo_end_year = climo_start_year + config.get('set_frequency') - 1
         climo_start_year = job_set.get('set_start_year')
         climo_end_year = job_set.get('set_end_year')
+        year_set = job_set.get('year_set')
 
         # create a temp directory, and fill it with symlinks to the actual data
         key_list = []
@@ -258,6 +280,44 @@ def add_jobs(year_set, job_set):
         logging.info('Adding Diagnostic job to the job list with config: %s', str(diag_config))
         job_set['jobs'].append(diag)
 
+
+        coupled_project_dir = os.path.join(os.getcwd(), 'coupled_daigs', str(job_set.get('year_set')))
+        if not os.path.exists(coupled_project_dir):
+            os.makedirs(coupled_project_dir)
+        coupled_diag_config = {
+            'coupled_project_dir': coupled_project_dir,
+            'test_casename': config.get('experiment'),
+            'test_native_res': config.get('test_native_res'),
+            'test_archive_dir': diag_temp_dir,
+            'test_begin_yr_climo': job_set.get('set_start_year'),
+            'test_end_yr_climo': job_set.get('set_end_year'),
+            'test_begin_yr_ts': job_set.get('set_start_year'),
+            'test_end_yr_ts': job_set.get('set_end_year'),
+            'ref_case': 'obs',
+            'ref_archive_dir': config.get('obs_for_diagnostics_path'),
+            'mpas_meshfile': config.get('mpas_meshfile'),
+            'mpas_remapfile': config.get('mpas_remapfile'),
+            'pop_remapfile': config.get('pop_remapfile'),
+            'remap_files_dir': config.get('remap_files_dir'),
+            'GPCP_regrid_wgt_file': config.get('GPCP_regrid_wgt_file'),
+            'CERES_EBAF_regrid_wgt_file': config.get('CERES_EBAF_regrid_wgt_file'),
+            'ERS_regrid_wgt_file': config.get('ERS_regrid_wgt_file'),
+            'coupled_home_directory': '/export/baldwin32/projects/PreAndPostProcessing/coupled_diags',
+            'coupled_template_path': os.path.join(os.getcwd(), 'resources', 'run_AIMS_template.csh'),
+            'rendered_output_path': os.path.join(coupled_project_dir, 'run_AIMS.csh'),
+            'obs_ocndir': config.get('obs_ocndir'),
+            'obs_seaicedir': config.get('obs_seaicedir'),
+            'obs_sstdir': config.get('obs_sstdir'),
+            'obs_iceareaNH': config.get('obs_iceareaNH'),
+            'obs_iceareaSH': config.get('obs_iceareaSH'),
+            'obs_icevolNH': config.get('obs_icevolNH'),
+            'obs_icevolSH': 'None',
+            'depends_on': [len(job_set['jobs']) - 2]
+        }
+        job = PrimaryDiagnostic(coupled_diag_config)
+        print_message(str(job))
+        sys.exit(1)
+
     # init the upload job
     if not required_jobs['upload_diagnostic_output']:
         upload_config = {
@@ -306,7 +366,7 @@ def monitor_check(monitor):
     new_files = monitor.get_new_files()
     checked_new_files = []
     for f in new_files:
-        key = filename_to_file_list_key(f, config.get('output_pattern'))
+        key = filename_to_file_list_key(f, config.get('output_pattern'), config.get('date_pattern'))
         status = file_list.get(key)
         if status and status != 'data ready':
             checked_new_files.append(f)
@@ -333,7 +393,7 @@ def monitor_check(monitor):
                         job_set['status'] = 'data in transit'
 
                         # Spawn jobs for that yearset
-                        job_set = add_jobs(year_set, job_set)
+                        job_set = add_jobs(job_set)
 
     # construct list of files to transfer
     f_list = ['{path}/{file}'.format(path=config.get('source_path'), file=f)  for f in checked_new_files]
@@ -397,16 +457,16 @@ def handle_transfer(transfer_job, f_list, event):
 
 def check_year_sets():
     """
-    Checks the file_list, and sets the year_set status to ready if all the files are in place
+    Checks the file_list, and sets the year_set status to ready if all the files are in place,
+    otherwise, checks if there is partial data, or zero data
     """
     global job_sets
-    sim_start_year = int(config.get('simulation_start_year'))
-    sim_end_year = int(config.get('simulation_end_year'))
+    sim_start_year = config.get('simulation_start_year')
+    sim_end_year = config.get('simulation_end_year')
     number_of_sim_years = sim_end_year - (sim_start_year - 1)
 
-    incomplete_job_sets = [s for s in job_sets if s['status'] != 'COMPLETED']
+    incomplete_job_sets = [s for s in job_sets if s['status'] != 'COMPLETED' and s['status'] != 'RUNNING']
     for job_set in incomplete_job_sets:
-        # compute number of expected year sets
 
         start_year = job_set.get('set_start_year')
         end_year = job_set.get('set_end_year')
@@ -417,18 +477,17 @@ def check_year_sets():
             for j in range(1, 13):
                 file_key = '{0}-{1}'.format(i, j)
                 status = file_list[file_key]
-                # if debug:
-                #     print_message('  {key}: {value}'.format(key=key, value=file_list[key]), 'ok')
+
                 if status == 'no data':
                     data_ready = False
                 elif status == 'data ready':
                     non_zero_data = True
         if data_ready:
-            # if job_set['status'] == 'no data' or job_set['status'] == 'partial data':
             job_set['status'] = 'data ready'
+            status = 'data ready'
+            job_set = add_jobs(job_set)
             continue
         if not data_ready and non_zero_data:
-            # if job_set['status'] == 'no data':
             job_set['status'] = 'partial data'
             continue
         if not data_ready and not non_zero_data:
@@ -445,22 +504,6 @@ def check_year_sets():
                     status = file_list[file_key]
                     print_message('  {key}: {value}'.format(key=file_key, value=status), 'ok')
 
-        # ready = True
-        # for year in range(set_start_year, set_end_year + 1):
-        #     for month in range(1, 13):
-        #         key = str(year) + '-' + str(month)
-        #         if file_list.get(key) and file_list[key] != 'data ready':
-        #             ready = False
-        # if ready:
-        #     status = 'data ready'
-        #     year_set = int(floor(set_start_year / config.get('set_frequency')) + 1)
-        #     s = add_jobs(year_set, s)
-        # else:
-        #     status = s['status']
-        # s['status'] = status
-
-
-
 def check_for_inplace_data():
     """
     Checks the data cache for any files that might already be in place,
@@ -472,14 +515,21 @@ def check_for_inplace_data():
     global job_sets
 
     cache_path = config.get('data_cache_path')
-    pattern = config.get('output_pattern')
+    date_pattern = config.get('date_pattern')
+    output_pattern = config.get('output_pattern')
+
+    print 'date_pattern: ' + date_pattern
+
 
     if not os.path.exists(cache_path):
         os.makedirs(cache_path)
         return
 
     for climo_file in os.listdir(cache_path):
-        file_key = filename_to_file_list_key(climo_file, pattern)
+        file_key = filename_to_file_list_key(
+            filename=climo_file,
+            output_pattern=output_pattern,
+            date_pattern=date_pattern)
         file_list[file_key] = 'data ready'
         file_name_list[file_key] = climo_file
 
@@ -503,7 +553,7 @@ def start_ready_job_sets():
             msg = 'year_set: {0} status: {1}'.format(job_set.get('year_set'), job_set.get('status'))
             print_message(msg, 'ok')
             logging.info(msg)
-        if job_set['status'] == 'data ready':
+        if job_set['status'] == 'data ready' or job_set['status'] == 'RUNNING':
             for job in job_set['jobs']:
                 # if the job is a climo, and it hasnt been started yet, start it
                 if debug:
@@ -515,6 +565,7 @@ def start_ready_job_sets():
                     logging.info(msg)
 
                 if job.get_type() == 'climo' and job.status == 'valid':
+                    job_set['status'] = 'RUNNING'
                     job_id = job.execute(batch=True)
                     job.set_status('starting')
                     logging.info('Starting Ncclimo for year set %s', job_set['year_set'])
@@ -674,11 +725,35 @@ def is_all_done():
         print_message('job_set {0} status {1}'.format(job_set['year_set'], job_set['status']))
         if job_set['status'] != 'COMPLETED':
             return False
-
     return True
+
+def cleanup():
+    """
+    Clean up temp files created during the run
+    """
+    logging.info('Cleaning up temp directories')
+    try:
+        cwd = os.getcwd()
+        tmp_path = os.path.join(cwd, 'tmp')
+        rmtree(tmp_path)
+    except Exception as e:
+        logging.error(format_debug(e))
+        print_message('Error removing temp directories')
+
+    try:
+        archive_path = os.path.join(cwd, 'run_script_archive', time.strftime("%d-%m-%Y"))
+        if not os.path.exists(archive_path):
+            os.makedirs(archive_path)
+        run_script_path = os.path.join(cwd, 'run_scripts')
+        move(run_script_path, archive_path)
+    except Exception as e:
+        logging.error(format_debug(e))
+        print_message('Error archiving run_scripts directory')
+
+
 if __name__ == "__main__":
 
-    # A list of all the expected fiels
+    # A list of all the expected files
     file_list = {}
     # A list of all the file names
     file_name_list = {}
@@ -803,7 +878,9 @@ if __name__ == "__main__":
             start_ready_job_sets()
             check_for_inplace_data()
             if is_all_done():
-                print_message('All processing complete!')
+                # cleanup()
+                print_message('All processing complete')
+                logging.info("All processes complete, exiting")
                 sys.exit(0)
             sleep(10)
     except KeyboardInterrupt as e:
