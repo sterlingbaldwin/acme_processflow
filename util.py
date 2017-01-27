@@ -100,24 +100,37 @@ def filename_to_file_list_key(filename, output_pattern, date_pattern):
     """
     Takes a filename and returns the key for the file_list
     """
-    date_pattern.replace('Y', '0')
-    date_pattern.replace('M', '0')
-    date_pattern.replace('D', '0')
-    output_pattern.replace('Y', '[0-9]')
-    output_pattern.replace('M', '[0-9]')
-    output_pattern.replace('D', '[0-9]')
-    index = re.search(date_pattern, output_pattern)
+    date_pattern = date_pattern.replace('YYYY', '[0-9][0-9][0-9][0-9]')
+    date_pattern = date_pattern.replace('MM', '[0-9][0-9]')
+    date_pattern = date_pattern.replace('DD', '[0-9][0-9]')
+    output_pattern = output_pattern.replace('YYYY', '0000')
+    output_pattern = output_pattern.replace('MM', '00')
+    output_pattern = output_pattern.replace('DD', '00')
+
+    index = re.search(date_pattern, filename)
     if index:
         index = index.start()
     else:
-        logging.error('unable to find pattern {0} in {1}'.format(date_pattern, output_pattern))
+        msg = 'unable to find pattern {0} in {1}'.format(date_pattern, filename)
+        print_message(msg)
+        logging.error(msg)
         return ''
     # the YYYY field is 4 characters long, the month is two
     year_offset = index + 4
     # two characters for the month, and one for the - between year and month
     month_offset = year_offset + 3
-    year = int(filename[index: year_offset])
-    month = int(filename[year_offset + 1: month_offset])
+    try:
+        year = int(filename[index: year_offset])
+    except:
+        print 'filename ' + filename
+        print 'index ' + str(index)
+        print 'year ' + filename[index: year_offset]
+    try:
+        month = int(filename[year_offset + 1: month_offset])
+    except:
+        print 'filename ' + filename
+        print 'index ' + str(index)
+        print 'month ' + filename[year_offset + 1: month_offset]
     key = "{year}-{month}".format(year=year, month=month)
     return key
 
