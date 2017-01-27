@@ -88,7 +88,7 @@ def render(variables, input_path, output_path, delimiter):
                     rendered_start = line[:delim_index[0]]
                     rendered_middle = variables[item]
                     rendered_end = line[delim_index[0] + len(delimiter) + len(item) + len(delimiter):]
-                    rendered_string += rendered_start + rendered_middle + rendered_end
+                    rendered_string += str(rendered_start) + str(rendered_middle) + str(rendered_end)
                 else:
                     continue
         else:
