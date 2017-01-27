@@ -61,37 +61,40 @@ def render(variables, input_path, output_path, delimiter):
     }
     delim = '%%'
 
-
     """
 
-    rendered_string = ''
+    try:
+        infile = open(input_path, 'r')
+    except IOError:
+        print 'unable to open file: {}'.format(input_path)
+        return
+    try:
+        outfile = open(output_path, 'w')
+    except IOError:
+        print 'unable to open file: {}'.format(input_path)
+        return
 
+    for line in infile.readlines():
+        rendered_string = ''
+        match = re.search(delimiter + '[a-zA-Z_0-9]*' + delimiter, line)
+        if match:
+            delim_index = [m.start() for m in re.finditer(delimiter, line)]
+            if len(delim_index) < 2:
+                continue
 
-    with open(input_path, 'r') as infile:
-        for line in infile.readlines():
-            match = re.search(delimiter + '[a-zA-Z_0-9]*' + delimiter, line)
-            if match:
-                delim_index = [m.start() for m in re.finditer(delimiter, line)]
-                if len(delim_index) < 2:
-                    print 'only one delimiter'
+            template_string = line[delim_index[0] + len(delimiter): delim_index[1]]
+            for item in variables:
+                if item == template_string:
+                    rendered_start = line[:delim_index[0]]
+                    rendered_middle = variables[item]
+                    rendered_end = line[delim_index[0] + len(delimiter) + len(item) + len(delimiter):]
+                    rendered_string += rendered_start + rendered_middle + rendered_end
+                else:
                     continue
-
-                template_string = line[delim_index[0] + len(delimiter): delim_index[1]]
-                for item in variables:
-                    if item == template_string:
-                        rendered_start = line[:delim_index[0]]
-                        rendered_middle = variables[item]
-                        rendered_end = line[delim_index[0] + len(delimiter) + len(item) + len(delimiter):]
-                        rendered_string += rendered_start + rendered_middle + rendered_end
-                    else:
-                        continue
-            else:
-                rendered_string += line
-
-    with open(output_path, 'w') as outfile:
+        else:
+            print 'no match'
+            rendered_string = line
         outfile.write(rendered_string)
-
-
 
 def filename_to_file_list_key(filename, output_pattern, date_pattern):
     """
