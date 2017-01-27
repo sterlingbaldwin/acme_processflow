@@ -103,7 +103,11 @@ class Climo(object):
         else:
             # Submitting the job to SLURM
             expected_name = 'ncclimo_job_' + str(self.uuid)
-            run_script = os.path.join(os.getcwd(), 'run_scripts', expected_name)
+            run_scripts_path = os.path.join(os.getcwd(), 'run_scripts')
+            run_script = os.path.join(run_scripts_path, expected_name)
+
+            if not os.path.exists(run_scripts_path):
+                os.makedirs(run_scripts_path)
 
             self.slurm_args['error_file'] = '-e {error_file}'.format(error_file=run_script + '.err')
             self.slurm_args['output_file'] = '-o {output_file}'.format(output_file=run_script + '.out')
@@ -185,18 +189,18 @@ class Climo(object):
 
         # after checking that the job is valid to run,
         # check if the output already exists and the job actually needs to run
-        # if os.path.exists(self.config.get('climo_output_directory')):
-        #     contents = os.listdir(self.config.get('climo_output_directory'))
-        #     if len(contents) <= 10:
-        #         return 0
-        #     else:
-        #         for i in contents:
-        #             if os.path.isdir(self.config.get('climo_output_directory') + '/' + i):
-        #                 continue
-        #             if not re.match(self.config.get('caseId'), i):
-        #                 return 0
-        #         self.status = 'COMPLETED'
-        # return 0
+        if os.path.exists(self.config.get('climo_output_directory')):
+            contents = os.listdir(self.config.get('climo_output_directory'))
+            if len(contents) <= 10:
+                return 0
+            else:
+                for i in contents:
+                    if os.path.isdir(self.config.get('climo_output_directory') + '/' + i):
+                        continue
+                    if not re.match(self.config.get('caseId'), i):
+                        return 0
+                self.status = 'COMPLETED'
+        return 0
 
     def postvalidate(self):
         """
