@@ -316,6 +316,7 @@ def add_jobs(job_set):
         }
         job = PrimaryDiagnostic(coupled_diag_config)
         print_message(str(job))
+        job.execute()
         sys.exit(1)
 
     # init the upload job
