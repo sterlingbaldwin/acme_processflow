@@ -369,11 +369,14 @@ def monitor_check(monitor):
     monitor.check()
     new_files = monitor.get_new_files()
     checked_new_files = []
+
     output_pattern = config.get('global').get('output_pattern')
     date_pattern = config.get('global').get('date_pattern')
+
     for f in new_files:
         key = filename_to_file_list_key(f, output_pattern, date_pattern)
         status = file_list.get(key)
+        print status
         if status and status != 'data ready':
             checked_new_files.append(f)
 
@@ -838,25 +841,25 @@ if __name__ == "__main__":
     # Check for any data already on the System
     check_for_inplace_data()
     check_year_sets()
-    # if debug:
-    #     for s in job_sets:
-    #         print_message('year_set {0}:'.format(s.get('year_set')), 'ok')
-    #         for job in s['jobs']:
-    #             print_message('    {}'.format(str(job)))
-    # if debug:
-    #     print_message('printing year sets', 'ok')
-    #     for key in job_sets:
-    #         print_message(str(key['year_set']) + ': ' + key['status'], 'ok')
-    #     print_message('printing file list', 'ok')
-    #     for key in sorted(file_list, cmp=file_list_cmp):
-    #         print_message(key + ': ' + file_list[key], 'ok')
+    if debug:
+        for s in job_sets:
+            print_message('year_set {0}:'.format(s.get('year_set')), 'ok')
+            for job in s['jobs']:
+                print_message('    {}'.format(str(job)))
 
-    #     if all_data:
-    #         print_message('All data is local, disabling remote monitor')
-    #     else:
-    #         print_message('Data is missing, enabling remote monitor')
+        print_message('printing year sets', 'ok')
+        for key in job_sets:
+            print_message(str(key['year_set']) + ': ' + key['status'], 'ok')
+        print_message('printing file list', 'ok')
+        for key in sorted(file_list, cmp=file_list_cmp):
+            print_message(key + ': ' + file_list[key], 'ok')
 
-    # if all the data is local, dont start the monitor
+        if all_data:
+            print_message('All data is local, disabling remote monitor')
+        else:
+            print_message('Data is missing, enabling remote monitor')
+
+    # If all the data is local, dont start the monitor
     if not all_data:
         pattern = config.get('global').get('output_pattern').replace('YYYY', '[0-9][0-9][0-9][0-9]')
         pattern = pattern.replace('MM', '[0-9][0-9]')
@@ -873,8 +876,8 @@ if __name__ == "__main__":
         else:
             print_message('No password or keyfile path given for compute resource, please add to your config and try again')
             sys.exit(1)
-        monitor = Monitor(monitor_config)
 
+        monitor = Monitor(monitor_config)
         print_message('attempting connection to {}'.format(config.get('monitor').get('compute_host')), 'ok')
         if monitor.connect() == 0:
             print_message('connected', 'ok')
