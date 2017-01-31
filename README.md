@@ -78,4 +78,4 @@ A workflow tool for the ACME project
 
 
 ## Example
-An example can be found:  https://github.com/sterlingbaldwin/acme_workflow/blob/master/config.json
+An example can be found here:  https://github.com/sterlingbaldwin/acme_workflow/blob/master/config.json
