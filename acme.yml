@@ -1,4 +1,7 @@
 name: acme
+channels:
+- conda-forge
+- uvcdat
 dependencies:
 - backports=1.0=py27_0
 - backports_abc=0.4=py27_0
