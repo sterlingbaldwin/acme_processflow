@@ -11,7 +11,7 @@ from util import print_debug
 from util import print_message
 from util import format_debug
 from util import check_slurm_job_submission
-from diagsviewer import DiagnosticsViewerClient
+from output_viewer.diagsviewer import DiagnosticsViewerClient
 
 class UploadDiagnosticOutput(object):
     def __init__(self, config):

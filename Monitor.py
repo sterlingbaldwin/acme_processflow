@@ -1,11 +1,14 @@
+import paramiko
+
 from time import sleep
 from util import print_debug
 from util import print_message
 from getpass import getpass
 
-import paramiko
 from paramiko import PasswordRequiredException
 from paramiko import SSHException
+
+
 class Monitor(object):
     """
         A class to monitor a remote directory, and pull down any files matching the given regex

@@ -1,11 +1,11 @@
 {
     "global": {
-        "output_path": "/export/baldwin32/projects/acme_workflow/output",
-        "data_cache_path": "/export/baldwin32/projects/acme_workflow/cache",
+        "output_path": "/space2/kendra/output",
+        "data_cache_path": "/space2/sbaldwin/cache",
         "output_pattern": "20161117.beta0.A_WCYCL1850.ne30_oEC.edison.cam.h0.YYYY-MM.nc",
         "simulation_start_year": 1,
-        "simulation_end_year": 50,
-        "set_frequency": [2, 5, 10],
+        "simulation_end_year": 5,
+        "set_frequency": [2, 5],
         "experiment": "20161117.beta0.A_WCYCL1850.ne30_oEC.edison",
         "batch_system_type": "slurm"
     },
@@ -13,15 +13,7 @@
         "compute_host": "edison.nersc.gov",
         "compute_username": "sbaldwin",
         "compute_password": "",
-        "compute_keyfile": "",
-        "processing_host": "aims4.llnl.gov",
-        "processing_username": "baldwin32",
-        "processing_password": "",
-        "globus_username": "sbaldwin",
-        "globus_password": "",
-        "source_endpoint": "b9d02196-6d04-11e5-ba46-22000b92c6ec",
-        "destination_endpoint": "43d64772-a82e-11e5-99d3-22000b96db58",
-        "source_path": "/global/homes/s/sbaldwin/test"
+        "compute_keyfile": ""
     },
     "ncclimo": {
         "regrid_map_path": "/export/baldwin32/projects/acme_workflow/resources/map_ne30np4_to_fv129x256_aave.20150901.nc"
@@ -55,5 +47,13 @@
         "diag_viewer_server": ""
     },
     "transfer": {
+        "source_path": "/global/homes/s/sbaldwin/test",
+        "source_endpoint": "b9d02196-6d04-11e5-ba46-22000b92c6ec",
+        "processing_host": "aims4.llnl.gov",
+        "processing_username": "baldwin32",
+        "processing_password": "",
+        "globus_username": "sbaldwin",
+        "globus_password": "",
+        "destination_endpoint": "43d64772-a82e-11e5-99d3-22000b96db58"
     }
 }

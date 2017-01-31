@@ -152,27 +152,29 @@ def setup(parser):
                 return -1
 
             for field in required_fields:
+                """
                 if field not in config or len(config[field]) == 0:
-                    if field == 'compute_password' and config.get('compute_keyfile'):
+                    if field == 'compute_password' and config.get('monitor').get('compute_keyfile'):
                         continue
-                    if field == 'compute_keyfile' and config.get('compute_password'):
+                    if field == 'compute_keyfile' and config.get('monitor').get('compute_password'):
                         continue
                     if 'password' in field:
                         config[field] = getpass("{0} not specified in config, please enter: ".format(field))
                     else:
                         config[field] = raw_input("{0} not specified in config, please enter: ".format(field))
+                """
                 if field == 'output_pattern':
                     patterns = ['YYYY-MM', 'YYYY-MM-DD']
-                    output_pattern = config.get(field)
+                    output_pattern = config.get('global').get(field)
                     for p in patterns:
                         index = re.search(p, output_pattern)
                         if index:
                             start = index.start()
                             end = start + len(p)
                             date_pattern = output_pattern[start:end]
-                            config['output_pattern'] = config['output_pattern'][:start] + p + '.nc'
-                            config['date_pattern'] = date_pattern
-                    if not config.get('date_pattern'):
+                            config['global']['output_pattern'] = config['global']['output_pattern'][:start] + p + '.nc'
+                            config['global']['date_pattern'] = date_pattern
+                    if not config.get('global').get('date_pattern'):
                         msg = 'Unable to parse output_pattern {}, exiting'.format(output_pattern)
                         print_message(msg)
                         logging.error(msg)
@@ -204,18 +206,18 @@ def add_jobs(job_set):
 
     # first initialize the climo job
     if not required_jobs['climo']:
-        climo_output_dir = os.path.join(config.get('output_path'))
+        climo_output_dir = os.path.join(config.get('global').get('output_path'))
         if not os.path.exists(climo_output_dir):
             if debug:
                 logging.info("Creating climotology output directory {}".format(climo_output_dir))
             os.makedirs(climo_output_dir)
-        regrid_output_dir = os.path.join(config.get('output_path'), 'regrid')
+        regrid_output_dir = os.path.join(config.get('global').get('output_path'), 'regrid')
         if not os.path.exists(regrid_output_dir):
             os.makedirs(regrid_output_dir)
 
         # Setup variables for climo job
-        # climo_start_year = config.get('simulation_start_year') + ((year_set - 1) * config.get('set_frequency'))
-        # climo_end_year = climo_start_year + config.get('set_frequency') - 1
+        # climo_start_year = config.get('global').get('simulation_start_year') + ((year_set - 1) * config.get('global').get('set_frequency'))
+        # climo_end_year = climo_start_year + config.get('global').get('set_frequency') - 1
         climo_start_year = job_set.get('set_start_year')
         climo_end_year = job_set.get('set_end_year')
         year_set = job_set.get('year_set')
@@ -229,7 +231,7 @@ def add_jobs(job_set):
         climo_file_list = [file_name_list.get(x) for x in key_list]
         climo_temp_dir = os.path.join(os.getcwd(), 'tmp', 'climo', 'year_set_' + str(year_set))
         create_symlink_dir(
-            src_dir=config.get('data_cache_path'),
+            src_dir=config.get('global').get('data_cache_path'),
             src_list=climo_file_list,
             dst=climo_temp_dir
         )
@@ -237,9 +239,9 @@ def add_jobs(job_set):
         climo_config = {
             'start_year': climo_start_year,
             'end_year': climo_end_year,
-            'caseId': config.get('experiment'),
+            'caseId': config.get('global').get('experiment'),
             'annual_mode': 'sdd',
-            'regrid_map_path': config.get('regrid_map_path'),
+            'regrid_map_path': config.get('ncclimo').get('regrid_map_path'),
             'input_directory': climo_temp_dir,
             'climo_output_directory': climo_output_dir,
             'regrid_output_directory': regrid_output_dir,
@@ -252,7 +254,7 @@ def add_jobs(job_set):
     # init the diagnostic job
     if not required_jobs['diagnostic']:
         # create the output directory
-        diag_output_path = os.path.join(config.get('output_path'), 'diagnostics', 'year_set_' + str(year_set))
+        diag_output_path = os.path.join(config.get('global').get('output_path'), 'diagnostics', 'year_set_' + str(year_set))
         if not os.path.exists(diag_output_path):
             os.makedirs(diag_output_path)
 
@@ -268,7 +270,7 @@ def add_jobs(job_set):
         # create the configuration object for the diag job
         diag_config = {
             '--model': diag_temp_dir,
-            '--obs': config.get('obs_for_diagnostics_path'),
+            '--obs': config.get('meta_diags').get('obs_for_diagnostics_path'),
             '--outputdir': diag_output_path,
             '--package': 'amwg',
             '--set': '5',
@@ -280,52 +282,53 @@ def add_jobs(job_set):
         logging.info('Adding Diagnostic job to the job list with config: %s', str(diag_config))
         job_set['jobs'].append(diag)
 
-
+        """
         coupled_project_dir = os.path.join(os.getcwd(), 'coupled_daigs', str(job_set.get('year_set')))
         if not os.path.exists(coupled_project_dir):
             os.makedirs(coupled_project_dir)
         coupled_diag_config = {
             'coupled_project_dir': coupled_project_dir,
-            'test_casename': config.get('experiment'),
-            'test_native_res': config.get('test_native_res'),
+            'test_casename': config.get('global').get('experiment'),
+            'test_native_res': config.get('primary_diags').get('test_native_res'),
             'test_archive_dir': diag_temp_dir,
             'test_begin_yr_climo': job_set.get('set_start_year'),
             'test_end_yr_climo': job_set.get('set_end_year'),
             'test_begin_yr_ts': job_set.get('set_start_year'),
             'test_end_yr_ts': job_set.get('set_end_year'),
-            'ref_case': 'obs',
-            'ref_archive_dir': config.get('obs_for_diagnostics_path'),
-            'mpas_meshfile': config.get('mpas_meshfile'),
-            'mpas_remapfile': config.get('mpas_remapfile'),
-            'pop_remapfile': config.get('pop_remapfile'),
-            'remap_files_dir': config.get('remap_files_dir'),
-            'GPCP_regrid_wgt_file': config.get('GPCP_regrid_wgt_file'),
-            'CERES_EBAF_regrid_wgt_file': config.get('CERES_EBAF_regrid_wgt_file'),
-            'ERS_regrid_wgt_file': config.get('ERS_regrid_wgt_file'),
+            'ref_case': config.get('primary_diags').get('obs'),
+            'ref_archive_dir': config.get('meta_diags').get('obs_for_diagnostics_path'),
+            'mpas_meshfile': config.get('primary_diags').get('mpas_meshfile'),
+            'mpas_remapfile': config.get('primary_diags').get('mpas_remapfile'),
+            'pop_remapfile': config.get('primary_diags').get('pop_remapfile'),
+            'remap_files_dir': config.get('primary_diags').get('remap_files_dir'),
+            'GPCP_regrid_wgt_file': config.get('primary_diags').get('GPCP_regrid_wgt_file'),
+            'CERES_EBAF_regrid_wgt_file': config.get('primary_diags').get('CERES_EBAF_regrid_wgt_file'),
+            'ERS_regrid_wgt_file': config.get('primary_diags').get('ERS_regrid_wgt_file'),
             'coupled_home_directory': '/export/baldwin32/projects/PreAndPostProcessing/coupled_diags',
             'coupled_template_path': os.path.join(os.getcwd(), 'resources', 'run_AIMS_template.csh'),
             'rendered_output_path': os.path.join(coupled_project_dir, 'run_AIMS.csh'),
-            'obs_ocndir': config.get('obs_ocndir'),
-            'obs_seaicedir': config.get('obs_seaicedir'),
-            'obs_sstdir': config.get('obs_sstdir'),
-            'obs_iceareaNH': config.get('obs_iceareaNH'),
-            'obs_iceareaSH': config.get('obs_iceareaSH'),
-            'obs_icevolNH': config.get('obs_icevolNH'),
+            'obs_ocndir': config.get('primary_diags').get('obs_ocndir'),
+            'obs_seaicedir': config.get('primary_diags').get('obs_seaicedir'),
+            'obs_sstdir': config.get('primary_diags').get('obs_sstdir'),
+            'obs_iceareaNH': config.get('primary_diags').get('obs_iceareaNH'),
+            'obs_iceareaSH': config.get('primary_diags').get('obs_iceareaSH'),
+            'obs_icevolNH': config.get('primary_diags').get('obs_icevolNH'),
             'obs_icevolSH': 'None',
-            'depends_on': [len(job_set['jobs']) - 2]
+            'depends_on': [len(job_set['jobs']) - 2],
+            'yr_offset': config.get('primary_diags').get('yr_offset')
         }
         job = PrimaryDiagnostic(coupled_diag_config)
         print_message(str(job))
         job.execute()
         sys.exit(1)
-
+        """
     # init the upload job
     if not required_jobs['upload_diagnostic_output']:
         upload_config = {
             'path_to_diagnostic': os.path.join(diag_output_path, 'amwg'),
-            'username': config.get('diag_viewer_username'),
-            'password': config.get('diag_viewer_password'),
-            'server': config.get('diag_viewer_server'),
+            'username': config.get('upload_diagnostic').get('diag_viewer_username'),
+            'password': config.get('upload_diagnostic').get('diag_viewer_password'),
+            'server': config.get('upload_diagnostic').get('diag_viewer_server'),
             'depends_on': [len(job_set['jobs']) - 1] # set the upload job to wait for the diag job to finish
         }
         upload = UploadDiagnosticOutput(upload_config)
@@ -367,7 +370,7 @@ def monitor_check(monitor):
     new_files = monitor.get_new_files()
     checked_new_files = []
     for f in new_files:
-        key = filename_to_file_list_key(f, config.get('output_pattern'), config.get('date_pattern'))
+        key = filename_to_file_list_key(f, config.get('global').get('output_pattern'), config.get('date_pattern'))
         status = file_list.get(key)
         if status and status != 'data ready':
             checked_new_files.append(f)
@@ -383,8 +386,8 @@ def monitor_check(monitor):
             pformat(checked_new_files, indent=4)), 'ok')
     # find which year set the data belongs to
     for f in new_files:
-        for freq in config.get('set_frequency'):
-            year_set = filename_to_year_set(f, config.get('output_pattern'), freq)
+        for freq in config.get('global').get('global').get('set_frequency'):
+            year_set = filename_to_year_set(f, config.get('global').get('output_pattern'), freq)
             for job_set in job_sets:
                 if job_set.get('year_set') == year_set:
                     # if before we got here, the job_set didnt have any data, now that we have some data
@@ -397,23 +400,23 @@ def monitor_check(monitor):
                         job_set = add_jobs(job_set)
 
     # construct list of files to transfer
-    f_list = ['{path}/{file}'.format(path=config.get('source_path'), file=f)  for f in checked_new_files]
+    f_list = ['{path}/{file}'.format(path=config.get('monitor').get('source_path'), file=f)  for f in checked_new_files]
 
     transfer_config = {
         'file_list': f_list,
-        'globus_username': config.get('globus_username'),
-        'globus_password': config.get('globus_password'),
-        'source_username': config.get('compute_username'),
-        'source_password': config.get('compute_password'),
-        'destination_username': config.get('processing_username'),
-        'destination_password': config.get('processing_password'),
-        'source_endpoint': config.get('source_endpoint'),
-        'destination_endpoint': config.get('destination_endpoint'),
-        'source_path': config.get('source_path'),
-        'destination_path': config.get('data_cache_path') + '/',
+        'globus_username': config.get('transfer').get('globus_username'),
+        'globus_password': config.get('transfer').get('globus_password'),
+        'source_username': config.get('monitor').get('compute_username'),
+        'source_password': config.get('monitor').get('compute_password'),
+        'destination_username': config.get('transfer').get('processing_username'),
+        'destination_password': config.get('transfer').get('processing_password'),
+        'source_endpoint': config.get('transfer').get('source_endpoint'),
+        'destination_endpoint': config.get('transfer').get('destination_endpoint'),
+        'source_path': config.get('transfer').get('source_path'),
+        'destination_path': config.get('global').get('data_cache_path') + '/',
         'recursive': 'False',
-        'final_destination_path': config.get('data_cache_path'),
-        'pattern': config.get('output_pattern')
+        'final_destination_path': config.get('global').get('data_cache_path'),
+        'pattern': config.get('global').get('output_pattern')
     }
     logging.info('Starting transfer with config: %s', pformat(transfer_config))
     transfer = Transfer(transfer_config)
@@ -446,7 +449,7 @@ def handle_transfer(transfer_job, f_list, event):
 
     # update the file_list all the files that were transferred
     for f in f_list:
-        list_key = filename_to_file_list_key(f, config.get('output_pattern'))
+        list_key = filename_to_file_list_key(f, config.get('global').get('output_pattern'))
         file_list[list_key] = 'data ready'
         file_name_list[list_key] = f
     if debug:
@@ -462,8 +465,8 @@ def check_year_sets():
     otherwise, checks if there is partial data, or zero data
     """
     global job_sets
-    sim_start_year = config.get('simulation_start_year')
-    sim_end_year = config.get('simulation_end_year')
+    sim_start_year = config.get('global').get('simulation_start_year')
+    sim_end_year = config.get('global').get('simulation_end_year')
     number_of_sim_years = sim_end_year - (sim_start_year - 1)
 
     incomplete_job_sets = [s for s in job_sets if s['status'] != 'COMPLETED' and s['status'] != 'RUNNING']
@@ -515,9 +518,9 @@ def check_for_inplace_data():
     global all_data
     global job_sets
 
-    cache_path = config.get('data_cache_path')
-    date_pattern = config.get('date_pattern')
-    output_pattern = config.get('output_pattern')
+    cache_path = config.get('global').get('data_cache_path')
+    date_pattern = config.get('global').get('date_pattern')
+    output_pattern = config.get('global').get('output_pattern')
 
     print 'date_pattern: ' + date_pattern
 
@@ -668,7 +671,7 @@ def monitor_job(job_id, job, job_set, event=None):
         # this check is here in case the loop is stuck and the thread needs to be canceled
         if event and event.is_set():
             return
-        batch_system = config.get('batch_system_type')
+        batch_system = config.get('global').get('batch_system_type')
         if batch_system == 'slurm':
             status, run_time = handle_slurm()
         elif batch_system == 'pbs':
@@ -780,12 +783,12 @@ if __name__ == "__main__":
         sys.exit(1)
 
     # compute number of expected year sets
-    sim_start_year = int(config.get('simulation_start_year'))
-    sim_end_year = int(config.get('simulation_end_year'))
+    sim_start_year = int(config.get('global').get('simulation_start_year'))
+    sim_end_year = int(config.get('global').get('simulation_end_year'))
     number_of_sim_years = sim_end_year - (sim_start_year - 1)
     if not from_saved_state:
         job_sets = []
-    for freq in config.get('set_frequency'):
+    for freq in config.get('global').get('set_frequency'):
         freq = int(freq)
         year_set = number_of_sim_years / freq
         if debug:
@@ -847,21 +850,21 @@ if __name__ == "__main__":
     # if all the data is local, dont start the monitor
     if not all_data:
         monitor_config = {
-            'remote_host': config.get('compute_host'),
-            'remote_dir': config.get('source_path'),
-            'username': config.get('compute_username'),
-            'pattern': config.get('output_pattern')
+            'remote_host': config.get('monitor').get('compute_host'),
+            'remote_dir': config.get('transfer').get('source_path'),
+            'username': config.get('monitor').get('compute_username'),
+            'pattern': config.get('global').get('output_pattern')
         }
-        if config.get('compute_password'):
-            monitor_config['password'] = config.get('compute_password')
-        if config.get('compute_keyfile'):
-            monitor_config['keyfile'] = config.get('compute_keyfile')
+        if config.get('monitor').get('compute_password'):
+            monitor_config['password'] = config.get('monitor').get('compute_password')
+        if config.get('monitor').get('compute_keyfile'):
+            monitor_config['keyfile'] = config.get('monitor').get('compute_keyfile')
         else:
             print_message('No password or keyfile path given for compute resource, please add to your config and try again')
             sys.exit(1)
         monitor = Monitor(monitor_config)
 
-        print_message('attempting connection to {}'.format(config.get('compute_host')), 'ok')
+        print_message('attempting connection to {}'.format(config.get('monitor').get('compute_host')), 'ok')
         if monitor.connect() == 0:
             print_message('connected', 'ok')
         else:
