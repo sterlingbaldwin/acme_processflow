@@ -404,15 +404,15 @@ def monitor_check(monitor):
 
     transfer_config = {
         'file_list': f_list,
-        'globus_username': config.get('monitor').get('globus_username'),
-        'globus_password': config.get('monitor').get('globus_password'),
+        'globus_username': config.get('transfer').get('globus_username'),
+        'globus_password': config.get('transfer').get('globus_password'),
         'source_username': config.get('monitor').get('compute_username'),
         'source_password': config.get('monitor').get('compute_password'),
-        'destination_username': config.get('monitor').get('processing_username'),
-        'destination_password': config.get('monitor').get('processing_password'),
-        'source_endpoint': config.get('monitor').get('source_endpoint'),
-        'destination_endpoint': config.get('monitor').get('destination_endpoint'),
-        'source_path': config.get('monitor').get('source_path'),
+        'destination_username': config.get('transfer').get('processing_username'),
+        'destination_password': config.get('transfer').get('processing_password'),
+        'source_endpoint': config.get('transfer').get('source_endpoint'),
+        'destination_endpoint': config.get('transfer').get('destination_endpoint'),
+        'source_path': config.get('transfer').get('source_path'),
         'destination_path': config.get('global').get('data_cache_path') + '/',
         'recursive': 'False',
         'final_destination_path': config.get('global').get('data_cache_path'),
@@ -851,7 +851,7 @@ if __name__ == "__main__":
     if not all_data:
         monitor_config = {
             'remote_host': config.get('monitor').get('compute_host'),
-            'remote_dir': config.get('monitor').get('source_path'),
+            'remote_dir': config.get('transfer').get('source_path'),
             'username': config.get('monitor').get('compute_username'),
             'pattern': config.get('global').get('output_pattern')
         }
