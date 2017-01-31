@@ -369,9 +369,14 @@ def monitor_check(monitor):
     monitor.check()
     new_files = monitor.get_new_files()
     checked_new_files = []
+
+    output_pattern = config.get('global').get('output_pattern')
+    date_pattern = config.get('global').get('date_pattern')
+
     for f in new_files:
-        key = filename_to_file_list_key(f, config.get('global').get('output_pattern'), config.get('date_pattern'))
+        key = filename_to_file_list_key(f, output_pattern, date_pattern)
         status = file_list.get(key)
+        print status
         if status and status != 'data ready':
             checked_new_files.append(f)
 
@@ -386,21 +391,20 @@ def monitor_check(monitor):
             pformat(checked_new_files, indent=4)), 'ok')
     # find which year set the data belongs to
     for f in new_files:
-        for freq in config.get('global').get('global').get('set_frequency'):
-            year_set = filename_to_year_set(f, config.get('global').get('output_pattern'), freq)
+        for freq in config.get('global').get('set_frequency'):
+            year_set = filename_to_year_set(f, output_pattern, freq)
             for job_set in job_sets:
-                if job_set.get('year_set') == year_set:
-                    # if before we got here, the job_set didnt have any data, now that we have some data
-                    # we create the processing jobs and add them to the job_sets list of jobs
-                    if job_set.get('status') == 'no data':
-                        # Change job_sets' state
-                        job_set['status'] = 'data in transit'
+                # if before we got here, the job_set didnt have any data, now that we have some data
+                # we create the processing jobs and add them to the job_sets list of jobs
+                if job_set.get('year_set') == year_set and job_set.get('status') == 'no data':
 
-                        # Spawn jobs for that yearset
-                        job_set = add_jobs(job_set)
+                    job_set['status'] = 'data in transit'
+                    # Spawn jobs for that yearset
+                    job_set = add_jobs(job_set)
 
     # construct list of files to transfer
-    f_list = ['{path}/{file}'.format(path=config.get('monitor').get('source_path'), file=f)  for f in checked_new_files]
+    f_path = config.get('transfer').get('source_path')
+    f_list = ['{path}/{file}'.format(path=f_path, file=f)  for f in checked_new_files]
 
     transfer_config = {
         'file_list': f_list,
@@ -419,6 +423,7 @@ def monitor_check(monitor):
         'pattern': config.get('global').get('output_pattern')
     }
     logging.info('Starting transfer with config: %s', pformat(transfer_config))
+    print_message('Starting file transfer', 'ok')
     transfer = Transfer(transfer_config)
     thread = threading.Thread(target=handle_transfer, args=(transfer, checked_new_files, thread_kill_event))
     thread_list.append(thread)
@@ -445,13 +450,16 @@ def handle_transfer(transfer_job, f_list, event):
     if transfer_job.status != 'COMPLETED':
         logging.error('Failed to complete transfer job\n  %s', pformat(str(transfer_job)))
         return
-        # print_message('Faild to transfer files correctly')
+    else:
+        print_message('Finished file transfer')
+        logging.info('File transfer {} completed'.format(transfer_job.uuid))
 
     # update the file_list all the files that were transferred
     for f in f_list:
         list_key = filename_to_file_list_key(f, config.get('global').get('output_pattern'))
         file_list[list_key] = 'data ready'
         file_name_list[list_key] = f
+
     if debug:
         logging.info('trasfer of files %s completed', pformat(f_list))
         logging.info('file_list status: %s', pformat(sorted(file_list, cmp=file_list_cmp)))
@@ -522,9 +530,6 @@ def check_for_inplace_data():
     date_pattern = config.get('global').get('date_pattern')
     output_pattern = config.get('global').get('output_pattern')
 
-    print 'date_pattern: ' + date_pattern
-
-
     if not os.path.exists(cache_path):
         os.makedirs(cache_path)
         return
@@ -550,7 +555,8 @@ def start_ready_job_sets():
     global thread_list
     # iterate over the job_sets
     if debug:
-        print_message('== Checking for ready jobs ==', 'ok')
+        print_message('=== Checking for ready jobs ===', 'ok')
+
     for job_set in job_sets:
         # if the job state is ready, but hasnt started yet
         if debug:
@@ -569,10 +575,13 @@ def start_ready_job_sets():
                     logging.info(msg)
 
                 if job.get_type() == 'climo' and job.status == 'valid':
+
                     job_set['status'] = 'RUNNING'
                     job_id = job.execute(batch=True)
                     job.set_status('starting')
                     logging.info('Starting Ncclimo for year set %s', job_set['year_set'])
+                    print_message('Starting Ncclimo for year_set {}'.format(job_set['year_set']))
+
                     thread = threading.Thread(target=monitor_job, args=(job_id, job, job_set, thread_kill_event))
                     thread_list.append(thread)
                     thread.start()
@@ -585,9 +594,12 @@ def start_ready_job_sets():
                             ready = False
                             break
                     if ready:
+
                         job_id = job.execute(batch=True)
                         job.set_status('starting')
                         logging.info('Starting %s job for year_set %s', job.get_type(), job_set['year_set'])
+                        print_message('Starting {0} job for year_set {1}'.format(job.get_type(), job_set['year_set']))
+
                         thread = threading.Thread(target=monitor_job, args=(job_id, job, job_set, thread_kill_event))
                         thread_list.append(thread)
                         thread.start()
@@ -829,31 +841,33 @@ if __name__ == "__main__":
     # Check for any data already on the System
     check_for_inplace_data()
     check_year_sets()
-    # if debug:
-    #     for s in job_sets:
-    #         print_message('year_set {0}:'.format(s.get('year_set')), 'ok')
-    #         for job in s['jobs']:
-    #             print_message('    {}'.format(str(job)))
-    # if debug:
-    #     print_message('printing year sets', 'ok')
-    #     for key in job_sets:
-    #         print_message(str(key['year_set']) + ': ' + key['status'], 'ok')
-    #     print_message('printing file list', 'ok')
-    #     for key in sorted(file_list, cmp=file_list_cmp):
-    #         print_message(key + ': ' + file_list[key], 'ok')
+    if debug:
+        for s in job_sets:
+            print_message('year_set {0}:'.format(s.get('year_set')), 'ok')
+            for job in s['jobs']:
+                print_message('    {}'.format(str(job)))
 
-    #     if all_data:
-    #         print_message('All data is local, disabling remote monitor')
-    #     else:
-    #         print_message('Data is missing, enabling remote monitor')
+        print_message('printing year sets', 'ok')
+        for key in job_sets:
+            print_message(str(key['year_set']) + ': ' + key['status'], 'ok')
+        print_message('printing file list', 'ok')
+        for key in sorted(file_list, cmp=file_list_cmp):
+            print_message(key + ': ' + file_list[key], 'ok')
 
-    # if all the data is local, dont start the monitor
+        if all_data:
+            print_message('All data is local, disabling remote monitor')
+        else:
+            print_message('Data is missing, enabling remote monitor')
+
+    # If all the data is local, dont start the monitor
     if not all_data:
+        pattern = config.get('global').get('output_pattern').replace('YYYY', '[0-9][0-9][0-9][0-9]')
+        pattern = pattern.replace('MM', '[0-9][0-9]')
         monitor_config = {
             'remote_host': config.get('monitor').get('compute_host'),
             'remote_dir': config.get('transfer').get('source_path'),
             'username': config.get('monitor').get('compute_username'),
-            'pattern': config.get('global').get('output_pattern')
+            'pattern': pattern
         }
         if config.get('monitor').get('compute_password'):
             monitor_config['password'] = config.get('monitor').get('compute_password')
@@ -862,8 +876,8 @@ if __name__ == "__main__":
         else:
             print_message('No password or keyfile path given for compute resource, please add to your config and try again')
             sys.exit(1)
-        monitor = Monitor(monitor_config)
 
+        monitor = Monitor(monitor_config)
         print_message('attempting connection to {}'.format(config.get('monitor').get('compute_host')), 'ok')
         if monitor.connect() == 0:
             print_message('connected', 'ok')
