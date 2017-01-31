@@ -77,4 +77,5 @@ A workflow tool for the ACME project
 * destination_endpoint: desired endpoint
 
 
-An example can be found [here])https://github.com/sterlingbaldwin/acme_workflow/blob/master/config.json]
+## Example
+An example can be found:  https://github.com/sterlingbaldwin/acme_workflow/blob/master/config.json
