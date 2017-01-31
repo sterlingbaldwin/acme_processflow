@@ -282,7 +282,7 @@ def add_jobs(job_set):
         logging.info('Adding Diagnostic job to the job list with config: %s', str(diag_config))
         job_set['jobs'].append(diag)
 
-
+        """
         coupled_project_dir = os.path.join(os.getcwd(), 'coupled_daigs', str(job_set.get('year_set')))
         if not os.path.exists(coupled_project_dir):
             os.makedirs(coupled_project_dir)
@@ -321,7 +321,7 @@ def add_jobs(job_set):
         print_message(str(job))
         job.execute()
         sys.exit(1)
-
+        """
     # init the upload job
     if not required_jobs['upload_diagnostic_output']:
         upload_config = {
