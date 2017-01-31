@@ -1,3 +1,4 @@
-*\\.pyc
+*pyc
+tmp
 \.vscode/
 ftp-sync\\.json
