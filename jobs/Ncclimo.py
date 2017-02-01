@@ -43,6 +43,7 @@ class Climo(object):
             'regrid_output_directory': '',
             'regrid_map_path': '',
             'yearset': '',
+            'ncclimo_path': ''
         }
         self.proc = None
         self.slurm_args = {
@@ -62,8 +63,9 @@ class Climo(object):
         """
         Calls ncclimo in a subprocess
         """
+        ncclimo = os.path.join(self.config['ncclimo_path'], 'ncclimo')
         cmd = [
-            '/export/baldwin32/scripts/ncclimo',
+            ncclimo,
             '-c', self.config['caseId'],
             '-a', self.config['annual_mode'],
             '-s', str(self.config['start_year']),

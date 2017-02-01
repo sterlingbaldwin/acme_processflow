@@ -2,11 +2,11 @@
     "global": {
         "output_path": "/space2/kendra/output",
         "data_cache_path": "/space2/sbaldwin/cache",
-        "output_pattern": "20161117.beta0.A_WCYCL1850.ne30_oEC.edison.cam.h0.YYYY-MM.nc",
+        "output_pattern": "20161117.beta0.A_WCYCL1850S.ne30_oEC_ICG.edison.cam.h0.YYYY-MM.nc",
         "simulation_start_year": 1,
-        "simulation_end_year": 5,
-        "set_frequency": [2, 5],
-        "experiment": "20161117.beta0.A_WCYCL1850.ne30_oEC.edison",
+        "simulation_end_year": 2,
+        "set_frequency": [2],
+        "experiment": "20161117.beta0.A_WCYCL1850S.ne30_oEC_ICG.edison",
         "batch_system_type": "slurm"
     },
     "monitor": {
@@ -16,7 +16,8 @@
         "compute_keyfile": ""
     },
     "ncclimo": {
-        "regrid_map_path": "/export/baldwin32/projects/acme_workflow/resources/map_ne30np4_to_fv129x256_aave.20150901.nc"
+        "regrid_map_path": "/export/kuivenhoven1/projects/acme_workflow/resources/map_ne30np4_to_fv129x256_aave.20150901.nc",
+        "ncclimo_path": "/export/zender1/bin"
     },
     "meta_diags": {
         "obs_for_diagnostics_path": ""

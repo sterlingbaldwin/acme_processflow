@@ -246,7 +246,8 @@ def add_jobs(year_set):
             'input_directory': climo_temp_dir,
             'climo_output_directory': climo_output_dir,
             'regrid_output_directory': regrid_output_dir,
-            'year_set': year_set.set_number
+            'year_set': year_set.set_number,
+            'ncclimo_path': config.get('ncclimo').get('ncclimo_path')
         }
         climo = Climo(climo_config)
         msg = 'Adding Ncclimo job to the job list with config: {}'.format(str(climo_config))
@@ -510,11 +511,10 @@ def check_for_inplace_data():
             all_data = False
             break
 
-def start_ready_job_sets():
+def start_ready_job_sets(job_sets, thread_list):
     """
     Iterates over the job sets, and starts ready jobs
     """
-    global thread_list
     # iterate over the job_sets
     if debug:
         print_message('=== Checking for ready jobs ===', 'ok')
@@ -863,7 +863,7 @@ if __name__ == "__main__":
                 monitor_check(monitor)
             # Check if a year_set is ready to run
             check_sets()
-            start_ready_job_sets()
+            start_ready_job_sets(job_sets, thread_list)
             check_for_inplace_data()
             if is_all_done():
                 # cleanup()
