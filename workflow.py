@@ -245,7 +245,8 @@ def add_jobs(job_set):
             'input_directory': climo_temp_dir,
             'climo_output_directory': climo_output_dir,
             'regrid_output_directory': regrid_output_dir,
-            'yearset': year_set
+            'yearset': year_set,
+            'ncclimo_path': config.get('ncclimo').get('ncclimo_path')
         }
         climo = Climo(climo_config)
         logging.info('Adding Ncclimo job to the job list with config: %s', str(climo_config))
@@ -420,7 +421,8 @@ def monitor_check(monitor):
         'destination_path': config.get('global').get('data_cache_path') + '/',
         'recursive': 'False',
         'final_destination_path': config.get('global').get('data_cache_path'),
-        'pattern': config.get('global').get('output_pattern')
+        'pattern': config.get('global').get('output_pattern'),
+        'ncclimo_path': config.get('ncclimo').get('ncclimo_path')
     }
     logging.info('Starting transfer with config: %s', pformat(transfer_config))
     print_message('Starting file transfer', 'ok')
