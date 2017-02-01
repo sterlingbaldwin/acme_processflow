@@ -43,6 +43,7 @@ class Climo(object):
             'regrid_output_directory': '',
             'regrid_map_path': '',
             'yearset': '',
+            'ncclimo_path': ''
         }
         self.proc = None
         self.slurm_args = {
@@ -62,8 +63,9 @@ class Climo(object):
         """
         Calls ncclimo in a subprocess
         """
+        ncclimo = os.path.join(self.config['ncclimo_path'], 'ncclimo')
         cmd = [
-            '/export/baldwin32/scripts/ncclimo',
+            ncclimo,
             '-c', self.config['caseId'],
             '-a', self.config['annual_mode'],
             '-s', str(self.config['start_year']),
@@ -189,17 +191,17 @@ class Climo(object):
 
         # after checking that the job is valid to run,
         # check if the output already exists and the job actually needs to run
-        if os.path.exists(self.config.get('climo_output_directory')):
-            contents = os.listdir(self.config.get('climo_output_directory'))
-            if len(contents) <= 10:
-                return 0
-            else:
-                for i in contents:
-                    if os.path.isdir(self.config.get('climo_output_directory') + '/' + i):
-                        continue
-                    if not re.match(self.config.get('caseId'), i):
-                        return 0
-                self.status = 'COMPLETED'
+    #    if os.path.exists(self.config.get('climo_output_directory')):
+    #        contents = os.listdir(self.config.get('climo_output_directory'))
+    #        if len(contents) <= 10:
+    #            return 0
+    #        else:
+    #            for i in contents:
+    #                if os.path.isdir(self.config.get('climo_output_directory') + '/' + i):
+    #                    continue
+    #                if not re.match(self.config.get('caseId'), i):
+    #                    return 0
+    #            self.status = 'COMPLETED'
         return 0
 
     def postvalidate(self):

@@ -245,7 +245,8 @@ def add_jobs(job_set):
             'input_directory': climo_temp_dir,
             'climo_output_directory': climo_output_dir,
             'regrid_output_directory': regrid_output_dir,
-            'yearset': year_set
+            'yearset': year_set,
+            'ncclimo_path': config.get('ncclimo').get('ncclimo_path')
         }
         climo = Climo(climo_config)
         logging.info('Adding Ncclimo job to the job list with config: %s', str(climo_config))
@@ -420,7 +421,8 @@ def monitor_check(monitor):
         'destination_path': config.get('global').get('data_cache_path') + '/',
         'recursive': 'False',
         'final_destination_path': config.get('global').get('data_cache_path'),
-        'pattern': config.get('global').get('output_pattern')
+        'pattern': config.get('global').get('output_pattern'),
+        'ncclimo_path': config.get('ncclimo').get('ncclimo_path')
     }
     logging.info('Starting transfer with config: %s', pformat(transfer_config))
     print_message('Starting file transfer', 'ok')
@@ -496,7 +498,6 @@ def check_year_sets():
                     non_zero_data = True
         if data_ready:
             job_set['status'] = 'data ready'
-            status = 'data ready'
             job_set = add_jobs(job_set)
             continue
         if not data_ready and non_zero_data:
@@ -598,7 +599,7 @@ def start_ready_job_sets():
                         job_id = job.execute(batch=True)
                         job.set_status('starting')
                         logging.info('Starting %s job for year_set %s', job.get_type(), job_set['year_set'])
-                        print_message('Starting {0} job for year_set {1}'.format(job.get_type(), job_set['year_set']))
+                        print_message('Starting {0} job for year_set {1}'.format(job.get_type(), job_set['year_set']), 'ok')
 
                         thread = threading.Thread(target=monitor_job, args=(job_id, job, job_set, thread_kill_event))
                         thread_list.append(thread)
@@ -709,6 +710,8 @@ def monitor_job(job_id, job, job_set, event=None):
                     print_message('Setting job status: {0}'.format(status), 'ok')
                 else:
                     print_message('Setting job status: {0}'.format(status))
+            if status == 'error' or status == 'FAILED':
+                print_message('Setting job status: {0}'.format(status))
             logging.info('Setting %s job with job_id %s to status %s', job.get_type(), job_id, status)
             job.status = status
             if status == 'RUNNING':
@@ -738,7 +741,9 @@ def is_all_done():
     Check if all job_sets are done, and all processing has been completed
     """
     for job_set in job_sets:
-        print_message('job_set {0} status {1}'.format(job_set['year_set'], job_set['status']))
+        #prints whether there is data or not in a particular job set
+        #yippee
+        #print_message('job_set {0} status {1}'.format(job_set['year_set'], job_set['status']))
         if job_set['status'] != 'COMPLETED':
             return False
     return True
@@ -823,9 +828,6 @@ if __name__ == "__main__":
                     'set_end_year': set_end_year
                 }
                 job_sets.append(job_set)
-
-    for job_set in job_sets:
-        print_message(job_set)
 
     # initialize the file_list
     if debug:

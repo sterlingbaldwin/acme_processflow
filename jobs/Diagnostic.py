@@ -224,7 +224,9 @@ class Diagnostic(object):
         inputs = config
         for i in inputs:
             if i not in self.inputs:
-                print_message('Unexpected argument: {}, {}'.format(i, config[i]))
+                pass
+                #print "yippee"
+                #print_message('Unexpected argument: {}, {}'.format(i, config[i]))
             else:
                 if i == '--model':
                     self.config['--model'] = 'path=' + inputs[i] + ',climos=yes'
@@ -264,7 +266,8 @@ class Diagnostic(object):
                 elif i == '--archive':
                     default = 'False'
                     self.config['archive'] = default
-                print_message('{} not found in config, using {}'.format(i, default), 'ok')
+                #print "yippee"
+                #print_message('{} not found in config, using {}'.format(i, default), 'ok')
         self.outputs['output_path'] = self.config['--outputdir']
         self.outputs['console_output'] = ''
         self.status = 'valid'
