@@ -6,6 +6,52 @@ import traceback
 import re
 import os
 
+from YearSet import SetStatus
+from YearSet import YearSet
+
+def check_year_sets(job_sets, file_list, sim_start_year, sim_end_year, debug, add_jobs):
+    """
+    Checks the file_list, and sets the year_set status to ready if all the files are in place,
+    otherwise, checks if there is partial data, or zero data
+    """
+    incomplete_job_sets = [s for s in job_sets if s.status != SetStatus.COMPLETED and s.status != SetStatus.RUNNING]
+    for job_set in incomplete_job_sets:
+
+        start_year = job_set.set_start_year
+        end_year = job_set.set_end_year
+
+        non_zero_data = False
+        data_ready = True
+        for i in range(start_year, end_year + 1):
+            for j in range(1, 13):
+                file_key = '{0}-{1}'.format(i, j)
+                status = file_list[file_key]
+
+                if status == SetStatus.NO_DATA:
+                    data_ready = False
+                elif status == SetStatus.DATA_READY:
+                    non_zero_data = True
+        if data_ready:
+            job_set.status = SetStatus.DATA_READY
+            job_set = add_jobs(job_set)
+            continue
+        if not data_ready and non_zero_data:
+            job_set.status = SetStatus.PARTIAL_DATA
+            continue
+        if not data_ready and not non_zero_data:
+            job_set.status = SetStatus.NO_DATA
+
+    if debug:
+        for job_set in job_sets:
+            start_year = job_set.set_start_year
+            end_year = job_set.set_end_year
+            print_message('year_set: {0}: {1}'.format(job_set.set_number, job_set.status), 'ok')
+            for i in range(start_year, end_year + 1):
+                for j in range(1, 13):
+                    file_key = '{0}-{1}'.format(i, j)
+                    status = file_list[file_key]
+                    print_message('  {key}: {value}'.format(key=file_key, value=status), 'ok')
+
 def print_debug(e):
     print '1', e.__doc__
     print '2', sys.exc_info()
