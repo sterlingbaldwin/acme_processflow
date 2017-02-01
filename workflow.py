@@ -741,9 +741,6 @@ def is_all_done():
     Check if all job_sets are done, and all processing has been completed
     """
     for job_set in job_sets:
-        #prints whether there is data or not in a particular job set
-        #yippee
-        #print_message('job_set {0} status {1}'.format(job_set['year_set'], job_set['status']))
         if job_set['status'] != 'COMPLETED':
             return False
     return True

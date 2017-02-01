@@ -189,19 +189,6 @@ class Climo(object):
                 self.config[i] = config.get(i)
         self.status = 'valid'
 
-        # after checking that the job is valid to run,
-        # check if the output already exists and the job actually needs to run
-    #    if os.path.exists(self.config.get('climo_output_directory')):
-    #        contents = os.listdir(self.config.get('climo_output_directory'))
-    #        if len(contents) <= 10:
-    #            return 0
-    #        else:
-    #            for i in contents:
-    #                if os.path.isdir(self.config.get('climo_output_directory') + '/' + i):
-    #                    continue
-    #                if not re.match(self.config.get('caseId'), i):
-    #                    return 0
-    #            self.status = 'COMPLETED'
         return 0
 
     def postvalidate(self):
