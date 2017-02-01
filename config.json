@@ -20,7 +20,7 @@
         "ncclimo_path": "/export/zender1/bin"
     },
     "meta_diags": {
-        "obs_for_diagnostics_path": ""
+        "obs_for_diagnostics_path": "/space2/ACME_obs_data/acme-repo/acme/obs_for_diagnostics"
     },
     "primary_diags": {
         "mpas_meshfile": "/space2/mapping/MPAS-grids/ocn/gridfile.oEC60to30.nc",
