@@ -20,6 +20,7 @@ from getpass import getpass
 from time import sleep
 from pprint import pformat
 from subprocess import Popen, PIPE
+from functools import partial
 
 from jobs.Diagnostic import Diagnostic
 from jobs.Transfer import Transfer
@@ -28,6 +29,8 @@ from jobs.UploadDiagnosticOutput import UploadDiagnosticOutput
 from jobs.Publication import Publication
 from jobs.PrimaryDiagnostic import PrimaryDiagnostic
 from Monitor import Monitor
+from YearSet import YearSet
+from YearSet import SetStatus
 
 from util import print_debug
 from util import print_message
@@ -37,8 +40,7 @@ from util import create_symlink_dir
 from util import file_list_cmp
 from util import thread_sleep
 from util import format_debug
-
-import pdb
+from util import check_year_sets
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-c', '--config', help='Path to configuration file')
@@ -190,20 +192,22 @@ def setup(parser):
                     config[field] = raw_input('{0}: '.format(field))
     return config
 
-def add_jobs(job_set):
-    global job_sets
-
+def add_jobs(year_set):
+    """
+    Initializes and adds all the jobs to the year_set
+    """
     # each required job is a key, the value is if its in the job list already or not
-    # this is here incase the jobs have already been added
+    # this is here in case the jobs have already been added
     required_jobs = {
         'climo': False,
         'diagnostic': False,
         'upload_diagnostic_output': False,
     }
-    for job in job_set['jobs']:
+    for job in year_set.jobs:
         if not required_jobs[job.get_type()]:
             required_jobs[job.get_type()] = True
 
+    year_set_str = 'year_set_' + str(year_set)
     # first initialize the climo job
     if not required_jobs['climo']:
         climo_output_dir = os.path.join(config.get('global').get('output_path'))
@@ -216,11 +220,8 @@ def add_jobs(job_set):
             os.makedirs(regrid_output_dir)
 
         # Setup variables for climo job
-        # climo_start_year = config.get('global').get('simulation_start_year') + ((year_set - 1) * config.get('global').get('set_frequency'))
-        # climo_end_year = climo_start_year + config.get('global').get('set_frequency') - 1
-        climo_start_year = job_set.get('set_start_year')
-        climo_end_year = job_set.get('set_end_year')
-        year_set = job_set.get('year_set')
+        climo_start_year = year_set.set_start_year
+        climo_end_year = year_set.set_end_year
 
         # create a temp directory, and fill it with symlinks to the actual data
         key_list = []
@@ -229,7 +230,7 @@ def add_jobs(job_set):
                 key_list.append('{0}-{1}'.format(year, month))
 
         climo_file_list = [file_name_list.get(x) for x in key_list]
-        climo_temp_dir = os.path.join(os.getcwd(), 'tmp', 'climo', 'year_set_' + str(year_set))
+        climo_temp_dir = os.path.join(os.getcwd(), 'tmp', 'climo', year_set_str)
         create_symlink_dir(
             src_dir=config.get('global').get('data_cache_path'),
             src_list=climo_file_list,
@@ -245,28 +246,30 @@ def add_jobs(job_set):
             'input_directory': climo_temp_dir,
             'climo_output_directory': climo_output_dir,
             'regrid_output_directory': regrid_output_dir,
-            'yearset': year_set
+            'year_set': year_set.set_number
         }
         climo = Climo(climo_config)
-        logging.info('Adding Ncclimo job to the job list with config: %s', str(climo_config))
-        job_set['jobs'].append(climo)
+        msg = 'Adding Ncclimo job to the job list with config: {}'.format(str(climo_config))
+        logging.info(msg)
+        year_set.add_job(climo)
 
     # init the diagnostic job
     if not required_jobs['diagnostic']:
         # create the output directory
-        diag_output_path = os.path.join(config.get('global').get('output_path'), 'diagnostics', 'year_set_' + str(year_set))
+        output_path = config.get('global').get('output_path')
+
+        diag_output_path = os.path.join(output_path, 'diagnostics', year_set_str)
         if not os.path.exists(diag_output_path):
             os.makedirs(diag_output_path)
 
         # create a temp directory full of just symlinks to the regridded output we need for this diagnostic job
-        diag_temp_dir = os.path.join(os.getcwd(), 'tmp', 'diag', 'year_set_' + str(year_set))
+        diag_temp_dir = os.path.join(os.getcwd(), 'tmp', 'diag', year_set_str)
         if not os.path.exists(diag_temp_dir):
             os.makedirs(diag_temp_dir)
         create_symlink_dir(
             src_dir=regrid_output_dir,
             src_list=climo_file_list,
-            dst=diag_temp_dir
-        )
+            dst=diag_temp_dir)
         # create the configuration object for the diag job
         diag_config = {
             '--model': diag_temp_dir,
@@ -275,12 +278,13 @@ def add_jobs(job_set):
             '--package': 'amwg',
             '--set': '5',
             '--archive': 'False',
-            'yearset': year_set,
+            'year_set': year_set.set_number,
             'depends_on': [len(job_set['jobs']) - 1] # set the diag job to wait for the climo job to finish befor running
         }
         diag = Diagnostic(diag_config)
-        logging.info('Adding Diagnostic job to the job list with config: %s', str(diag_config))
-        job_set['jobs'].append(diag)
+        msg = 'Adding Diagnostic job to the job list with config: {}'.format(str(diag_config))
+        logging.info(msg)
+        year_set.add_jobs(diag)
 
         """
         coupled_project_dir = os.path.join(os.getcwd(), 'coupled_daigs', str(job_set.get('year_set')))
@@ -332,21 +336,23 @@ def add_jobs(job_set):
             'depends_on': [len(job_set['jobs']) - 1] # set the upload job to wait for the diag job to finish
         }
         upload = UploadDiagnosticOutput(upload_config)
-        logging.info('Adding Upload job to the job list with config: %s', str(upload_config))
-        job_set['jobs'].append(upload)
+        msg = 'Adding Upload job to the job list with config: {}'.format(str(upload_config))
+        logging.info(msg)
+        year_set.jobs(upload)
 
-
+    """
     # finally init the publication job
-    # if not required_jobs['publication']:
-    #     publication_config = {
-    #         'place': 'holder',
-    #         'yearset': year_set,
-    #         'depends_on': [len(job_set['jobs']) - 2] # wait for the diagnostic job to finish, but not the upload job
-    #     }
-    #     publish = Publication(publication_config)
-    #     job_set['jobs'].append(publish)
-    #     print_message('adding publication job')
-    return job_set
+    if not required_jobs['publication']:
+        publication_config = {
+            'place': 'holder',
+            'yearset': year_set,
+            'depends_on': [len(job_set['jobs']) - 2] # wait for the diagnostic job to finish, but not the upload job
+        }
+        publish = Publication(publication_config)
+        job_set['jobs'].append(publish)
+        print_message('adding publication job')
+    """
+    return year_set
 
 
 
@@ -372,12 +378,12 @@ def monitor_check(monitor):
 
     output_pattern = config.get('global').get('output_pattern')
     date_pattern = config.get('global').get('date_pattern')
+    frequencies = config.get('global').get('set_frequency')
 
     for f in new_files:
-        key = filename_to_file_list_key(f, output_pattern, date_pattern)
-        status = file_list.get(key)
-        print status
-        if status and status != 'data ready':
+        file_key = filename_to_file_list_key(f, output_pattern, date_pattern)
+        status = file_list.get(file_key)
+        if status and status != SetStatus.DATA_READY:
             checked_new_files.append(f)
 
     # if there are any new files
@@ -389,16 +395,15 @@ def monitor_check(monitor):
     if debug:
         print_message('Found new files:\n  {}'.format(
             pformat(checked_new_files, indent=4)), 'ok')
-    # find which year set the data belongs to
-    for f in new_files:
-        for freq in config.get('global').get('set_frequency'):
-            year_set = filename_to_year_set(f, output_pattern, freq)
-            for job_set in job_sets:
-                # if before we got here, the job_set didnt have any data, now that we have some data
-                # we create the processing jobs and add them to the job_sets list of jobs
-                if job_set.get('year_set') == year_set and job_set.get('status') == 'no data':
 
-                    job_set['status'] = 'data in transit'
+    # find which year set the data belongs to
+    for file in checked_new_files:
+        for freq in frequencies:
+            year_set = filename_to_year_set(file, output_pattern, freq)
+            for year_set in job_sets:
+                if job_set.set_number == year_set and job_set.status == SetStatus.NO_DATA:
+                    
+                    job_set.status = SetStatus.PARTIAL_DATA
                     # Spawn jobs for that yearset
                     job_set = add_jobs(job_set)
 
@@ -406,21 +411,25 @@ def monitor_check(monitor):
     f_path = config.get('transfer').get('source_path')
     f_list = ['{path}/{file}'.format(path=f_path, file=f)  for f in checked_new_files]
 
+    t_config = config.get('transfer')
+    g_config = config.get('global')
+    m_config = config.get('monitor')
+
     transfer_config = {
         'file_list': f_list,
-        'globus_username': config.get('transfer').get('globus_username'),
-        'globus_password': config.get('transfer').get('globus_password'),
-        'source_username': config.get('monitor').get('compute_username'),
-        'source_password': config.get('monitor').get('compute_password'),
-        'destination_username': config.get('transfer').get('processing_username'),
-        'destination_password': config.get('transfer').get('processing_password'),
-        'source_endpoint': config.get('transfer').get('source_endpoint'),
-        'destination_endpoint': config.get('transfer').get('destination_endpoint'),
-        'source_path': config.get('transfer').get('source_path'),
-        'destination_path': config.get('global').get('data_cache_path') + '/',
+        'globus_username': t_config.get('globus_username'),
+        'globus_password': t_config.get('globus_password'),
+        'source_username': m_config.get('compute_username'),
+        'source_password': m_config.get('compute_password'),
+        'destination_username': t_config.get('processing_username'),
+        'destination_password': t_config.get('processing_password'),
+        'source_endpoint': t_config.get('source_endpoint'),
+        'destination_endpoint': t_config.get('destination_endpoint'),
+        'source_path': t_config.get('source_path'),
+        'destination_path': g_config.get('data_cache_path') + '/',
         'recursive': 'False',
-        'final_destination_path': config.get('global').get('data_cache_path'),
-        'pattern': config.get('global').get('output_pattern')
+        'final_destination_path': g_config.get('data_cache_path'),
+        'pattern': g_config.get('output_pattern')
     }
     logging.info('Starting transfer with config: %s', pformat(transfer_config))
     print_message('Starting file transfer', 'ok')
@@ -455,10 +464,12 @@ def handle_transfer(transfer_job, f_list, event):
         logging.info('File transfer {} completed'.format(transfer_job.uuid))
 
     # update the file_list all the files that were transferred
-    for f in f_list:
-        list_key = filename_to_file_list_key(f, config.get('global').get('output_pattern'))
+    output_pattern = config.get('global').get('output_pattern')
+    date_pattern = config.get('global').get('date_pattern')
+    for file in f_list:
+        list_key = filename_to_file_list_key(file, output_pattern, date_pattern)
         file_list[list_key] = 'data ready'
-        file_name_list[list_key] = f
+        file_name_list[list_key] = file
 
     if debug:
         logging.info('trasfer of files %s completed', pformat(f_list))
@@ -466,55 +477,6 @@ def handle_transfer(transfer_job, f_list, event):
         print_message('file_list status: ', 'ok')
         for key in sorted(file_list, cmp=file_list_cmp):
             print_message('{key}: {val}'.format(key=key, val=file_list[key]), 'ok')
-
-def check_year_sets():
-    """
-    Checks the file_list, and sets the year_set status to ready if all the files are in place,
-    otherwise, checks if there is partial data, or zero data
-    """
-    global job_sets
-    sim_start_year = config.get('global').get('simulation_start_year')
-    sim_end_year = config.get('global').get('simulation_end_year')
-    number_of_sim_years = sim_end_year - (sim_start_year - 1)
-
-    incomplete_job_sets = [s for s in job_sets if s['status'] != 'COMPLETED' and s['status'] != 'RUNNING']
-    for job_set in incomplete_job_sets:
-
-        start_year = job_set.get('set_start_year')
-        end_year = job_set.get('set_end_year')
-
-        non_zero_data = False
-        data_ready = True
-        for i in range(start_year, end_year + 1):
-            for j in range(1, 13):
-                file_key = '{0}-{1}'.format(i, j)
-                status = file_list[file_key]
-
-                if status == 'no data':
-                    data_ready = False
-                elif status == 'data ready':
-                    non_zero_data = True
-        if data_ready:
-            job_set['status'] = 'data ready'
-            status = 'data ready'
-            job_set = add_jobs(job_set)
-            continue
-        if not data_ready and non_zero_data:
-            job_set['status'] = 'partial data'
-            continue
-        if not data_ready and not non_zero_data:
-            job_set['status'] = 'no data'
-
-    if debug:
-        for job_set in job_sets:
-            start_year = job_set.get('set_start_year')
-            end_year = job_set.get('set_end_year')
-            print_message('year_set: {0}: {1}'.format(job_set.get('year_set'), job_set.get('status')), 'ok')
-            for i in range(start_year, end_year + 1):
-                for j in range(1, 13):
-                    file_key = '{0}-{1}'.format(i, j)
-                    status = file_list[file_key]
-                    print_message('  {key}: {value}'.format(key=file_key, value=status), 'ok')
 
 def check_for_inplace_data():
     """
@@ -794,6 +756,15 @@ if __name__ == "__main__":
         print "Error in setup, exiting"
         sys.exit(1)
 
+    check_sets = partial(
+        check_year_sets,
+        job_sets=job_sets,
+        file_list=file_list,
+        sim_start_year=config.get('global').get('simulation_start_year'),
+        sim_end_year=config.get('global').get('simulation_end_year'),
+        debug=debug,
+        add_jobs=add_jobs)
+
     # compute number of expected year sets
     sim_start_year = int(config.get('global').get('simulation_start_year'))
     sim_end_year = int(config.get('global').get('simulation_end_year'))
@@ -815,14 +786,11 @@ if __name__ == "__main__":
             for i in range(1, year_set + 1):
                 set_start_year = sim_start_year + ((i - 1) * freq)
                 set_end_year = set_start_year + freq - 1
-                job_set = {
-                    'status': 'no data',
-                    'year_set': len(job_sets) + 1,
-                    'jobs': [],
-                    'set_start_year': set_start_year,
-                    'set_end_year': set_end_year
-                }
-                job_sets.append(job_set)
+                new_set = YearSet(
+                    set_number=len(job_sets) + 1,
+                    start_year=set_start_year,
+                    end_year=set_end_year)
+                job_sets.append(new_set)
 
     for job_set in job_sets:
         print_message(job_set)
@@ -840,24 +808,26 @@ if __name__ == "__main__":
 
     # Check for any data already on the System
     check_for_inplace_data()
-    check_year_sets()
+    check_sets()
     if debug:
         for s in job_sets:
-            print_message('year_set {0}:'.format(s.get('year_set')), 'ok')
-            for job in s['jobs']:
+            print_message('year_set {0}:'.format(s.set_number), 'ok')
+            for job in s.jobs:
                 print_message('    {}'.format(str(job)))
 
         print_message('printing year sets', 'ok')
         for key in job_sets:
-            print_message(str(key['year_set']) + ': ' + key['status'], 'ok')
+            msg = '{0}: {1}'.format(key.set_number, key.status)
+            print_message(msg, 'ok')
         print_message('printing file list', 'ok')
         for key in sorted(file_list, cmp=file_list_cmp):
-            print_message(key + ': ' + file_list[key], 'ok')
+            msg = '{0}: {1}'.format(key, file_list[key])
+            print_message(msg, 'ok')
 
-        if all_data:
-            print_message('All data is local, disabling remote monitor')
-        else:
-            print_message('Data is missing, enabling remote monitor')
+    if all_data:
+        print_message('All data is local, disabling remote monitor', 'ok')
+    else:
+        print_message('More data needed, enabling remote monitor', 'ok')
 
     # If all the data is local, dont start the monitor
     if not all_data:
@@ -892,7 +862,7 @@ if __name__ == "__main__":
             if not all_data:
                 monitor_check(monitor)
             # Check if a year_set is ready to run
-            check_year_sets()
+            check_sets()
             start_ready_job_sets()
             check_for_inplace_data()
             if is_all_done():
