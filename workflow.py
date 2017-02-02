@@ -76,6 +76,8 @@ def save_state():
     except IOError as e:
         logging.error("Error saving state file")
         logging.error(format_debug(e))
+        message = "## year_set {set} status change to {status}".format(set=job_set.get('year_set'), status=job_set['status'])
+        logging.info(message)
         # print_debug(e)
         # print_message("Error saving state file")
 
@@ -112,6 +114,8 @@ def setup(parser):
                 if debug:
                     print_message('Loading from saved state {}'.format(args.state))
                     logging.info('Loading from saved state {}'.format(args.state))
+                    message = "## year_set {set} status change to {status}".format(set=job_set.get('year_set'), status=job_set['status'])
+                    logging.info(message)
                 config = state.get('config')
                 file_list = state.get('file_list')
                 job_sets = state.get('job_sets')
@@ -119,6 +123,8 @@ def setup(parser):
             except IOError as e:
                 logging.error('Error loading from state file {}'.format(args.state))
                 logging.error(format_debug(e))
+                message = "## year_set {set} status change to {status}".format(set=job_set.get('year_set'), status=job_set['status'])
+                logging.info(message)
                 # print_debug(e)
                 # print_message('Error loading state file')
                 sys.exit(1)
@@ -154,6 +160,8 @@ def setup(parser):
             except Exception as e:
                 logging.error('Unable to read config file, is it properly formatted json?')
                 logging.error(format_debug(e))
+                message = "## year_set {set} status change to {status}".format(set=job_set.get('year_set'), status=job_set['status'])
+                logging.info(message)
                 return -1
 
             for field in required_fields:
@@ -183,6 +191,8 @@ def setup(parser):
                         msg = 'Unable to parse output_pattern {}, exiting'.format(output_pattern)
                         print_message(msg)
                         logging.error(msg)
+                        message = "## year_set {set} status change to {status}".format(set=job_set.get('year_set'), status=job_set['status'])
+                        logging.error(message)
                         sys.exit(1)
         else:
             parser.print_help()
@@ -217,6 +227,8 @@ def add_jobs(year_set):
         if not os.path.exists(climo_output_dir):
             if debug:
                 logging.info("Creating climotology output directory {}".format(climo_output_dir))
+                message = "## year_set {set} status change to {status}".format(set=job_set.get('year_set'), status=job_set['status'])
+                logging.info(message)
             os.makedirs(climo_output_dir)
         regrid_output_dir = os.path.join(config.get('global').get('output_path'), 'regrid')
         if not os.path.exists(regrid_output_dir):
@@ -255,6 +267,8 @@ def add_jobs(year_set):
         climo = Climo(climo_config)
         msg = 'Adding Ncclimo job to the job list with config: {}'.format(str(climo_config))
         logging.info(msg)
+        message = "## year_set {set} status change to {status}".format(set=job_set.get('year_set'), status=job_set['status'])
+        logging.info(message)
         year_set.add_job(climo)
 
     # init the diagnostic job
@@ -288,6 +302,8 @@ def add_jobs(year_set):
         diag = Diagnostic(diag_config)
         msg = 'Adding Diagnostic job to the job list with config: {}'.format(str(diag_config))
         logging.info(msg)
+        message = "## year_set {set} status change to {status}".format(set=job_set.get('year_set'), status=job_set['status'])
+        logging.info(message)
         year_set.add_job(diag)
 
         """
@@ -341,6 +357,8 @@ def add_jobs(year_set):
         }
         upload = UploadDiagnosticOutput(upload_config)
         msg = 'Adding Upload job to the job list with config: {}'.format(str(upload_config))
+        message = "## year_set {set} status change to {status}".format(set=job_set.get('year_set'), status=job_set['status'])
+        logging.info(message)
         logging.info(msg)
         year_set.add_job(upload)
 
@@ -437,6 +455,8 @@ def monitor_check(monitor):
         'ncclimo_path': config.get('ncclimo').get('ncclimo_path')
     }
     logging.info('Starting transfer with config: %s', pformat(transfer_config))
+    message = "## year_set {set} status change to {status}".format(set=job_set.get('year_set'), status=job_set['status'])
+    logging.info(message)
     print_message('Starting file transfer', 'ok')
     transfer = Transfer(transfer_config)
     thread = threading.Thread(target=handle_transfer, args=(transfer, checked_new_files, thread_kill_event))
@@ -463,9 +483,14 @@ def handle_transfer(transfer_job, f_list, event):
 
     if transfer_job.status != 'COMPLETED':
         logging.error('Failed to complete transfer job\n  %s', pformat(str(transfer_job)))
+        message = "## year_set {set} status change to {status}".format(set=job_set.get('year_set'), status=job_set['status'])
+        logging.error(message)
         return
     else:
         print_message('Finished file transfer')
+        logging.info('Failed to complete transfer job\n  %s', pformat(str(transfer_job)))
+        message = "## year_set {set} status change to {status}".format(set=job_set.get('year_set'), status=job_set['status'])
+        logging.info(message)
         logging.info('File transfer {} completed'.format(transfer_job.uuid))
 
     # update the file_list all the files that were transferred
@@ -479,6 +504,8 @@ def handle_transfer(transfer_job, f_list, event):
     if debug:
         logging.info('trasfer of files %s completed', pformat(f_list))
         logging.info('file_list status: %s', pformat(sorted(file_list, cmp=file_list_cmp)))
+        message = "## year_set {set} status change to {status}".format(set=job_set.get('year_set'), status=job_set['status'])
+        logging.info(message)
         print_message('file_list status: ', 'ok')
         for key in sorted(file_list, cmp=file_list_cmp):
             print_message('{key}: {val}'.format(key=key, val=file_list[key]), 'ok')
@@ -497,12 +524,16 @@ def cleanup():
     Clean up temp files created during the run
     """
     logging.info('Cleaning up temp directories')
+    message = "## year_set {set} status change to {status}".format(set=job_set.get('year_set'), status=job_set['status'])
+    logging.info(message)
     try:
         cwd = os.getcwd()
         tmp_path = os.path.join(cwd, 'tmp')
         rmtree(tmp_path)
     except Exception as e:
         logging.error(format_debug(e))
+        message = "## year_set {set} status change to {status}".format(set=job_set.get('year_set'), status=job_set['status'])
+        logging.error(message)
         print_message('Error removing temp directories')
 
     try:
@@ -513,6 +544,8 @@ def cleanup():
         move(run_script_path, archive_path)
     except Exception as e:
         logging.error(format_debug(e))
+        message = "## year_set {set} status change to {status}".format(set=job_set.get('year_set'), status=job_set['status'])
+        logging.error(message)
         print_message('Error archiving run_scripts directory')
 
 
@@ -672,6 +705,8 @@ if __name__ == "__main__":
                 # cleanup()
                 print_message('All processing complete')
                 logging.info("All processes complete, exiting")
+                message = "## year_set {set} status change to {status}".format(set=job_set.get('year_set'), status=job_set['status'])
+                logging.info(message)
                 sys.exit(0)
             sleep(10)
     except KeyboardInterrupt as e:

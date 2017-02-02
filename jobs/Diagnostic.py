@@ -159,15 +159,21 @@ class Diagnostic(object):
                     self.status = 'RUNNING'
                     self.job_id = job_id
                     logging.info('Starting diagnostic job with job_id %s', job_id)
+                    message = "## year_set {set} status change to {status}".format(set=self.yearset, status=self.status)
+                    logging.info(message)
                     # print_message('+++++ STARTING CLIMO JOB {0} +++++'.format(self.job_id))
                 elif retry_count <= 0:
                     logging.warning("Error starting diagnostic job\n%s", output)
+                    message = "## year_set {set} status change to {status}".format(set=job_set.get('year_set'), status=job_set['status'])
+                    logging.warning(message)
                     print_message("Error starting diagnostic job")
                     print_message(output)
                     self.job_id = 0
                     break
                 else:
                     logging.warning('Failed to start job trying again, attempt %s', str(retry_count))
+                    message = "## year_set {set} status change to {status}".format(set=job_set.get('year_set'), status=job_set['status'])
+                    logging.warning(message)
                     print_message('Failed to start job, trying again')
                     retry_count += 1
                     continue
