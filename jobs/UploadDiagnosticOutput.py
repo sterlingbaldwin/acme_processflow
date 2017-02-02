@@ -139,8 +139,6 @@ class UploadDiagnosticOutput(object):
                     'uploading diagnostic package from %s',
                     self.config.get('path_to_diagnostic')
                 )
-                message = "## year_set {set} status change to {status}".format(set=self.year_set, status=self.status)
-                logging.info(message)
                 dataset_id = client.upload_package(self.config.get('path_to_diagnostic'))
             except Exception as e:
                 logging.error('Error uploading diagnostic set to server')
