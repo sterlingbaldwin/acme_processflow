@@ -24,7 +24,7 @@ class Climo(object):
         self.status = 'unvarified'
         self.type = 'climo'
         self.uuid = uuid4().hex
-        self.yearset = config.get('yearset', 0)
+        self.year_set = config.get('yearset', 0)
         self.job_id = 0
         self.depends_on = []
         self.outputs = {
