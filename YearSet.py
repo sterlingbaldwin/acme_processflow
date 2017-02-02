@@ -1,5 +1,5 @@
 from enum import Enum
-
+from pprint import pformat
 
 class SetStatus(Enum):
     NO_DATA = 0
@@ -24,4 +24,11 @@ class YearSet(object):
 
     def add_job(self, job):
         self.jobs.append(job)
-    
+
+    def __str__(self):
+        return "status: {status}\nset_number: {num}\nstart_year: {start}\nend_year: {end}\njobs: {jobs}".format(
+            status=self.status,
+            jobs=pformat(self.jobs),
+            num=self.set_number,
+            start=self.set_start_year,
+            end=self.set_end_year)
