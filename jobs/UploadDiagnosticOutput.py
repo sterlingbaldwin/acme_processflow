@@ -95,9 +95,9 @@ class UploadDiagnosticOutput(object):
         for i in self.inputs:
             if i not in self.config:
                 logging.error('Missing UploadDiagnosticOutput argument %s', i)
+                self.status = 'invalid'
                 message = "## year_set {set} status change to {status}".format(set=self.year_set, status=self.status)
                 logging.error(message)
-                self.status = 'invalid'
                 return -1
         self.status = 'valid'
         return 0
