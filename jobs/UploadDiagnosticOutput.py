@@ -136,7 +136,7 @@ class UploadDiagnosticOutput(object):
             self.outputs['id'] = client_id
             try:
                 logging.info(
-                    'uploading diagnostic package from %s',
+                    '## uploading diagnostic package from %s',
                     self.config.get('path_to_diagnostic')
                 )
                 dataset_id = client.upload_package(self.config.get('path_to_diagnostic'))
