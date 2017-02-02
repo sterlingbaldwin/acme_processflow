@@ -76,8 +76,6 @@ def save_state():
     except IOError as e:
         logging.error("Error saving state file")
         logging.error(format_debug(e))
-        message = "## year_set {set} status change to {status}".format(set=year_set.set_number, status=year_set.status)
-        logging.info(message)
         # print_debug(e)
         # print_message("Error saving state file")
 
@@ -219,8 +217,6 @@ def add_jobs(year_set):
         if not os.path.exists(climo_output_dir):
             if debug:
                 logging.info("Creating climotology output directory {}".format(climo_output_dir))
-                message = "## year_set {set} status change to {status}".format(set=year_set.set_number, status=year_set.status)
-                logging.info(message)
             os.makedirs(climo_output_dir)
         regrid_output_dir = os.path.join(config.get('global').get('output_path'), 'regrid')
         if not os.path.exists(regrid_output_dir):
@@ -259,8 +255,6 @@ def add_jobs(year_set):
         climo = Climo(climo_config)
         msg = 'Adding Ncclimo job to the job list with config: {}'.format(str(climo_config))
         logging.info(msg)
-        message = "## year_set {set} status change to {status}".format(set=year_set.set_number, status=year_set.status)
-        logging.info(message)
         year_set.add_job(climo)
 
     # init the diagnostic job
@@ -294,8 +288,6 @@ def add_jobs(year_set):
         diag = Diagnostic(diag_config)
         msg = 'Adding Diagnostic job to the job list with config: {}'.format(str(diag_config))
         logging.info(msg)
-        message = "## year_set {set} status change to {status}".format(set=year_set.set_number, status=year_set.status)
-        logging.info(message)
         year_set.add_job(diag)
 
         """
@@ -349,8 +341,6 @@ def add_jobs(year_set):
         }
         upload = UploadDiagnosticOutput(upload_config)
         msg = 'Adding Upload job to the job list with config: {}'.format(str(upload_config))
-        message = "## year_set {set} status change to {status}".format(set=year_set.set_number, status=year_set.status)
-        logging.info(message)
         logging.info(msg)
         year_set.add_job(upload)
 
@@ -446,9 +436,7 @@ def monitor_check(monitor):
         'pattern': config.get('global').get('output_pattern'),
         'ncclimo_path': config.get('ncclimo').get('ncclimo_path')
     }
-    logging.info('Starting transfer with config: %s', pformat(transfer_config))
-    message = "## year_set {set} status change to {status}".format(set=year_set.set_number, status=year_set.status)
-    logging.info(message)
+    logging.info('## Starting transfer with config: %s', pformat(transfer_config))
     print_message('Starting file transfer', 'ok')
     transfer = Transfer(transfer_config)
     thread = threading.Thread(target=handle_transfer, args=(transfer, checked_new_files, thread_kill_event))
@@ -475,13 +463,13 @@ def handle_transfer(transfer_job, f_list, event):
 
     if transfer_job.status != 'COMPLETED':
         logging.error('Failed to complete transfer job\n  %s', pformat(str(transfer_job)))
-        message = "## year_set {set} status change to {status}".format(set=year_set.set_number, status=year_set.status)
+        message = "Transfer: {set} has failed".format(set=transfer_job.transfer_id)
         logging.error(message)
         return
     else:
         print_message('Finished file transfer')
         logging.info('Failed to complete transfer job\n  %s', pformat(str(transfer_job)))
-        message = "## year_set {set} status change to {status}".format(set=year_set.set_number, status=year_set.status)
+        message = "Transfer: {set} has completed".format(set=transfer_job.transfer_id)
         logging.info(message)
         logging.info('File transfer {} completed'.format(transfer_job.uuid))
 
@@ -494,7 +482,7 @@ def handle_transfer(transfer_job, f_list, event):
         file_name_list[list_key] = file
 
     if debug:
-        logging.info('trasfer of files %s completed', pformat(f_list))
+        logging.info('transfer of files %s completed', pformat(f_list))
         logging.info('file_list status: %s', pformat(sorted(file_list, cmp=file_list_cmp)))
         message = "## year_set {set} status change to {status}".format(set=year_set.set_number, status=year_set.status)
         logging.info(message)
@@ -516,16 +504,12 @@ def cleanup():
     Clean up temp files created during the run
     """
     logging.info('Cleaning up temp directories')
-    message = "## year_set {set} status change to {status}".format(set=year_set.set_number, status=year_set.status)
-    logging.info(message)
     try:
         cwd = os.getcwd()
         tmp_path = os.path.join(cwd, 'tmp')
         rmtree(tmp_path)
     except Exception as e:
         logging.error(format_debug(e))
-        message = "## year_set {set} status change to {status}".format(set=year_set.set_number, status=year_set.status)
-        logging.error(message)
         print_message('Error removing temp directories')
 
     try:
@@ -536,8 +520,6 @@ def cleanup():
         move(run_script_path, archive_path)
     except Exception as e:
         logging.error(format_debug(e))
-        message = "## year_set {set} status change to {status}".format(set=year_set.set_number, status=year_set.status)
-        logging.error(message)
         print_message('Error archiving run_scripts directory')
 
 
@@ -696,9 +678,7 @@ if __name__ == "__main__":
             if is_all_done():
                 # cleanup()
                 print_message('All processing complete')
-                logging.info("All processes complete, exiting")
-                message = "## year_set {set} status change to {status}".format(set=year_set.set_number, status=year_set.status)
-                logging.info(message)
+                logging.info(" ## All processes complete, exiting")
                 sys.exit(0)
             sleep(10)
     except KeyboardInterrupt as e:
