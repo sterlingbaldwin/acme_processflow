@@ -86,12 +86,14 @@ def start_ready_job_sets(job_sets, thread_list, debug, event):
                     job.status = JobStatus.COMPLETED
                     return
 
-
-                    job_set.status = SetStatus.RUNNING
                     job_id = job.execute(batch=True)
+                    job_set.status = SetStatus.RUNNING
                     job.set_status(JobStatus.SUBMITTED)
-                    logging.info('Submitted Ncclimo for year set %s', job_set.set_number)
                     print_message('Submitted Ncclimo for year_set {}'.format(job_set.set_number))
+                    message = "## job_set {set} status change to {status}".format(set=job_set.set_number, status=job_set.status)
+                    logging.info(message)
+                    message = "## {job}: {id} status changed to {status}".format(job=job.get_type(), id=job.job_id, status=job.status)
+                    logging.info(message)
 
                     thread = threading.Thread(target=monitor_job, args=(job_id, job, job_set, event))
                     thread_list.append(thread)
@@ -108,9 +110,15 @@ def start_ready_job_sets(job_sets, thread_list, debug, event):
 
                     if ready:
                         job_id = job.execute(batch=True)
+
                         job.set_status(JobStatus.SUBMITTED)
-                        logging.info('Submitted %s job for year_set %s', job.get_type(), job_set.set_number)
-                        print_message('Submitted {0} job for year_set {1}'.format(job.get_type(), job_set.set_number), 'ok')
+
+                        message = "## year_set {set} status change to {status}".format(set=job_set.set_number, status=job_set.status)
+                        logging.info(message)
+                        message = "## {job}: {id} status changed to {status}".format(job=job.get_type(), id=job.job_id, status=job.status)
+                        logging.info(message)
+                        print_message(message, 'ok')
+
 
                         thread = threading.Thread(target=monitor_job, args=(job_id, job, job_set, event, debug))
                         thread_list.append(thread)
@@ -118,6 +126,8 @@ def start_ready_job_sets(job_sets, thread_list, debug, event):
                         return
                 elif job.status == 'invalid':
                     logging.error('Job in invalid state: \n%s', pformat(str(job)))
+                    message = "UploadDiagnosticJob: {set} status changed to {status}".format(set=job.job_id, status=status)
+                    logging.error(message)
                     print_message('===== INVALID JOB =====\n{}'.format(str(job)))
 
 def monitor_job(job_id, job, job_set, event=None, debug=False, batch_type='slurm'):
@@ -237,6 +247,8 @@ def monitor_job(job_id, job, job_set, event=None, debug=False, batch_type='slurm
                 job.get_type(),
                 job_id,
                 status)
+            message = "## UploadDiagnosticJob: {set} status changed to {status}".format(set=job.job_id, status=status)
+            logging.info(message)
             job.status = status
             if status == JobStatus.RUNNING:
                 job_set.status = SetStatus.RUNNING
@@ -247,6 +259,10 @@ def monitor_job(job_id, job, job_set, event=None, debug=False, batch_type='slurm
                 '%s job  with job_id %s completed',
                 job.get_type(),
                 job_id)
+
+            message = "## UploadDiagnosticJob: {set} status changed to {status}".format(set=job.job_id, status=status)
+            logging.info(message)
+
             job_set_done = True
             for job in job_set.jobs:
                 if job.status != JobStatus.COMPLETED:
@@ -261,6 +277,9 @@ def monitor_job(job_id, job, job_set, event=None, debug=False, batch_type='slurm
                 '%s job  with job_id %s FAILED',
                 job.get_type(),
                 job_id)
+
+            message = "## UploadDiagnosticJob: {set} status changed to {status}".format(set=job.job_id, status=status)
+            logging.info(message)
             return
         # wait for 10 seconds, or if the kill_thread event has been set, exit
         if thread_sleep(10, event):
