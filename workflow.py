@@ -32,15 +32,18 @@ from Monitor import Monitor
 from YearSet import YearSet
 from YearSet import SetStatus
 
-from util import print_debug
-from util import print_message
-from util import filename_to_file_list_key
-from util import filename_to_year_set
-from util import create_symlink_dir
-from util import file_list_cmp
-from util import thread_sleep
-from util import format_debug
-from util import check_year_sets
+# from util import print_debug
+# from util import print_message
+# from util import filename_to_file_list_key
+# from util import filename_to_year_set
+# from util import create_symlink_dir
+# from util import file_list_cmp
+# from util import thread_sleep
+# from util import format_debug
+# from util import check_year_sets
+# from util import check_for_inplace_data
+# from util import start_ready_job_sets
+from util import *
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-c', '--config', help='Path to configuration file')
@@ -280,12 +283,12 @@ def add_jobs(year_set):
             '--set': '5',
             '--archive': 'False',
             'year_set': year_set.set_number,
-            'depends_on': [len(job_set['jobs']) - 1] # set the diag job to wait for the climo job to finish befor running
+            'depends_on': [len(year_set.jobs) - 1] # set the diag job to wait for the climo job to finish befor running
         }
         diag = Diagnostic(diag_config)
         msg = 'Adding Diagnostic job to the job list with config: {}'.format(str(diag_config))
         logging.info(msg)
-        year_set.add_jobs(diag)
+        year_set.add_job(diag)
 
         """
         coupled_project_dir = os.path.join(os.getcwd(), 'coupled_daigs', str(job_set.get('year_set')))
@@ -334,12 +337,12 @@ def add_jobs(year_set):
             'username': config.get('upload_diagnostic').get('diag_viewer_username'),
             'password': config.get('upload_diagnostic').get('diag_viewer_password'),
             'server': config.get('upload_diagnostic').get('diag_viewer_server'),
-            'depends_on': [len(job_set['jobs']) - 1] # set the upload job to wait for the diag job to finish
+            'depends_on': [len(year_set.jobs) - 1] # set the upload job to wait for the diag job to finish
         }
         upload = UploadDiagnosticOutput(upload_config)
         msg = 'Adding Upload job to the job list with config: {}'.format(str(upload_config))
         logging.info(msg)
-        year_set.jobs(upload)
+        year_set.add_job(upload)
 
     """
     # finally init the publication job
@@ -401,9 +404,9 @@ def monitor_check(monitor):
     for file in checked_new_files:
         for freq in frequencies:
             year_set = filename_to_year_set(file, output_pattern, freq)
-            for year_set in job_sets:
+            for job_set in job_sets:
                 if job_set.set_number == year_set and job_set.status == SetStatus.NO_DATA:
-                    
+
                     job_set.status = SetStatus.PARTIAL_DATA
                     # Spawn jobs for that yearset
                     job_set = add_jobs(job_set)
@@ -470,7 +473,7 @@ def handle_transfer(transfer_job, f_list, event):
     date_pattern = config.get('global').get('date_pattern')
     for file in f_list:
         list_key = filename_to_file_list_key(file, output_pattern, date_pattern)
-        file_list[list_key] = 'data ready'
+        file_list[list_key] = SetStatus.DATA_READY
         file_name_list[list_key] = file
 
     if debug:
@@ -480,230 +483,12 @@ def handle_transfer(transfer_job, f_list, event):
         for key in sorted(file_list, cmp=file_list_cmp):
             print_message('{key}: {val}'.format(key=key, val=file_list[key]), 'ok')
 
-def check_for_inplace_data():
-    """
-    Checks the data cache for any files that might already be in place,
-    updates the file_list and job_sets accordingly
-    """
-    global file_list
-    global file_name_list
-    global all_data
-    global job_sets
-
-    cache_path = config.get('global').get('data_cache_path')
-    date_pattern = config.get('global').get('date_pattern')
-    output_pattern = config.get('global').get('output_pattern')
-
-    if not os.path.exists(cache_path):
-        os.makedirs(cache_path)
-        return
-
-    for climo_file in os.listdir(cache_path):
-        file_key = filename_to_file_list_key(
-            filename=climo_file,
-            output_pattern=output_pattern,
-            date_pattern=date_pattern)
-        file_list[file_key] = 'data ready'
-        file_name_list[file_key] = climo_file
-
-    all_data = True
-    for key in file_list:
-        if file_list[key] != 'data ready':
-            all_data = False
-            break
-
-def start_ready_job_sets(job_sets, thread_list):
-    """
-    Iterates over the job sets, and starts ready jobs
-    """
-    # iterate over the job_sets
-    if debug:
-        print_message('=== Checking for ready jobs ===', 'ok')
-
-    for job_set in job_sets:
-        # if the job state is ready, but hasnt started yet
-        if debug:
-            msg = 'year_set: {0} status: {1}'.format(job_set.get('year_set'), job_set.get('status'))
-            print_message(msg, 'ok')
-            logging.info(msg)
-        if job_set['status'] == 'data ready' or job_set['status'] == 'RUNNING':
-            for job in job_set['jobs']:
-                # if the job is a climo, and it hasnt been started yet, start it
-                if debug:
-                    msg = '    job type: {0}, job_status: {1}, job_id: {2}'.format(
-                        job.get_type(),
-                        job.status,
-                        job.job_id)
-                    print_message(msg, 'ok')
-                    logging.info(msg)
-
-                if job.get_type() == 'climo' and job.status == 'valid':
-
-                    job_set['status'] = 'RUNNING'
-                    job_id = job.execute(batch=True)
-                    job.set_status('starting')
-                    logging.info('Starting Ncclimo for year set %s', job_set['year_set'])
-                    print_message('Starting Ncclimo for year_set {}'.format(job_set['year_set']))
-
-                    thread = threading.Thread(target=monitor_job, args=(job_id, job, job_set, thread_kill_event))
-                    thread_list.append(thread)
-                    thread.start()
-                    return
-                # if the job isnt a climo, and the job that it depends on is done, start it
-                elif job.get_type() != 'climo' and job.status == 'valid':
-                    ready = True
-                    for dependancy in job.depends_on:
-                        if job_set['jobs'][dependancy].status != 'COMPLETED':
-                            ready = False
-                            break
-                    if ready:
-
-                        job_id = job.execute(batch=True)
-                        job.set_status('starting')
-                        logging.info('Starting %s job for year_set %s', job.get_type(), job_set['year_set'])
-                        print_message('Starting {0} job for year_set {1}'.format(job.get_type(), job_set['year_set']), 'ok')
-
-                        thread = threading.Thread(target=monitor_job, args=(job_id, job, job_set, thread_kill_event))
-                        thread_list.append(thread)
-                        thread.start()
-                        return
-                elif job.status == 'invalid':
-                    logging.error('Job in invalid state: \n%s', pformat(str(job)))
-                    print_message('===== INVALID JOB =====\n{}'.format(str(job)))
-
-def monitor_job(job_id, job, job_set, event=None):
-    """
-    Monitor the slurm job, and update the status to 'complete' when it finishes
-    This function should only be called from within a thread
-    """
-    def handle_slurm():
-        """
-        handle interfacing with the SLURM controller
-        Checkes the SLURM queue status and changes the job status appropriately
-        """
-        count = 0
-        valid = False
-        while count < 10 and not valid:
-            cmd = ['scontrol', 'show', 'job', str(job_id)]
-            out = Popen(cmd, stdout=PIPE, stderr=PIPE).communicate()[0]
-            # sometimes there will be a communication error with the SLURM controller
-            # in which case the controller returns 'error: some message'
-            if 'error' in out or len(out) == 0:
-                logging.info('Error communication with SLURM controller, attempt number %s', count)
-                valid = False
-                count += 1
-                if thread_sleep(5, event):
-                    return
-            else:
-                valid = True
-
-        if not valid:
-            # if the controller errors 5 times in a row, its probably an unrecoverable error
-            logging.info('SLURM controller not responding')
-            return None
-
-        # loop through the scontrol output looking for the JobState field
-        job_status = None
-        run_time = None
-        for line in out.split('\n'):
-            for word in line.split():
-                if 'JobState' in word:
-                    index = word.find('=')
-                    job_status = word[index + 1:]
-                    continue
-                if 'RunTime' in word:
-                    index = word.find('=') + 1
-                    run_time = word[index:]
-                    break
-            if job_status and run_time:
-                break
-
-        # if debug:
-        #     msg = '{0} status: {1}'.format(job_id, job_status)
-        #     print_message(msg, 'ok')
-        #     logging.info(msg)
-        if not job_status:
-            if debug:
-                print_message('Error parsing job output\n{0}'.format(out))
-            logging.warning('Unable to parse scontrol output: %s', out)
-
-        return job_status, run_time
-
-    def handle_pbs():
-        print 'dealing with pbs'
-        cmd = ['qstat']
-        out = Popen(cmd, stdout=PIPE, stderr=PIPE).communicate()[0]
-        # do some work
-        job_status = 'DANGER WILL ROBENSON'
-        return job_status
-
-    def handle_none():
-        print 'you should really be running this with slurm'
-        return 'Zug zug'
-
-    error_count = 0
-    while True:
-        # this check is here in case the loop is stuck and the thread needs to be canceled
-        if event and event.is_set():
-            return
-        batch_system = config.get('global').get('batch_system_type')
-        if batch_system == 'slurm':
-            status, run_time = handle_slurm()
-        elif batch_system == 'pbs':
-            status = handle_pbs()
-        elif batch_system == 'none':
-            cmd = ['']
-            status = handle_none()
-            # TODO: figure out how to get this working
-
-        if not status:
-            if error_count <= 10:
-                logging.error('Unable to communicate to controller after 10 attempts')
-                logging.error('Setting %s job with job_id %s to status error', job.get_type(), job_id)
-                job.status = 'error'
-            error_count += 1
-            if thread_sleep(5, event):
-                return
-            continue
-
-        if job.status != status:
-            if debug:
-                if status != 'error':
-                    print_message('Setting job status: {0}'.format(status), 'ok')
-                else:
-                    print_message('Setting job status: {0}'.format(status))
-            if status == 'error' or status == 'FAILED':
-                print_message('Setting job status: {0}'.format(status))
-            logging.info('Setting %s job with job_id %s to status %s', job.get_type(), job_id, status)
-            job.status = status
-            if status == 'RUNNING':
-                job_set['status'] = 'RUNNING'
-
-        # if the job is done, or there has been an error, exit
-        if status == 'COMPLETED':
-            logging.info('%s job  with job_id %s completed after %s', job.get_type(), job_id, run_time)
-            job_set_done = True
-            for job in job_set['jobs']:
-                if job.status != 'COMPLETED':
-                    job_set_done = False
-                    break
-
-            if job_set_done:
-                job_set['status'] = 'COMPLETED'
-            return
-        if status == 'error':
-            logging.info('%s job  with job_id %s ERRORED after %s', job.get_type(), job_id, run_time)
-            return
-        # wait for 10 seconds, or if the kill_thread event has been set, exit
-        if thread_sleep(10, event):
-            return
-
 def is_all_done():
     """
     Check if all job_sets are done, and all processing has been completed
     """
     for job_set in job_sets:
-        if job_set['status'] != 'COMPLETED':
+        if job_set.status != SetStatus.COMPLETED:
             return False
     return True
 
@@ -738,7 +523,7 @@ if __name__ == "__main__":
     # A list of all the file names
     file_name_list = {}
     # Describes the state of each job jet
-    job_sets = {}
+    job_sets = []
     # The master configuration object
     config = {}
     # A list of all the threads
@@ -758,32 +543,18 @@ if __name__ == "__main__":
         print "Error in setup, exiting"
         sys.exit(1)
 
-    check_sets = partial(
-        check_year_sets,
-        job_sets=job_sets,
-        file_list=file_list,
-        sim_start_year=config.get('global').get('simulation_start_year'),
-        sim_end_year=config.get('global').get('simulation_end_year'),
-        debug=debug,
-        add_jobs=add_jobs)
-
     # compute number of expected year sets
     sim_start_year = int(config.get('global').get('simulation_start_year'))
     sim_end_year = int(config.get('global').get('simulation_end_year'))
     number_of_sim_years = sim_end_year - (sim_start_year - 1)
+    frequencies = config.get('global').get('set_frequency')
     if not from_saved_state:
         job_sets = []
-    for freq in config.get('global').get('set_frequency'):
-        freq = int(freq)
-        year_set = number_of_sim_years / freq
-        if debug:
-            print_message(
-                ' set_frequency: {freq},\n     number of year_sets: {ys}\n'.format(
-                    ys=year_set,
-                    freq=freq),
-                'ok')
 
-        if not from_saved_state:
+        for freq in frequencies:
+            freq = int(freq)
+            year_set = number_of_sim_years / freq
+
             # initialize the job_sets dict
             for i in range(1, year_set + 1):
                 set_start_year = sim_start_year + ((i - 1) * freq)
@@ -794,6 +565,13 @@ if __name__ == "__main__":
                     end_year=set_end_year)
                 job_sets.append(new_set)
 
+    if debug:
+            print_message(
+                'set_frequency: {freq},\n     number of year_sets: {ys}\n'.format(
+                    ys=year_set,
+                    freq=freq),
+                'ok')
+
     # initialize the file_list
     if debug:
         print_message('initializing file_list with {num_years} years'.format(
@@ -802,12 +580,24 @@ if __name__ == "__main__":
     for year in range(1, number_of_sim_years + 1):
         for month in range(1, 13):
             key = str(year) + '-' + str(month)
-            file_list[key] = 'no data'
+            file_list[key] = SetStatus.NO_DATA
             file_name_list[key] = ''
 
     # Check for any data already on the System
-    check_for_inplace_data()
-    check_sets()
+    all_data = check_for_inplace_data(
+        file_list=file_list,
+        file_name_list=file_name_list,
+        job_sets=job_sets,
+        config=config)
+
+    check_year_sets(
+        job_sets=job_sets,
+        file_list=file_list,
+        sim_start_year=config.get('global').get('simulation_start_year'),
+        sim_end_year=config.get('global').get('simulation_end_year'),
+        debug=debug,
+        add_jobs=add_jobs)
+
     if debug:
         for s in job_sets:
             print_message('year_set {0}:'.format(s.set_number), 'ok')
@@ -861,9 +651,23 @@ if __name__ == "__main__":
             if not all_data:
                 monitor_check(monitor)
             # Check if a year_set is ready to run
-            check_sets()
-            start_ready_job_sets(job_sets, thread_list)
-            check_for_inplace_data()
+            check_year_sets(
+                job_sets=job_sets,
+                file_list=file_list,
+                sim_start_year=config.get('global').get('simulation_start_year'),
+                sim_end_year=config.get('global').get('simulation_end_year'),
+                debug=debug,
+                add_jobs=add_jobs)
+            all_data = check_for_inplace_data(
+                file_list=file_list,
+                file_name_list=file_name_list,
+                job_sets=job_sets,
+                config=config)
+            start_ready_job_sets(
+                job_sets=job_sets,
+                thread_list=thread_list,
+                debug=debug,
+                event=thread_kill_event)
             if is_all_done():
                 # cleanup()
                 print_message('All processing complete')

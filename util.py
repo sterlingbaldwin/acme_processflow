@@ -5,6 +5,8 @@ import sys
 import traceback
 import re
 import os
+import threading
+from pprint import pformat
 
 from YearSet import SetStatus
 from YearSet import YearSet
@@ -51,6 +53,234 @@ def check_year_sets(job_sets, file_list, sim_start_year, sim_end_year, debug, ad
                     file_key = '{0}-{1}'.format(i, j)
                     status = file_list[file_key]
                     print_message('  {key}: {value}'.format(key=file_key, value=status), 'ok')
+
+
+def start_ready_job_sets(job_sets, thread_list, debug, event):
+    """
+    Iterates over the job sets, and starts ready jobs
+    """
+    # iterate over the job_sets
+    if debug:
+        print_message('=== Checking for ready jobs ===', 'ok')
+
+    for job_set in job_sets:
+        # if the job state is ready, but hasnt started yet
+        if debug:
+            msg = 'year_set: {0} status: {1}'.format(job_set.set_number, job_set.status)
+            print_message(msg, 'ok')
+            logging.info(msg)
+        if job_set.status == SetStatus.DATA_READY or job_set.status == SetStatus.RUNNING:
+            for job in job_set.jobs:
+                # if the job is a climo, and it hasnt been started yet, start it
+                if debug:
+                    msg = '    job type: {0}, job_status: {1}, job_id: {2}'.format(
+                        job.get_type(),
+                        job.status,
+                        job.job_id)
+                    print_message(msg, 'ok')
+                    logging.info(msg)
+
+                if job.get_type() == 'climo' and job.status == 'valid':
+
+                    job_set.status = SetStatus.RUNNING
+                    job_id = job.execute(batch=True)
+                    job.set_status('RUNNING')
+                    logging.info('Starting Ncclimo for year set %s', job_set.set_number)
+                    print_message('Starting Ncclimo for year_set {}'.format(job_set.set_number))
+
+                    thread = threading.Thread(target=monitor_job, args=(job_id, job, job_set, event))
+                    thread_list.append(thread)
+                    thread.start()
+                    return
+                # if the job isnt a climo, and the job that it depends on is done, start it
+                elif job.get_type() != 'climo' and job.status == 'valid':
+                    ready = True
+                    for dependancy in job.depends_on:
+                        if job_set.jobs[dependancy].status != SetStatus.COMPLETED:
+                            ready = False
+                            break
+                    if ready:
+
+                        job_id = job.execute(batch=True)
+                        job.set_status('starting')
+                        logging.info('Starting %s job for year_set %s', job.get_type(), job_set.set_number)
+                        print_message('Starting {0} job for year_set {1}'.format(job.get_type(), job_set.set_number), 'ok')
+
+                        thread = threading.Thread(target=monitor_job, args=(job_id, job, job_set, event, debug))
+                        thread_list.append(thread)
+                        thread.start()
+                        return
+                elif job.status == 'invalid':
+                    logging.error('Job in invalid state: \n%s', pformat(str(job)))
+                    print_message('===== INVALID JOB =====\n{}'.format(str(job)))
+
+def monitor_job(job_id, job, job_set, event=None, debug=False, batch_type='slurm'):
+    """
+    Monitor the slurm job, and update the status to 'complete' when it finishes
+    This function should only be called from within a thread
+    """
+    def handle_slurm():
+        """
+        handle interfacing with the SLURM controller
+        Checkes the SLURM queue status and changes the job status appropriately
+        """
+        count = 0
+        valid = False
+        while count < 10 and not valid:
+            cmd = ['scontrol', 'show', 'job', str(job_id)]
+            out = Popen(cmd, stdout=PIPE, stderr=PIPE).communicate()[0]
+            # sometimes there will be a communication error with the SLURM controller
+            # in which case the controller returns 'error: some message'
+            if 'error' in out or len(out) == 0:
+                logging.info('Error communication with SLURM controller, attempt number %s', count)
+                valid = False
+                count += 1
+                if thread_sleep(5, event):
+                    return
+            else:
+                valid = True
+
+        if not valid:
+            # if the controller errors 5 times in a row, its probably an unrecoverable error
+            logging.info('SLURM controller not responding')
+            return None
+
+        # loop through the scontrol output looking for the JobState field
+        job_status = None
+        run_time = None
+        for line in out.split('\n'):
+            for word in line.split():
+                if 'JobState' in word:
+                    index = word.find('=')
+                    job_status = word[index + 1:]
+                    continue
+                if 'RunTime' in word:
+                    index = word.find('=') + 1
+                    run_time = word[index:]
+                    break
+            if job_status and run_time:
+                break
+
+        # if debug:
+        #     msg = '{0} status: {1}'.format(job_id, job_status)
+        #     print_message(msg, 'ok')
+        #     logging.info(msg)
+        if not job_status:
+            if debug:
+                print_message('Error parsing job output\n{0}'.format(out))
+            logging.warning('Unable to parse scontrol output: %s', out)
+
+        return job_status, run_time
+
+    def handle_pbs():
+        print 'dealing with pbs'
+        cmd = ['qstat']
+        out = Popen(cmd, stdout=PIPE, stderr=PIPE).communicate()[0]
+        # do some work
+        job_status = 'DANGER WILL ROBENSON'
+        return job_status
+
+    def handle_none():
+        print 'you should really be running this with slurm'
+        return 'Zug zug'
+
+    error_count = 0
+    while True:
+        # this check is here in case the loop is stuck and the thread needs to be canceled
+        if event and event.is_set():
+            return
+        if batch_type == 'slurm':
+            status, run_time = handle_slurm()
+        elif batch_type == 'pbs':
+            status = handle_pbs()
+        elif batch_type == 'none':
+            cmd = ['']
+            status = handle_none()
+            # TODO: figure out how to get this working
+
+        if not status:
+            if error_count <= 10:
+                logging.error('Unable to communicate to controller after 10 attempts')
+                logging.error(
+                    'Setting %s job with job_id %s to status error',
+                    job.get_type(),
+                    job_id)
+                job.status = 'error'
+            error_count += 1
+            if thread_sleep(5, event):
+                return
+            continue
+
+        if job.status != status:
+            if debug:
+                if status != 'error':
+                    print_message('Setting job status: {0}'.format(status), 'ok')
+                else:
+                    print_message('Setting job status: {0}'.format(status))
+            if status == 'error' or status == 'FAILED':
+                print_message('Setting job status: {0}'.format(status))
+            logging.info(
+                'Setting %s job with job_id %s to status %s',
+                job.get_type(),
+                job_id,
+                status)
+            job.status = status
+            if status == 'RUNNING':
+                job_set.status = SetStatus.RUNNING
+
+        # if the job is done, or there has been an error, exit
+        if status == 'COMPLETED':
+            logging.info(
+                '%s job  with job_id %s completed after %s',
+                job.get_type(),
+                job_id, run_time)
+            job_set_done = True
+            for job in job_set.jobs:
+                if job.status != 'COMPLETED':
+                    job_set_done = False
+                    break
+
+            if job_set_done:
+                job_set.status = SetStatus.COMPLETED
+            return
+        if status == 'error':
+            logging.info(
+                '%s job  with job_id %s ERRORED after %s',
+                job.get_type(),
+                job_id,
+                run_time)
+            return
+        # wait for 10 seconds, or if the kill_thread event has been set, exit
+        if thread_sleep(10, event):
+            return
+
+def check_for_inplace_data(file_list, file_name_list, job_sets, config):
+    """
+    Checks the data cache for any files that might already be in place,
+    updates the file_list and job_sets accordingly
+    """
+    cache_path = config.get('global').get('data_cache_path')
+    date_pattern = config.get('global').get('date_pattern')
+    output_pattern = config.get('global').get('output_pattern')
+
+    if not os.path.exists(cache_path):
+        os.makedirs(cache_path)
+        return
+
+    for climo_file in os.listdir(cache_path):
+        file_key = filename_to_file_list_key(
+            filename=climo_file,
+            output_pattern=output_pattern,
+            date_pattern=date_pattern)
+        file_list[file_key] = SetStatus.DATA_READY
+        file_name_list[file_key] = climo_file
+
+    all_data = True
+    for key in file_list:
+        if file_list[key] != SetStatus.DATA_READY:
+            all_data = False
+            break
+    return all_data
 
 def print_debug(e):
     print '1', e.__doc__
