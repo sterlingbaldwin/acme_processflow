@@ -137,7 +137,7 @@ class Climo(object):
                     # print_message('+++++ STARTING CLIMO JOB {0} +++++'.format(self.job_id))
                 elif retry_count <= 0:
                     logging.warning("Error starting climo job\n%s", output)
-                    message = "## year_set {set} status change to {status}".format(set=self.yearset, status=job_set['status'])
+                    message = "## year_set {set} status change to {status}".format(set=self.yearset, status=self.status)
                     logging.warning(message)
                     print_message("Error starting climo job")
                     print_message(output)
@@ -145,7 +145,7 @@ class Climo(object):
                     break
                 else:
                     logging.warning('Failed to start job trying again, attempt %s', str(retry_count))
-                    message = "## year_set {set} status change to {status}".format(set=self.year_set, status=job_set['status'])
+                    message = "## year_set {set} status change to {status}".format(set=self.yearset, status=self.status)
                     logging.warning(message)
                     print_message('Failed to start job, trying again')
                     retry_count += 1
