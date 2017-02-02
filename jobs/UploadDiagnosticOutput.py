@@ -12,6 +12,8 @@ from util import print_message
 from util import format_debug
 from util import check_slurm_job_submission
 from output_viewer.diagsviewer import DiagnosticsViewerClient
+from JobStatus import JobStatus
+
 
 class UploadDiagnosticOutput(object):
     def __init__(self, config):
@@ -28,7 +30,7 @@ class UploadDiagnosticOutput(object):
         self.config = {}
         self.outputs = {}
         self.uuid = uuid4().hex
-        self.status = 'unvalidated'
+        self.status = JobStatus.INVALID
         self.depends_on = []
         self.type = 'upload_diagnostic_output'
         self.job_id = 0
@@ -77,7 +79,7 @@ class UploadDiagnosticOutput(object):
         Iterate over given config dictionary making sure all the inputs are set
         and rejecting any inputs that arent in the input dict
         """
-        if self.status == 'valid':
+        if self.status == JobStatus.VALID:
             return 0
         for i in config:
             if i not in self.inputs:
@@ -91,9 +93,9 @@ class UploadDiagnosticOutput(object):
         for i in self.inputs:
             if i not in self.config:
                 logging.error('Missing UploadDiagnosticOutput argument %s', i)
-                self.status = 'invalid'
+                self.status = JobStatus.INVALID
                 return -1
-        self.status = 'valid'
+        self.status = JobStatus.VALID
         return 0
 
     def postvalidate(self):
@@ -101,12 +103,12 @@ class UploadDiagnosticOutput(object):
         Check that what the job was supposed to do actually happened
         """
         if not self.outputs.get('dataset_id'):
-            self.status = 'error'
+            self.status = JobStatus.FAILED
             return
         if not self.outputs.get('id'):
-            self.status = 'error'
+            self.status = JobStatus.FAILED
             return
-        self.status = 'COMPLETED'
+        self.status = JobStatus.COMPLETED
 
     def execute(self, batch=True):
         """
@@ -137,7 +139,7 @@ class UploadDiagnosticOutput(object):
                 logging.error(format_debug(e))
                 return -1
             self.outputs['dataset_id'] = dataset_id
-            self.status = 'COMPLETED'
+            self.status = JobStatus.COMPLETED
         # running in batch mode
         else:
             expected_name = 'upload_diag_job_' + str(self.uuid)
@@ -182,7 +184,7 @@ except Exception as e:\n\
                 # print_message('upload job output:\n {0}\nerr: {1}'.format(output, err))
                 started, job_id = check_slurm_job_submission(expected_name)
                 if started:
-                    self.status = 'RUNNING'
+                    self.status = JobStatus.RUNNING
                     logging.info('Started upload_diag job with job_id %s', job_id)
                     self.job_id = job_id
                 elif retry_count >= 5:

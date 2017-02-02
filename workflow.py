@@ -28,6 +28,7 @@ from jobs.Ncclimo import Climo
 from jobs.UploadDiagnosticOutput import UploadDiagnosticOutput
 from jobs.Publication import Publication
 from jobs.PrimaryDiagnostic import PrimaryDiagnostic
+from jobs.JobStatus import JobStatus
 from Monitor import Monitor
 from YearSet import YearSet
 from YearSet import SetStatus
@@ -210,7 +211,7 @@ def add_jobs(year_set):
         if not required_jobs[job.get_type()]:
             required_jobs[job.get_type()] = True
 
-    year_set_str = 'year_set_' + str(year_set)
+    year_set_str = 'year_set_' + str(year_set.set_number)
     # first initialize the climo job
     if not required_jobs['climo']:
         climo_output_dir = os.path.join(config.get('global').get('output_path'))

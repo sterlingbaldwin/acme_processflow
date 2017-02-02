@@ -15,7 +15,7 @@ from subprocess import Popen, PIPE
 from util import print_debug
 from util import print_message
 from util import check_slurm_job_submission
-
+from JobStatus import JobStatus
 
 class Diagnostic(object):
     """
@@ -26,7 +26,7 @@ class Diagnostic(object):
         self.config = {}
         self.proc = None
         self.type = 'diagnostic'
-        self.status = 'unvalidated'
+        self.status = JobStatus.INVALID
         self.yearset = config.get('yearset', 0)
         self.uuid = uuid4().hex
         self.depends_on = []
@@ -111,7 +111,7 @@ class Diagnostic(object):
                     stdin=PIPE,
                     stderr=PIPE,
                     shell=True)
-                self.status = 'running'
+                self.status = JobStatus.RUNNING
                 done = 2
                 while done != 0:
                     done = self.proc.poll()
@@ -131,7 +131,7 @@ class Diagnostic(object):
                     config.get('diagnostic')['outputs'] = self.outputs
                 with open('config.json', 'w') as outfile:
                     json.dump(config, outfile, indent=4, sort_keys=True)
-                self.status = 'complete'
+                self.status = JobStatus.COMPLETED
             except Exception as e:
                 self.status = 'error'
                 print_debug(e)
@@ -156,7 +156,7 @@ class Diagnostic(object):
                 output, err = self.proc.communicate()
                 started, job_id = check_slurm_job_submission(expected_name)
                 if started:
-                    self.status = 'RUNNING'
+                    self.status = JobStatus.RUNNING
                     self.job_id = job_id
                     logging.info('Starting diagnostic job with job_id %s', job_id)
                     # print_message('+++++ STARTING CLIMO JOB {0} +++++'.format(self.job_id))
@@ -219,7 +219,7 @@ class Diagnostic(object):
         Validates the config options
         Valid options are: model_path, obs_path, output_path, package, sets
         """
-        if self.status == 'valid':
+        if self.status == JobStatus.VALID:
             return 0
         inputs = config
         for i in inputs:
@@ -264,12 +264,12 @@ class Diagnostic(object):
                     self.config['archive'] = default
         self.outputs['output_path'] = self.config['--outputdir']
         self.outputs['console_output'] = ''
-        self.status = 'valid'
+        self.status = JobStatus.VALID
 
         # Check if the job has already been completed
         outputdir = os.path.join(self.config.get('--outputdir'), 'amwg')
         if os.path.exists(outputdir):
             output_contents = os.listdir(outputdir)
             if 'index.json' in output_contents and len(output_contents) > 400:
-                self.status = 'COMPLETED'
+                self.status = JobStatus.COMPLETED
         return 0
