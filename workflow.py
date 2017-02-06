@@ -584,6 +584,7 @@ if __name__ == "__main__":
         print "Error in setup, exiting"
         sys.exit(1)
 
+    path_exists(config)
     # compute number of expected year sets
     sim_start_year = int(config.get('global').get('simulation_start_year'))
     sim_end_year = int(config.get('global').get('simulation_end_year'))
@@ -689,9 +690,6 @@ if __name__ == "__main__":
     try:
         while True:
             # Setup remote monitoring system
-            config_items = setup(parser)
-            path_exists(config_items)
-            #stuff()
             if not all_data:
                 monitor_check(monitor)
             # Check if a year_set is ready to run
