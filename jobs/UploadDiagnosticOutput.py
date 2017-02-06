@@ -70,6 +70,8 @@ class UploadDiagnosticOutput(object):
         except Exception as e:
             logging.error('Error saving configuration file')
             logging.error(format_debug(e))
+            message = "## year_set {set} status change to {status}".format(set=job_set.get('year_set'), status=job_set['status'])
+            logging.error(message)
             raise
 
     def prevalidate(self, config=None):
@@ -82,6 +84,8 @@ class UploadDiagnosticOutput(object):
         for i in config:
             if i not in self.inputs:
                 logging.info('Unexpected arguement to Upload_Diagnostic: %s, %s', i, config[i])
+                message = "## year_set {set} status change to {status}".format(set=job_set.get('year_set'), status=job_set['status'])
+                logging.info(message)
             else:
                 if i == 'depends_on':
                     self.depends_on = config.get(i)
@@ -91,6 +95,8 @@ class UploadDiagnosticOutput(object):
         for i in self.inputs:
             if i not in self.config:
                 logging.error('Missing UploadDiagnosticOutput argument %s', i)
+                message = "## year_set {set} status change to {status}".format(set=job_set.get('year_set'), status=job_set['status'])
+                logging.error(message)
                 self.status = 'invalid'
                 return -1
         self.status = 'valid'
@@ -123,6 +129,8 @@ class UploadDiagnosticOutput(object):
                     self.config.get('password'))
             except Exception as e:
                 logging.error('Upload_Diagnostic unable error connecting to server')
+                message = "## year_set {set} status change to {status}".format(set=job_set.get('year_set'), status=job_set['status'])
+                logging.error(message)
                 logging.error(format_debug(e))
                 return -1
             self.outputs['id'] = client_id
@@ -131,10 +139,14 @@ class UploadDiagnosticOutput(object):
                     'uploading diagnostic package from %s',
                     self.config.get('path_to_diagnostic')
                 )
+                message = "## year_set {set} status change to {status}".format(set=job_set.get('year_set'), status=job_set['status'])
+                logging.info(message)
                 dataset_id = client.upload_package(self.config.get('path_to_diagnostic'))
             except Exception as e:
                 logging.error('Error uploading diagnostic set to server')
                 logging.error(format_debug(e))
+                message = "## year_set {set} status change to {status}".format(set=job_set.get('year_set'), status=job_set['status'])
+                logging.info(message)
                 return -1
             self.outputs['dataset_id'] = dataset_id
             self.status = 'COMPLETED'
@@ -176,6 +188,8 @@ except Exception as e:\n\
             started = False
             retry_count = 0
             while not started and retry_count < 5:
+                message = "## year_set {set} status change to {status}".format(set=job_set.get('year_set'), status=job_set['status'])
+                logging.info(message)
                 logging.info('Starting upload_diag')
                 self.proc = Popen(slurm_cmd, stdout=PIPE, stderr=PIPE)
                 output, err = self.proc.communicate()
@@ -184,14 +198,20 @@ except Exception as e:\n\
                 if started:
                     self.status = 'RUNNING'
                     logging.info('Started upload_diag job with job_id %s', job_id)
+                    message = "## year_set {set} status change to {status}".format(set=job_set.get('year_set'), status=job_set['status'])
+                    logging.info(message)
                     self.job_id = job_id
                 elif retry_count >= 5:
                     logging.warning("Failed starting upload_diag job\n%s", output)
+                    message = "## year_set {set} status change to {status}".format(set=job_set.get('year_set'), status=job_set['status'])
+                    logging.warning(message)
                     print_message("Failed starting upload_diag job")
                     print_message(output)
                     return 0
                 else:
                     logging.warning('Error starting job trying again, attempt %s', str(retry_count))
+                    message = "## year_set {set} status change to {status}".format(set=job_set.get('year_set'), status=job_set['status'])
+                    logging.warning(message)
                     print_message('Error starting job, trying again')
                     retry_count += 1
                     sleep(5)
