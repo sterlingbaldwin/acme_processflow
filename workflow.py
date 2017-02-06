@@ -77,8 +77,6 @@ def save_state():
     except IOError as e:
         logging.error("Error saving state file")
         logging.error(format_debug(e))
-        message = "## year_set {set} status change to {status}".format(set=year_set.set_number, status=year_set.status)
-        logging.info(message)
         # print_debug(e)
         # print_message("Error saving state file")
 
@@ -124,8 +122,6 @@ def setup(parser):
             except IOError as e:
                 logging.error('Error loading from state file {}'.format(args.state))
                 logging.error(format_debug(e))
-                message = "## year_set {set} status change to {status}".format(set=year_set.set_number, status=year_set.status)
-                logging.info(message)
                 # print_debug(e)
                 # print_message('Error loading state file')
                 sys.exit(1)
