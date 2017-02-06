@@ -14,6 +14,8 @@ from time import sleep
 from util import print_debug
 from util import print_message
 from util import check_slurm_job_submission
+from JobStatus import JobStatus
+
 
 class Climo(object):
     """
@@ -21,7 +23,7 @@ class Climo(object):
     """
     def __init__(self, config):
         self.config = {}
-        self.status = 'unvarified'
+        self.status = JobStatus.INVALID
         self.type = 'climo'
         self.uuid = uuid4().hex
         self.yearset = config.get('yearset', 0)
@@ -82,7 +84,7 @@ class Climo(object):
                 stdout=PIPE,
                 stderr=PIPE,
                 shell=False)
-            self.status = 'RUNNING'
+            self.status = JobStatus.RUNNING
             done = 2
             console_output = ''
             while done != 0:
@@ -100,7 +102,7 @@ class Climo(object):
                 self.outputs['console_output'] = console_output
                 print console_output
 
-            self.status = 'COMPLETED'
+            self.status = JobStatus.COMPLETED
             return 0
         else:
             # Submitting the job to SLURM
@@ -129,7 +131,7 @@ class Climo(object):
                 output, err = self.proc.communicate()
                 started, job_id = check_slurm_job_submission(expected_name)
                 if started:
-                    self.status = 'RUNNING'
+                    self.status = JobStatus.RUNNING
                     self.job_id = job_id
                     logging.info('Starting climo job with job_id %s', job_id)
                     message = "## year_set {set} status change to {status}".format(set=self.year_set, status=self.status)
@@ -186,14 +188,14 @@ class Climo(object):
         """
         Prerun validation for inputs
         """
-        if self.status == 'valid':
+        if self.status == JobStatus.VALID:
             return 0
         for i in config:
             if i not in self.inputs:
                 print_message("Unexpected arguement: {}, {}".format(i, config[i]))
             else:
                 self.config[i] = config.get(i)
-        self.status = 'valid'
+        self.status = JobStatus.VALID
 
         # after checking that the job is valid to run,
         # check if the output already exists and the job actually needs to run

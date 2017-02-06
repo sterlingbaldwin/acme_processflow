@@ -10,6 +10,7 @@ from pprint import pformat
 
 from YearSet import SetStatus
 from YearSet import YearSet
+from jobs.JobStatus import JobStatus
 
 def check_year_sets(job_sets, file_list, sim_start_year, sim_end_year, debug, add_jobs):
     """
@@ -84,35 +85,44 @@ def start_ready_job_sets(job_sets, thread_list, debug, event):
                 message = "## year_set {set} status change to {status}".format(set=job_set.set_number, status=job_set.status)
                 logging.info(message)
 
-                if job.get_type() == 'climo' and job.status == 'valid':
+                if job.get_type() == 'climo' and job.status == JobStatus.VALID:
+                    # for debug purposes only
+                    job.status = JobStatus.COMPLETED
+                    return
 
-                    job_set.status = SetStatus.RUNNING
                     job_id = job.execute(batch=True)
-                    job.set_status('RUNNING')
-                    logging.info('Starting Ncclimo for year set %s', job_set.set_number)
+                    job_set.status = SetStatus.RUNNING
+                    job.set_status(JobStatus.SUBMITTED)
+                    print_message('Submitted Ncclimo for year_set {}'.format(job_set.set_number))
                     message = "## job_set {set} status change to {status}".format(set=job_set.set_number, status=job_set.status)
                     logging.info(message)
-                    print_message('Starting Ncclimo for year_set {}'.format(job_set.set_number))
+                    message = "## {job}: {id} status changed to {status}".format(job=job.get_type(), id=job.job_id, status=job.status)
+                    logging.info(message)
 
                     thread = threading.Thread(target=monitor_job, args=(job_id, job, job_set, event))
                     thread_list.append(thread)
                     thread.start()
                     return
+
                 # if the job isnt a climo, and the job that it depends on is done, start it
-                elif job.get_type() != 'climo' and job.status == 'valid':
+                elif job.get_type() != 'climo' and job.status == JobStatus.VALID:
                     ready = True
                     for dependancy in job.depends_on:
-                        if job_set.jobs[dependancy].status != SetStatus.COMPLETED:
+                        if job_set.jobs[dependancy].status != JobStatus.COMPLETED:
                             ready = False
                             break
-                    if ready:
 
+                    if ready:
                         job_id = job.execute(batch=True)
-                        job.set_status('starting')
-                        logging.info('Starting %s job for year_set %s', job.get_type(), job_set.set_number)
+
+                        job.set_status(JobStatus.SUBMITTED)
+
                         message = "## year_set {set} status change to {status}".format(set=job_set.set_number, status=job_set.status)
                         logging.info(message)
-                        print_message('Starting {0} job for year_set {1}'.format(job.get_type(), job_set.set_number), 'ok')
+                        message = "## {job}: {id} status changed to {status}".format(job=job.get_type(), id=job.job_id, status=job.status)
+                        logging.info(message)
+                        print_message(message, 'ok')
+
 
                         thread = threading.Thread(target=monitor_job, args=(job_id, job, job_set, event, debug))
                         thread_list.append(thread)
@@ -175,10 +185,6 @@ def monitor_job(job_id, job, job_set, event=None, debug=False, batch_type='slurm
             if job_status and run_time:
                 break
 
-        # if debug:
-        #     msg = '{0} status: {1}'.format(job_id, job_status)
-        #     print_message(msg, 'ok')
-        #     logging.info(msg)
         if not job_status:
             if debug:
                 print_message('Error parsing job output\n{0}'.format(out))
@@ -186,7 +192,16 @@ def monitor_job(job_id, job, job_set, event=None, debug=False, batch_type='slurm
             message = "## year_set {set} status change to {status}".format(set=year_set.set_number, status=year_set.status)
             logging.warning(message)
 
-        return job_status, run_time
+        if job_status == 'RUNNING':
+            return JobStatus.RUNNING
+        elif job_status == 'PENDING':
+            return JobStatus.PENDING
+        elif job_status == 'FAILED':
+            return JobStatus.FAILED
+        elif job_status == 'COMPLETED':
+            return JobStatus.COMPLETED
+
+        return job_status
 
     def handle_pbs():
         print 'dealing with pbs'
@@ -206,7 +221,7 @@ def monitor_job(job_id, job, job_set, event=None, debug=False, batch_type='slurm
         if event and event.is_set():
             return
         if batch_type == 'slurm':
-            status, run_time = handle_slurm()
+            status = handle_slurm()
         elif batch_type == 'pbs':
             status = handle_pbs()
         elif batch_type == 'none':
@@ -218,12 +233,12 @@ def monitor_job(job_id, job, job_set, event=None, debug=False, batch_type='slurm
             if error_count <= 10:
                 logging.error('Unable to communicate to controller after 10 attempts')
                 logging.error(
-                    'Setting %s job with job_id %s to status error',
+                    'Setting %s job with job_id %s to status FAILED',
                     job.get_type(),
                     job_id)
+                job.status = JobStatus.FAILED
                 message = "## year_set {set} status change to {status}".format(set=year_set.set_number, status=year_set.status)
                 logging.error(message)
-                job.status = 'error'
             error_count += 1
             if thread_sleep(5, event):
                 return
@@ -231,47 +246,51 @@ def monitor_job(job_id, job, job_set, event=None, debug=False, batch_type='slurm
 
         if job.status != status:
             if debug:
-                if status != 'error':
+                if status != JobStatus.FAILED:
                     print_message('Setting job status: {0}'.format(status), 'ok')
                 else:
                     print_message('Setting job status: {0}'.format(status))
-            if status == 'error' or status == 'FAILED':
-                print_message('Setting job status: {0}'.format(status))
+
+            if status == JobStatus.FAILED:
+                print_message('Job {0} has failed'.format(job_id))
+
             logging.info(
                 'Setting %s job with job_id %s to status %s',
                 job.get_type(),
                 job_id,
                 status)
-            message = "UploadDiagnosticJob: {set} status changed to {status}".format(set=job.job_id, status=status)
+            message = "## UploadDiagnosticJob: {set} status changed to {status}".format(set=job.job_id, status=status)
             logging.info(message)
             job.status = status
-            if status == 'RUNNING':
+            if status == JobStatus.RUNNING:
                 job_set.status = SetStatus.RUNNING
 
         # if the job is done, or there has been an error, exit
-        if status == 'COMPLETED':
+        if status == JobStatus.COMPLETED:
             logging.info(
-                '%s job  with job_id %s completed after %s',
+                '%s job  with job_id %s completed',
                 job.get_type(),
-                job_id, run_time)
-            message = "UploadDiagnosticJob: {set} status changed to {status}".format(set=job.job_id, status=status)
+                job_id)
+
+            message = "## UploadDiagnosticJob: {set} status changed to {status}".format(set=job.job_id, status=status)
             logging.info(message)
+
             job_set_done = True
             for job in job_set.jobs:
-                if job.status != 'COMPLETED':
+                if job.status != JobStatus.COMPLETED:
                     job_set_done = False
                     break
 
             if job_set_done:
                 job_set.status = SetStatus.COMPLETED
             return
-        if status == 'error':
+        if status == JobStatus.FAILED:
             logging.info(
-                '%s job  with job_id %s ERRORED after %s',
+                '%s job  with job_id %s FAILED',
                 job.get_type(),
-                job_id,
-                run_time)
-            message = "UploadDiagnosticJob: {set} status changed to {status}".format(set=job.job_id, status=status)
+                job_id)
+
+            message = "## UploadDiagnosticJob: {set} status changed to {status}".format(set=job.job_id, status=status)
             logging.info(message)
             return
         # wait for 10 seconds, or if the kill_thread event has been set, exit

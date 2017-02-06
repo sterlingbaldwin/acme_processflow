@@ -28,6 +28,7 @@ from jobs.Ncclimo import Climo
 from jobs.UploadDiagnosticOutput import UploadDiagnosticOutput
 from jobs.Publication import Publication
 from jobs.PrimaryDiagnostic import PrimaryDiagnostic
+from jobs.JobStatus import JobStatus
 from Monitor import Monitor
 from YearSet import YearSet
 from YearSet import SetStatus
@@ -236,7 +237,7 @@ def add_jobs(year_set):
         if not required_jobs[job.get_type()]:
             required_jobs[job.get_type()] = True
 
-    year_set_str = 'year_set_' + str(year_set)
+    year_set_str = 'year_set_' + str(year_set.set_number)
     # first initialize the climo job
     if not required_jobs['climo']:
         climo_output_dir = os.path.join(config.get('global').get('output_path'))
@@ -495,17 +496,15 @@ def handle_transfer(transfer_job, f_list, event):
     # the transfer is complete, so we can decrement the active_transfers counter
     active_transfers -= 1
 
-    if transfer_job.status != 'COMPLETED':
+    if transfer_job.status != JobStatus.COMPLETED:
         logging.error('Failed to complete transfer job\n  %s', pformat(str(transfer_job)))
         message = "Transfer: {set} has failed".format(set=transfer_job.transfer_id)
         logging.error(message)
         return
     else:
         print_message('Finished file transfer')
-        logging.info('Failed to complete transfer job\n  %s', pformat(str(transfer_job)))
-        message = "Transfer: {set} has completed".format(set=transfer_job.transfer_id)
+        message = "## Transfer with id {id} {set} has completed".format(set=transfer_job.transfer_id, id=transfer_job.uuid)
         logging.info(message)
-        logging.info('File transfer {} completed'.format(transfer_job.uuid))
 
     # update the file_list all the files that were transferred
     output_pattern = config.get('global').get('output_pattern')
@@ -516,10 +515,6 @@ def handle_transfer(transfer_job, f_list, event):
         file_name_list[list_key] = file
 
     if debug:
-        logging.info('transfer of files %s completed', pformat(f_list))
-        logging.info('file_list status: %s', pformat(sorted(file_list, cmp=file_list_cmp)))
-        message = "## year_set {set} status change to {status}".format(set=year_set.set_number, status=year_set.status)
-        logging.info(message)
         print_message('file_list status: ', 'ok')
         for key in sorted(file_list, cmp=file_list_cmp):
             print_message('{key}: {val}'.format(key=key, val=file_list[key]), 'ok')
