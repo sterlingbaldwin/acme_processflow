@@ -129,14 +129,14 @@ class UploadDiagnosticOutput(object):
                     self.config.get('password'))
             except Exception as e:
                 logging.error('Upload_Diagnostic unable error connecting to server')
-                message = "## year_set {set} status change to {status}".format(set=job_set.get('year_set'), status=job_set['status'])
+                message = "## Upload diagnostic job {set} unable to connect to server".format(set=self.job_id)
                 logging.error(message)
                 logging.error(format_debug(e))
                 return -1
             self.outputs['id'] = client_id
             try:
                 logging.info(
-                    'uploading diagnostic package from %s',
+                    '## uploading diagnostic package from %s',
                     self.config.get('path_to_diagnostic')
                 )
                 message = "## year_set {set} status change to {status}".format(set=job_set.get('year_set'), status=job_set['status'])
@@ -145,7 +145,7 @@ class UploadDiagnosticOutput(object):
             except Exception as e:
                 logging.error('Error uploading diagnostic set to server')
                 logging.error(format_debug(e))
-                message = "## year_set {set} status change to {status}".format(set=job_set.get('year_set'), status=job_set['status'])
+                message = "## Uploading diagnostic job {set} has failed".format(set=self.job_id)
                 logging.info(message)
                 return -1
             self.outputs['dataset_id'] = dataset_id
@@ -188,7 +188,7 @@ except Exception as e:\n\
             started = False
             retry_count = 0
             while not started and retry_count < 5:
-                message = "## year_set {set} status change to {status}".format(set=job_set.get('year_set'), status=job_set['status'])
+                message = "## year_set {set} status change to {status}".format(set=self.year_set, status=self.status)
                 logging.info(message)
                 logging.info('Starting upload_diag')
                 self.proc = Popen(slurm_cmd, stdout=PIPE, stderr=PIPE)
@@ -198,12 +198,12 @@ except Exception as e:\n\
                 if started:
                     self.status = 'RUNNING'
                     logging.info('Started upload_diag job with job_id %s', job_id)
-                    message = "## year_set {set} status change to {status}".format(set=job_set.get('year_set'), status=job_set['status'])
+                    message = "## Diagnostic job {set} status change to {status}".format(set=self.job_id, status=self.status)
                     logging.info(message)
                     self.job_id = job_id
                 elif retry_count >= 5:
                     logging.warning("Failed starting upload_diag job\n%s", output)
-                    message = "## year_set {set} status change to {status}".format(set=job_set.get('year_set'), status=job_set['status'])
+                    message = "## Upload changed to FAIL"
                     logging.warning(message)
                     print_message("Failed starting upload_diag job")
                     print_message(output)

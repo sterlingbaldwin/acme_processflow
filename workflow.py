@@ -470,9 +470,7 @@ def monitor_check(monitor):
         'pattern': config.get('global').get('output_pattern'),
         'ncclimo_path': config.get('ncclimo').get('ncclimo_path')
     }
-    logging.info('Starting transfer with config: %s', pformat(transfer_config))
-    message = "## year_set {set} status change to {status}".format(set=year_set.set_number, status=year_set.status)
-    logging.info(message)
+    logging.info('## Starting transfer with config: %s', pformat(transfer_config))
     print_message('Starting file transfer', 'ok')
     transfer = Transfer(transfer_config)
     thread = threading.Thread(target=handle_transfer, args=(transfer, checked_new_files, thread_kill_event))
@@ -499,13 +497,13 @@ def handle_transfer(transfer_job, f_list, event):
 
     if transfer_job.status != 'COMPLETED':
         logging.error('Failed to complete transfer job\n  %s', pformat(str(transfer_job)))
-        message = "## year_set {set} status change to {status}".format(set=year_set.set_number, status=year_set.status)
+        message = "Transfer: {set} has failed".format(set=transfer_job.transfer_id)
         logging.error(message)
         return
     else:
         print_message('Finished file transfer')
         logging.info('Failed to complete transfer job\n  %s', pformat(str(transfer_job)))
-        message = "## year_set {set} status change to {status}".format(set=year_set.set_number, status=year_set.status)
+        message = "Transfer: {set} has completed".format(set=transfer_job.transfer_id)
         logging.info(message)
         logging.info('File transfer {} completed'.format(transfer_job.uuid))
 
@@ -518,7 +516,7 @@ def handle_transfer(transfer_job, f_list, event):
         file_name_list[list_key] = file
 
     if debug:
-        logging.info('trasfer of files %s completed', pformat(f_list))
+        logging.info('transfer of files %s completed', pformat(f_list))
         logging.info('file_list status: %s', pformat(sorted(file_list, cmp=file_list_cmp)))
         message = "## year_set {set} status change to {status}".format(set=year_set.set_number, status=year_set.status)
         logging.info(message)
@@ -722,9 +720,7 @@ if __name__ == "__main__":
             if is_all_done():
                 # cleanup()
                 print_message('All processing complete')
-                logging.info("All processes complete, exiting")
-                message = "## year_set {set} status change to {status}".format(set=year_set.set_number, status=year_set.status)
-                logging.info(message)
+                logging.info(" ## All processes complete, exiting")
                 sys.exit(0)
             sleep(10)
     except KeyboardInterrupt as e:

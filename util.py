@@ -90,7 +90,7 @@ def start_ready_job_sets(job_sets, thread_list, debug, event):
                     job_id = job.execute(batch=True)
                     job.set_status('RUNNING')
                     logging.info('Starting Ncclimo for year set %s', job_set.set_number)
-                    message = "## year_set {set} status change to {status}".format(set=job.yearset, status=job.status)
+                    message = "## job_set {set} status change to {status}".format(set=job_set.set_number, status=job_set.status)
                     logging.info(message)
                     print_message('Starting Ncclimo for year_set {}'.format(job_set.set_number))
 
@@ -120,7 +120,7 @@ def start_ready_job_sets(job_sets, thread_list, debug, event):
                         return
                 elif job.status == 'invalid':
                     logging.error('Job in invalid state: \n%s', pformat(str(job)))
-                    message = "## year_set {set} status change to {status}".format(set=year_set.set_number, status=year_set.status)
+                    message = "UploadDiagnosticJob: {set} status changed to {status}".format(set=job.job_id, status=status)
                     logging.error(message)
                     print_message('===== INVALID JOB =====\n{}'.format(str(job)))
 
@@ -242,7 +242,7 @@ def monitor_job(job_id, job, job_set, event=None, debug=False, batch_type='slurm
                 job.get_type(),
                 job_id,
                 status)
-            message = "## year_set {set} status change to {status}".format(set=job_set.set_number, status=job_set.status)
+            message = "UploadDiagnosticJob: {set} status changed to {status}".format(set=job.job_id, status=status)
             logging.info(message)
             job.status = status
             if status == 'RUNNING':
@@ -254,7 +254,7 @@ def monitor_job(job_id, job, job_set, event=None, debug=False, batch_type='slurm
                 '%s job  with job_id %s completed after %s',
                 job.get_type(),
                 job_id, run_time)
-            message = "## year_set {set} status change to {status}".format(set=year_set.set_number, status=year_set.status)
+            message = "UploadDiagnosticJob: {set} status changed to {status}".format(set=job.job_id, status=status)
             logging.info(message)
             job_set_done = True
             for job in job_set.jobs:
@@ -271,7 +271,7 @@ def monitor_job(job_id, job, job_set, event=None, debug=False, batch_type='slurm
                 job.get_type(),
                 job_id,
                 run_time)
-            message = "## year_set {set} status change to {status}".format(set=year_set.set_number, status=year_set.status)
+            message = "UploadDiagnosticJob: {set} status changed to {status}".format(set=job.job_id, status=status)
             logging.info(message)
             return
         # wait for 10 seconds, or if the kill_thread event has been set, exit
