@@ -72,8 +72,6 @@ class UploadDiagnosticOutput(object):
         except Exception as e:
             logging.error('Error saving configuration file')
             logging.error(format_debug(e))
-            message = "## year_set {set} status change to {status}".format(set=job_set.get('year_set'), status=job_set['status'])
-            logging.error(message)
             raise
 
     def prevalidate(self, config=None):
@@ -86,8 +84,6 @@ class UploadDiagnosticOutput(object):
         for i in config:
             if i not in self.inputs:
                 logging.info('Unexpected arguement to Upload_Diagnostic: %s, %s', i, config[i])
-                message = "## year_set {set} status change to {status}".format(set=job_set.get('year_set'), status=job_set['status'])
-                logging.info(message)
             else:
                 if i == 'depends_on':
                     self.depends_on = config.get(i)
@@ -98,8 +94,6 @@ class UploadDiagnosticOutput(object):
             if i not in self.config:
                 logging.error('Missing UploadDiagnosticOutput argument %s', i)
                 self.status = JobStatus.INVALID
-                message = "## year_set {set} status change to {status}".format(set=job_set.get('year_set'), status=job_set['status'])
-                logging.error(message)
                 return -1
         self.status = JobStatus.VALID
         return 0
@@ -141,8 +135,6 @@ class UploadDiagnosticOutput(object):
                     '## uploading diagnostic package from %s',
                     self.config.get('path_to_diagnostic')
                 )
-                message = "## year_set {set} status change to {status}".format(set=job_set.get('year_set'), status=job_set['status'])
-                logging.info(message)
                 dataset_id = client.upload_package(self.config.get('path_to_diagnostic'))
             except Exception as e:
                 logging.error('Error uploading diagnostic set to server')
@@ -212,8 +204,6 @@ except Exception as e:\n\
                     return 0
                 else:
                     logging.warning('Error starting job trying again, attempt %s', str(retry_count))
-                    message = "## year_set {set} status change to {status}".format(set=job_set.get('year_set'), status=job_set['status'])
-                    logging.warning(message)
                     print_message('Error starting job, trying again')
                     retry_count += 1
                     sleep(5)

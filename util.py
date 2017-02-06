@@ -70,8 +70,6 @@ def start_ready_job_sets(job_sets, thread_list, debug, event):
             msg = 'year_set: {0} status: {1}'.format(job_set.set_number, job_set.status)
             print_message(msg, 'ok')
             logging.info(msg)
-        message = "## year_set {set} status change to {status}".format(set=job_set.set_number, status=job_set.status)
-        logging.info(message)
         if job_set.status == SetStatus.DATA_READY or job_set.status == SetStatus.RUNNING:
             for job in job_set.jobs:
                 # if the job is a climo, and it hasnt been started yet, start it
@@ -82,8 +80,6 @@ def start_ready_job_sets(job_sets, thread_list, debug, event):
                         job.job_id)
                     print_message(msg, 'ok')
                     logging.info(msg)
-                message = "## year_set {set} status change to {status}".format(set=job_set.set_number, status=job_set.status)
-                logging.info(message)
 
                 if job.get_type() == 'climo' and job.status == JobStatus.VALID:
                     # for debug purposes only
@@ -153,8 +149,6 @@ def monitor_job(job_id, job, job_set, event=None, debug=False, batch_type='slurm
             # in which case the controller returns 'error: some message'
             if 'error' in out or len(out) == 0:
                 logging.info('Error communication with SLURM controller, attempt number %s', count)
-                message = "## year_set {set} status change to {status}".format(set=job_set.set_number, status=job_set.status)
-                logging.info(message)
                 valid = False
                 count += 1
                 if thread_sleep(5, event):
@@ -165,8 +159,6 @@ def monitor_job(job_id, job, job_set, event=None, debug=False, batch_type='slurm
         if not valid:
             # if the controller errors 5 times in a row, its probably an unrecoverable error
             logging.info('SLURM controller not responding')
-            message = "## year_set {set} status change to {status}".format(set=year_set.set_number, status=year_set.status)
-            logging.info(message)
             return None
 
         # loop through the scontrol output looking for the JobState field
@@ -189,8 +181,6 @@ def monitor_job(job_id, job, job_set, event=None, debug=False, batch_type='slurm
             if debug:
                 print_message('Error parsing job output\n{0}'.format(out))
             logging.warning('Unable to parse scontrol output: %s', out)
-            message = "## year_set {set} status change to {status}".format(set=year_set.set_number, status=year_set.status)
-            logging.warning(message)
 
         if job_status == 'RUNNING':
             return JobStatus.RUNNING
@@ -237,8 +227,6 @@ def monitor_job(job_id, job, job_set, event=None, debug=False, batch_type='slurm
                     job.get_type(),
                     job_id)
                 job.status = JobStatus.FAILED
-                message = "## year_set {set} status change to {status}".format(set=year_set.set_number, status=year_set.status)
-                logging.error(message)
             error_count += 1
             if thread_sleep(5, event):
                 return
@@ -433,8 +421,6 @@ def filename_to_file_list_key(filename, output_pattern, date_pattern):
         msg = 'unable to find pattern {0} in {1}'.format(date_pattern, filename)
         print_message(msg)
         logging.error(msg)
-        message = "## year_set {set} status change to {status}".format(set=year_set.set_number, status=year_set.status)
-        logging.error(message)
         return ''
     # the YYYY field is 4 characters long, the month is two
     year_offset = index + 4
@@ -531,8 +517,6 @@ def check_slurm_job_submission(expected_name):
             sleep(1)
             error_count += 1
             logging.warning('Error checking job status for {0}'.format(expected_name))
-            message = "## year_set {set} status change to {status}".format(set=year_set.set_number, status=year_set.status)
-            logging.warning(message)
             continue
         for line in out:
             for word in line.split():

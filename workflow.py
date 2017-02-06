@@ -209,8 +209,7 @@ def setup(parser):
     return config
 
 
-def path_exists():
-    config_items = setup(parser)
+def path_exists(config_items):
     for k, v in config_items.items():
         for j, m in v.items():
             if j != 'output_pattern':
@@ -690,7 +689,8 @@ if __name__ == "__main__":
     try:
         while True:
             # Setup remote monitoring system
-            path_exists()
+            config_items = setup(parser)
+            path_exists(config_items)
             #stuff()
             if not all_data:
                 monitor_check(monitor)
