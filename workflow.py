@@ -53,8 +53,8 @@ logging.basicConfig(
     level=logging.DEBUG
 )
 
-@atexit.register
-def save_state():
+#@atexit.register
+def save_state(config, file_list, job_sets, file_name_list):
     state_path = config.get('state_path')
     if not state_path:
         print_message('no state path')
@@ -70,9 +70,11 @@ def save_state():
             json.dump(state, outfile)
     except IOError as e:
         logging.error("Error saving state file")
-        logging.error(format_debug(e))
-        # print_debug(e)
-        # print_message("Error saving state file")
+    for job_set in job_sets:
+        for job in job_set.jobs:
+            if job.status != JobStatus.COMPLETED:
+                job.status = JobStatus.UNVALIDATED
+                job.prevalidate(job, config)
 
 def setup(parser):
     """
@@ -121,6 +123,10 @@ def setup(parser):
                 print_message('saved file_list: \n{}'.format(pformat(sorted(file_list, cmp=file_list_cmp))))
                 print_message('saved job_sets: \n{}'.format(pformat(job_sets)))
                 print_message('saved config: \n{}'.format(pformat(config)))
+        for job_set in job_sets:
+            for job in job_set.jobs:
+                if hasattr(job, 'proc'):
+                    job.proc = None
 
     if not from_saved_state:
         required_fields = [
@@ -142,6 +148,9 @@ def setup(parser):
             "batch_system_type",
             "experiment",
         ]
+        if job.status is not JobStatus.COMPLETED:
+            job.status = JobStatus.UNVALIDATED
+            job.prevalidate(job, config)
         if args.config:
             try:
                 with open(args.config, 'r') as conf:
@@ -356,7 +365,7 @@ def monitor_check(monitor):
     if there are any new files, create new transfer jobs. If they're in a new job_set,
     spawn the jobs for that set.
 
-    inputs: 
+    inputs:
         monitor: a monitor object setup with a remote directory and an SSH session
     """
     global job_sets
@@ -794,7 +803,11 @@ if __name__ == "__main__":
         print "Error in setup, exiting"
         sys.exit(1)
 
-    # compute number of expected year sets
+    atexit.register(save_state, config, file_list, job_sets, file_name_list)
+    # check that all netCDF files exist
+    path_exists(config)
+
+    # compute number of expected year_sets
     sim_start_year = int(config.get('global').get('simulation_start_year'))
     sim_end_year = int(config.get('global').get('simulation_end_year'))
     number_of_sim_years = sim_end_year - (sim_start_year - 1)
@@ -909,3 +922,4 @@ if __name__ == "__main__":
         for t in thread_list:
             thread_kill_event.set()
             t.join()
+
