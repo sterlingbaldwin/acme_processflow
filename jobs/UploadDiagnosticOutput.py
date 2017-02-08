@@ -124,22 +124,21 @@ class UploadDiagnosticOutput(object):
                     self.config.get('username'),
                     self.config.get('password'))
             except Exception as e:
-                logging.error('Upload_Diagnostic unable error connecting to server')
-                message = "## Upload diagnostic job {set} unable to connect to server".format(set=self.job_id)
+                message = "## {type} job {id} unable to connect to server".format(
+                    id=self.job_id,
+                    type=self.type)
                 logging.error(message)
                 logging.error(format_debug(e))
                 return -1
             self.outputs['id'] = client_id
             try:
-                logging.info(
-                    '## uploading diagnostic package from %s',
-                    self.config.get('path_to_diagnostic')
-                )
+                message = '## uploading diagnostic package from {}'.format(
+                    self.config.get('path_to_diagnostic'))
+                logging.info(message)
                 dataset_id = client.upload_package(self.config.get('path_to_diagnostic'))
             except Exception as e:
-                logging.error('Error uploading diagnostic set to server')
                 logging.error(format_debug(e))
-                message = "## Uploading diagnostic job {set} has failed".format(set=self.job_id)
+                message = "## {type}: {id} has failed".format(id=self.job_id, type=self.type)
                 logging.info(message)
                 return -1
             self.outputs['dataset_id'] = dataset_id
@@ -182,29 +181,30 @@ except Exception as e:\n\
             started = False
             retry_count = 0
             while not started and retry_count < 5:
-                message = "## year_set {set} status change to {status}".format(set=self.year_set, status=self.status)
-                logging.info(message)
-                logging.info('Starting upload_diag')
                 self.proc = Popen(slurm_cmd, stdout=PIPE, stderr=PIPE)
                 output, err = self.proc.communicate()
                 # print_message('upload job output:\n {0}\nerr: {1}'.format(output, err))
                 started, job_id = check_slurm_job_submission(expected_name)
                 if started:
                     self.status = JobStatus.RUNNING
-                    logging.info('Started upload_diag job with job_id %s', job_id)
-                    message = "## Diagnostic job {set} status change to {status}".format(set=self.job_id, status=self.status)
+                    message = "## {type} id: {id} status change to {status}".format(
+                        type=self.type,
+                        id=self.job_id,
+                        status=self.status)
                     logging.info(message)
                     self.job_id = job_id
                 elif retry_count >= 5:
-                    logging.warning("Failed starting upload_diag job\n%s", output)
-                    message = "## Upload changed to FAIL"
-                    logging.warning(message)
-                    print_message("Failed starting upload_diag job")
-                    print_message(output)
+                    logging.error(output)
+
+                    self.status = JobStatus.FAILED
+                    message = "## {type} id: {id} status change to {status}".format(
+                        type=self.type,
+                        id=self.job_id,
+                        status=self.status)
+                    logging.error(message)
                     return 0
                 else:
                     logging.warning('Error starting job trying again, attempt %s', str(retry_count))
-                    print_message('Error starting job, trying again')
                     retry_count += 1
                     sleep(5)
                     continue

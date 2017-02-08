@@ -24,7 +24,7 @@ from util import print_debug
 from util import print_message
 from util import filename_to_year_set
 from util import format_debug
-
+from JobStatus import JobStatus
 
 class Transfer(object):
     """
@@ -32,7 +32,7 @@ class Transfer(object):
     """
     def __init__(self, config=None):
         self.config = {}
-        self.status = 'unvalidated'
+        self.status = JobStatus.INVALID
         self.type = 'transfer'
         self.outputs = {
             "status": self.status
@@ -95,7 +95,7 @@ class Transfer(object):
         """
         Validates transfer inputs
         """
-        if self.status == 'valid':
+        if self.status == JobStatus.VALID:
             return 0
         for i in config:
             if i not in self.inputs:
@@ -117,9 +117,9 @@ class Transfer(object):
                     self.config[i] = False
                 else:
                     print_message('Missing transfer argument {}'.format(i))
-                    self.status = 'invalid'
+                    self.status = JobStatus.INVALID
                     return -1
-        self.status = 'valid'
+        self.status = JobStatus.VALID
         # the maximum number of files to transfer at one time, set to a single year_set assuming 12 files per year
         # self.maximum_transfers = self.config.get('frequency') * 12
         self.maximum_transfers = 10
@@ -159,35 +159,8 @@ class Transfer(object):
                     return dstpath + basename
         return dstpath
 
-    def move_file_locally(self, file_name):
-        """
-        After the files have been moved from the remote host, they need to be moved
-        out of their temprary directory to their final destination. This should be run from
-        its own thread to not stop the rest of the program
-        """
-        logging.info('Moving file locally %s', file_name)
-        # check that a folder for this year set exists, if not make one
-        new_path = self.config.get('final_destination_path')
-        if not os.path.exists(new_path):
-            os.mkdir(new_path)
-
-        src = os.path.join(self.config.get('destination_path'), file_name)
-        # copy the file to the final destination
-        try:
-            copy(src=src, dst=new_path)
-        except Exception as e:
-            logging.error('Error moving file from %s to %s', src, new_path)
-            logging.error(format_debug(e))
-
-        # remove the old files
-        try:
-            os.remove(src)
-        except Exception as e:
-            logging.error('Error removing file %s', src)
-            logging.error(format_debug(e))
-
     def execute(self):
-        if self.status != 'valid':
+        if self.status != JobStatus.VALID:
             logging.error('Transfer job in invalid state')
             logging.error(str(self))
             return
@@ -217,7 +190,7 @@ class Transfer(object):
                 break
         if not successful_activation:
             logging.error('Unable to activate source endpoint after five attempts, exiting')
-            self.status = 'error'
+            self.status = JobStatus.FAILED
             return
 
         successful_activation = False
@@ -234,7 +207,7 @@ class Transfer(object):
                 break
         if not successful_activation:
             logging.error('Unable to activate destination endpoint after five attempts, exiting')
-            self.status = 'error'
+            self.status = JobStatus.FAILED
             return
 
         try:
@@ -245,14 +218,14 @@ class Transfer(object):
         except Exception as e:
             logging.error('Error creating transfer task')
             logging.error(format_debug(e))
-            self.status = 'error'
+            self.status = JobStatus.FAILED
             return
 
         # only add the first n transfers up to the max
         source_list = self.config.get('file_list')[:self.maximum_transfers]
         if not source_list:
             logging.error('Unable to transfer files without a source list')
-            self.status = 'error'
+            self.status = JobStatus.FAILED
             return
         try:
             for path in source_list:
@@ -267,7 +240,7 @@ class Transfer(object):
         except IOError as e:
             logging.error('Error opening source list')
             logging.error(format_debug(e))
-            self.status = 'error'
+            self.status = JobStatus.FAILED
             return
 
         # Start the transfer
@@ -292,28 +265,13 @@ class Transfer(object):
             # moved to their final destination
             if data['status'] == 'SUCCEEDED':
                 logging.info('progress %d/%d', data['files_transferred'], data['files'])
-                # if data['files_transferred'] > number_transfered:
-                #     directory_contents = os.listdir(self.config.get('destination_path'))
-                #     for f in directory_contents:
-                #         if f in self.config.get('file_list') and f not in files_transferred:
-                #             files_transferred.append(f)
-                #             number_transfered = data['files_transferred']
-                #             self.move_file_locally(file_name=f)
-                self.status = 'COMPLETED'
+                self.status = JobStatus.COMPLETED
                 return ('success', '')
             elif data['status'] == 'FAILED':
                 logging.error('Error transfering files %s', data.get('nice_status_details'))
-                self.status = 'error'
+                self.status = JobStatus.FAILED
                 return ('error', data['nice_status_details'])
 
             elif data['status'] == 'ACTIVE':
                 logging.info('progress %d/%d', data['files_transferred'], data['files'])
-                # if data['files_transferred'] > number_transfered:
-                #     directory_contents = os.listdir(self.config.get('destination_path'))
-                #     for f in directory_contents:
-                #         if f in self.config.get('file_list') and f not in files_transferred:
-                #             files_transferred.append(f)
-                #             number_transfered = data['files_transferred']
-                #             thread = threading.Thread(target=self.move_file_locally, args=(f))
-                #             thread.start()
             time.sleep(10)

@@ -133,19 +133,24 @@ class Climo(object):
                 if started:
                     self.status = JobStatus.RUNNING
                     self.job_id = job_id
-                    logging.info('## Starting climo job with job_id %s', job_id)
+                    message = '## {type} id: {id} changed state to {state}'.format(
+                        type=self.get_type(),
+                        id=self.job_id,
+                        state=self.status)
+                    logging.info(message)
 
-                elif retry_count <= 0:
-                    message = "## Error starting job {set}".format(set=self.job_id)
-                    logging.error(message)
-                    print_message("Error starting climo job")
-                    self.job_id = 0
-                    break
                 else:
-                    logging.warning('Failed to start job trying again, attempt %s', str(retry_count))
-                    print_message('Failed to start job, trying again')
+                    logging.warning('Error starting climo job, trying again attempt %s', str(retry_count))
                     retry_count += 1
-                    continue
+
+            if retry_count >= 5:
+                self.status = JobStatus.FAILED
+                message = '## {type} id: {id} changed state to {state}'.format(
+                    type=self.get_type(),
+                    id=self.job_id,
+                    state=self.status)
+                logging.info(message)
+                self.job_id = 0
             return self.job_id
 
     def set_status(self, status):
