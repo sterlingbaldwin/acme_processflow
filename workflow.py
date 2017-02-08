@@ -132,8 +132,10 @@ def setup(parser):
                 with open(args.state, 'r') as statefile:
                     state = json.load(statefile)
                 if debug:
-                    print_message('Loading from saved state {}'.format(args.state))
+                    print_message('Loading from saved state {}'.format(args.state), 'ok')
                     logging.info('Loading from saved state {}'.format(args.state))
+                    message = "## year_set {set} status change to {status}".format(set=year_set.set_number, status=year_set.status)
+                    logging.info(message)
                 config = state.get('config')
                 file_list = state.get('file_list')
                 job_sets = state.get('job_sets')
@@ -174,8 +176,12 @@ def setup(parser):
                 with open(args.config, 'r') as conf:
                     config.update(json.load(conf))
             except Exception as e:
-                logging.error('Unable to read config file, is it properly formatted json?')
+                msg = 'Unable to read config file, is it properly formatted json?'
+                print_message(msg)
+                logging.error(msg)
                 logging.error(format_debug(e))
+                message = "## year_set {set} status change to {status}".format(set=year_set.set_number, status=year_set.status)
+                logging.info(message)
                 return -1
 
             for field in required_fields:
@@ -205,6 +211,8 @@ def setup(parser):
                         msg = 'Unable to parse output_pattern {}, exiting'.format(output_pattern)
                         print_message(msg)
                         logging.error(msg)
+                        message = "## year_set {set} status change to {status}".format(set=year_set.set_number, status=year_set.status)
+                        logging.error(message)
                         sys.exit(1)
         else:
             parser.print_help()
@@ -215,9 +223,22 @@ def setup(parser):
                     config[field] = getpass('{0}: '.format(field))
                 else:
                     config[field] = raw_input('{0}: '.format(field))
-    print config
-    sys.exit()
     return config
+
+
+def path_exists(config_items):
+    for k, v in config_items.items():
+        if type(v) != dict:
+            continue
+        for j, m in v.items():
+            if j != 'output_pattern':
+                if str(m).endswith('.nc'):
+                    if os.path.exists(m):
+                        print(m)
+                    else: 
+                        print "File {key}: {value} does not exist, exiting.".format(key=j, value=m)
+                        sys.exit(1)
+
 
 def add_jobs(year_set):
     """
@@ -241,6 +262,8 @@ def add_jobs(year_set):
         if not os.path.exists(climo_output_dir):
             if debug:
                 logging.info("Creating climotology output directory {}".format(climo_output_dir))
+                message = "## year_set {set} status change to {status}".format(set=year_set.set_number, status=year_set.status)
+                logging.info(message)
             os.makedirs(climo_output_dir)
         regrid_output_dir = os.path.join(config.get('global').get('output_path'), 'regrid')
         if not os.path.exists(regrid_output_dir):
@@ -277,8 +300,10 @@ def add_jobs(year_set):
             'ncclimo_path': config.get('ncclimo').get('ncclimo_path')
         }
         climo = Climo(climo_config)
-        msg = 'Adding Ncclimo job to the job list with config: {}'.format(str(climo_config))
+        msg = 'Adding Ncclimo job to the job list: {}'.format(str(climo))
         logging.info(msg)
+        message = "## year_set {set} status change to {status}".format(set=year_set.set_number, status=year_set.status)
+        logging.info(message)
         year_set.add_job(climo)
 
     # init the diagnostic job
@@ -294,10 +319,23 @@ def add_jobs(year_set):
         diag_temp_dir = os.path.join(os.getcwd(), 'tmp', 'diag', year_set_str)
         if not os.path.exists(diag_temp_dir):
             os.makedirs(diag_temp_dir)
-        create_symlink_dir(
-            src_dir=regrid_output_dir,
-            src_list=climo_file_list,
-            dst=diag_temp_dir)
+
+        # diag_file_list_tmp = [s for s in os.listdir(regrid_output_dir) if not os.path.islink(s)]
+        # diag_file_list = []
+        # for d_file in diag_file_list_tmp:
+        #     start_index = re.search(r'\_\d\d\d\d', d_file).start() + 1
+        #     start_year = int(d_file[start_index: start_index + 4])
+
+        #     end_index = re.search(r'\_\d\d\d\d', d_file[start_index:]).start() + start_index + 1
+        #     end_year = int(d_file[end_index: end_index + 4])
+
+        #     if start_year == year_set.set_start_year and end_index == year_set.set_end_year:
+        #         diag_file_list.append(d_file)
+
+        # create_symlink_dir(
+        #     src_dir=regrid_output_dir,
+        #     src_list=diag_file_list,
+        #     dst=diag_temp_dir)
         # create the configuration object for the diag job
         diag_config = {
             '--model': diag_temp_dir,
@@ -307,53 +345,60 @@ def add_jobs(year_set):
             '--set': '5',
             '--archive': 'False',
             'year_set': year_set.set_number,
-            'depends_on': [len(year_set.jobs) - 1] # set the diag job to wait for the climo job to finish befor running
+            'start_year': year_set.set_start_year,
+            'end_year': year_set.set_end_year,
+            'depends_on': [len(year_set.jobs) - 1], # set the diag job to wait for the climo job to finish befor running
+            'regrid_path': regrid_output_dir,
+            'diag_temp_dir': diag_temp_dir
         }
         diag = Diagnostic(diag_config)
-        msg = 'Adding Diagnostic job to the job list with config: {}'.format(str(diag_config))
+        msg = 'Adding Diagnostic to the job list: {}'.format(str(diag))
         logging.info(msg)
+        message = "## year_set {set} status change to {status}".format(set=year_set.set_number, status=year_set.status)
+        logging.info(message)
         year_set.add_job(diag)
 
-        """
-        coupled_project_dir = os.path.join(os.getcwd(), 'coupled_daigs', str(job_set.get('year_set')))
-        if not os.path.exists(coupled_project_dir):
-            os.makedirs(coupled_project_dir)
-        coupled_diag_config = {
-            'coupled_project_dir': coupled_project_dir,
-            'test_casename': config.get('global').get('experiment'),
-            'test_native_res': config.get('primary_diags').get('test_native_res'),
-            'test_archive_dir': diag_temp_dir,
-            'test_begin_yr_climo': job_set.get('set_start_year'),
-            'test_end_yr_climo': job_set.get('set_end_year'),
-            'test_begin_yr_ts': job_set.get('set_start_year'),
-            'test_end_yr_ts': job_set.get('set_end_year'),
-            'ref_case': config.get('primary_diags').get('obs'),
-            'ref_archive_dir': config.get('meta_diags').get('obs_for_diagnostics_path'),
-            'mpas_meshfile': config.get('primary_diags').get('mpas_meshfile'),
-            'mpas_remapfile': config.get('primary_diags').get('mpas_remapfile'),
-            'pop_remapfile': config.get('primary_diags').get('pop_remapfile'),
-            'remap_files_dir': config.get('primary_diags').get('remap_files_dir'),
-            'GPCP_regrid_wgt_file': config.get('primary_diags').get('GPCP_regrid_wgt_file'),
-            'CERES_EBAF_regrid_wgt_file': config.get('primary_diags').get('CERES_EBAF_regrid_wgt_file'),
-            'ERS_regrid_wgt_file': config.get('primary_diags').get('ERS_regrid_wgt_file'),
-            'coupled_home_directory': '/export/baldwin32/projects/PreAndPostProcessing/coupled_diags',
-            'coupled_template_path': os.path.join(os.getcwd(), 'resources', 'run_AIMS_template.csh'),
-            'rendered_output_path': os.path.join(coupled_project_dir, 'run_AIMS.csh'),
-            'obs_ocndir': config.get('primary_diags').get('obs_ocndir'),
-            'obs_seaicedir': config.get('primary_diags').get('obs_seaicedir'),
-            'obs_sstdir': config.get('primary_diags').get('obs_sstdir'),
-            'obs_iceareaNH': config.get('primary_diags').get('obs_iceareaNH'),
-            'obs_iceareaSH': config.get('primary_diags').get('obs_iceareaSH'),
-            'obs_icevolNH': config.get('primary_diags').get('obs_icevolNH'),
-            'obs_icevolSH': 'None',
-            'depends_on': [len(job_set['jobs']) - 2],
-            'yr_offset': config.get('primary_diags').get('yr_offset')
-        }
-        job = PrimaryDiagnostic(coupled_diag_config)
-        print_message(str(job))
-        job.execute()
-        sys.exit(1)
-        """
+        # coupled_project_dir = os.path.join(os.getcwd(), 'coupled_daigs', str(year_set.set_number))
+        # if not os.path.exists(coupled_project_dir):
+        #     os.makedirs(coupled_project_dir)
+        # g_config = config.get('global')
+        # p_config = config.get('primary_diags')
+        # coupled_diag_config = {
+        #     'coupled_project_dir': coupled_project_dir,
+        #     'test_casename': g_config.get('experiment'),
+        #     'test_native_res': p_config.get('test_native_res'),
+        #     'test_archive_dir': diag_temp_dir,
+        #     'test_begin_yr_climo': year_set.set_start_year,
+        #     'test_end_yr_climo': year_set.set_end_year,
+        #     'test_begin_yr_ts': year_set.set_start_year,
+        #     'test_end_yr_ts': year_set.set_end_year,
+        #     'ref_case': p_config.get('obs'),
+        #     'ref_archive_dir': config.get('meta_diags').get('obs_for_diagnostics_path'),
+        #     'mpas_meshfile': p_config.get('mpas_meshfile'),
+        #     'mpas_remapfile': p_config.get('mpas_remapfile'),
+        #     'pop_remapfile': p_config.get('pop_remapfile'),
+        #     'remap_files_dir': p_config.get('remap_files_dir'),
+        #     'GPCP_regrid_wgt_file': p_config.get('GPCP_regrid_wgt_file'),
+        #     'CERES_EBAF_regrid_wgt_file': p_config.get('CERES_EBAF_regrid_wgt_file'),
+        #     'ERS_regrid_wgt_file': p_config.get('ERS_regrid_wgt_file'),
+        #     'coupled_home_directory': p_config.get('coupled_home_directory'),
+        #     'coupled_template_path': os.path.join(os.getcwd(), 'resources', 'run_AIMS_template.csh'),
+        #     'rendered_output_path': os.path.join(coupled_project_dir, 'run_AIMS.csh'),
+        #     'obs_ocndir': p_config.get('obs_ocndir'),
+        #     'obs_seaicedir': p_config.get('obs_seaicedir'),
+        #     'obs_sstdir': p_config.get('obs_sstdir'),
+        #     'obs_iceareaNH': p_config.get('obs_iceareaNH'),
+        #     'obs_iceareaSH': p_config.get('obs_iceareaSH'),
+        #     'obs_icevolNH': p_config.get('obs_icevolNH'),
+        #     'obs_icevolSH': 'None',
+        #     'depends_on': [len(year_set.jobs) - 2],
+        #     'yr_offset': p_config.get('yr_offset')
+        # }
+        # job = PrimaryDiagnostic(coupled_diag_config)
+        # print_message(str(job))
+        # job.execute()
+        # sys.exit(1)
+
     # init the upload job
     if not required_jobs['upload_diagnostic_output']:
         upload_config = {
@@ -364,7 +409,10 @@ def add_jobs(year_set):
             'depends_on': [len(year_set.jobs) - 1] # set the upload job to wait for the diag job to finish
         }
         upload = UploadDiagnosticOutput(upload_config)
-        msg = 'Adding Upload job to the job list with config: {}'.format(str(upload_config))
+
+        msg = 'Adding Upload job to the job list: {}'.format(str(upload))
+        logging.info(message)
+
         logging.info(msg)
         year_set.add_job(upload)
 
@@ -460,9 +508,9 @@ def monitor_check(monitor):
         'pattern': config.get('global').get('output_pattern'),
         'ncclimo_path': config.get('ncclimo').get('ncclimo_path')
     }
-    logging.info('## Starting transfer with config: %s', pformat(transfer_config))
-    print_message('Starting file transfer', 'ok')
     transfer = Transfer(transfer_config)
+    logging.info('## Starting transfer %s with config: %s', transfer.uuid, pformat(transfer_config))
+    print_message('Starting file transfer', 'ok')
     thread = threading.Thread(target=handle_transfer, args=(transfer, checked_new_files, thread_kill_event))
     thread_list.append(thread)
     thread.start()
@@ -486,13 +534,13 @@ def handle_transfer(transfer_job, f_list, event):
     active_transfers -= 1
 
     if transfer_job.status != JobStatus.COMPLETED:
-        logging.error('Failed to complete transfer job\n  %s', pformat(str(transfer_job)))
-        message = "Transfer: {set} has failed".format(set=transfer_job.transfer_id)
+        print_message("File transfer failed")
+        message = "## Transfer {uuid} has failed".format(uuid=transfer_job.uuid)
         logging.error(message)
         return
     else:
-        print_message('Finished file transfer')
-        message = "## Transfer with id {id} {set} has completed".format(set=transfer_job.transfer_id, id=transfer_job.uuid)
+        print_message('Finished file transfer', 'ok')
+        message = "## Transfer {uuid} has completed".format(uuid=transfer_job.uuid)
         logging.info(message)
 
     # update the file_list all the files that were transferred
@@ -522,12 +570,16 @@ def cleanup():
     Clean up temp files created during the run
     """
     logging.info('Cleaning up temp directories')
+    message = "## year_set {set} status change to {status}".format(set=year_set.set_number, status=year_set.status)
+    logging.info(message)
     try:
         cwd = os.getcwd()
         tmp_path = os.path.join(cwd, 'tmp')
         rmtree(tmp_path)
     except Exception as e:
         logging.error(format_debug(e))
+        message = "## year_set {set} status change to {status}".format(set=year_set.set_number, status=year_set.status)
+        logging.error(message)
         print_message('Error removing temp directories')
 
     try:
@@ -538,6 +590,8 @@ def cleanup():
         move(run_script_path, archive_path)
     except Exception as e:
         logging.error(format_debug(e))
+        message = "## year_set {set} status change to {status}".format(set=year_set.set_number, status=year_set.status)
+        logging.error(message)
         print_message('Error archiving run_scripts directory')
 
 
@@ -568,6 +622,7 @@ if __name__ == "__main__":
         print "Error in setup, exiting"
         sys.exit(1)
 
+    path_exists(config)
     # compute number of expected year sets
     sim_start_year = int(config.get('global').get('simulation_start_year'))
     sim_end_year = int(config.get('global').get('simulation_end_year'))
@@ -696,13 +751,11 @@ if __name__ == "__main__":
             if is_all_done():
                 # cleanup()
                 print_message('All processing complete')
-                logging.info(" ## All processes complete, exiting")
+                logging.info("## All processes complete")
                 sys.exit(0)
             sleep(10)
     except KeyboardInterrupt as e:
         print_message('----- KEYBOARD INTERUPT -----')
-        if config.get('state_path'):
-            save_state()
         print_message('cleaning up threads', 'ok')
         for t in thread_list:
             thread_kill_event.set()

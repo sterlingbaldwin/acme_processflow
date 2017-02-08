@@ -2,6 +2,7 @@
 # pylint: disable=C0111
 # pylint: disable=C0301
 import os
+import re
 import shutil
 import json
 import logging
@@ -15,6 +16,7 @@ from subprocess import Popen, PIPE
 from util import print_debug
 from util import print_message
 from util import check_slurm_job_submission
+from util import create_symlink_dir
 from JobStatus import JobStatus
 
 class Diagnostic(object):
@@ -27,7 +29,7 @@ class Diagnostic(object):
         self.proc = None
         self.type = 'diagnostic'
         self.status = JobStatus.INVALID
-        self.yearset = config.get('yearset', 0)
+        self.year_set = config.get('year_set', 0)
         self.uuid = uuid4().hex
         self.depends_on = []
         self.job_id = 0
@@ -38,7 +40,11 @@ class Diagnostic(object):
             '--package': '',
             '--set': '',
             '--archive': '',
-            'depends_on': ''
+            'depends_on': '',
+            'regrid_path': '',
+            'diag_temp_dir': '',
+            'start_year': '',
+            'end_year':''
         }
         self.outputs = {
             'output_path': '',
@@ -88,16 +94,64 @@ class Diagnostic(object):
     def set_status(self, status):
         self.status = status
 
+    def setup_input_directory(self):
+        regrid_path = self.config.get('regrid_path')
+        diag_temp_path = self.config.get('diag_temp_dir')
+        set_start_year = self.config.get('start_year')
+        set_end_year = self.config.get('end_year')
+        if not regrid_path or not os.path.exists(regrid_path):
+            self.status = JobStatus.INVALID
+            return -1
+        if not diag_temp_path or not os.path.exists(diag_temp_path):
+            self.status = JobStatus.INVALID
+            return -1
+
+        diag_file_list_tmp = [s for s in os.listdir(regrid_path) if not os.path.islink(s)]
+        diag_file_list = []
+        for d_file in diag_file_list_tmp:
+            start_search = re.search(r'\_\d\d\d\d', d_file)
+            if not start_search:
+                continue
+            start_index = start_search.start() + 1
+            start_year = int(d_file[start_index: start_index + 4])
+
+            end_search = re.search(r'\_\d\d\d\d', d_file[start_index:])
+            if not end_search:
+                continue
+            end_index = end_search.start() + start_index + 1
+            end_year = int(d_file[end_index: end_index + 4])
+
+            print start_year, end_year
+            if start_year == set_start_year and end_year == set_end_year:
+                diag_file_list.append(d_file)
+
+        print diag_file_list
+
+        create_symlink_dir(
+            src_dir=regrid_path,
+            src_list=diag_file_list,
+            dst=diag_temp_path)
+        return 0
+
     def execute(self, batch=False):
         """
         Executes the diagnostic job.
         If archive is set to True, will create a tarbal of the output directory
         """
-        dataset_name = time.strftime("%d-%m-%Y") + '-year-set-' + str(self.yearset) + '-' + self.uuid
+        if self.setup_input_directory() == -1:
+            return
+
+        dataset_name = time.strftime("%d-%m-%Y") + '-year-set-' + str(self.year_set) + '-' + self.uuid
         cmd = ['metadiags', '--dsname', dataset_name]
-        for i in self.config:
-            if i == '--archive':
-                continue
+
+        cmd_config = {
+            '--model': self.config.get('--model'),
+            '--obs': self.config.get('--obs'),
+            '--outputdir': self.config.get('--outputdir'),
+            '--package': self.config.get('--package'),
+            '--set': self.config.get('--set'),
+        }
+        for i in cmd_config:
             cmd.append(i)
             cmd.append(self.config[i])
         cmd = ' '.join(cmd)
@@ -158,21 +212,22 @@ class Diagnostic(object):
                 if started:
                     self.status = JobStatus.RUNNING
                     self.job_id = job_id
-                    message = "## year_set {set} status change to {status}".format(set=self.yearset, status=self.status)
+                    message = "## year_set {set} status change to {status}".format(
+                        set=self.year_set,
+                        status=self.status)
                     logging.info(message)
-                    # print_message('+++++ STARTING CLIMO JOB {0} +++++'.format(self.job_id))
-                elif retry_count <= 0:
-                    print_message("Error starting diagnostic job")
-                    print_message(output)
-                    self.job_id = 0
-                    break
                 else:
-                    logging.warning('Failed to start job trying again, attempt %s', str(retry_count))
-                    message = "## year_set {set} status change to {status}".format(set=self.yearset, status=self.status)
-                    logging.warning(message)
-                    print_message('Failed to start job, trying again')
+                    logging.warning('Failed to start diag job trying again, attempt %s', str(retry_count))
+                    logging.warning('%s \n%s', output, err)
                     retry_count += 1
-                    continue
+
+            if retry_count >= 5:
+                self.status = JobStatus.FAILED
+                message = "## year_set {set} status change to {status}".format(
+                    set=self.year_set,
+                    status=self.status)
+                logging.error(message)
+                self.job_id = 0
             return self.job_id
 
         if self.config['--archive'] == 'True':

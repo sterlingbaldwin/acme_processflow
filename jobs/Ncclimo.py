@@ -133,25 +133,24 @@ class Climo(object):
                 if started:
                     self.status = JobStatus.RUNNING
                     self.job_id = job_id
-                    logging.info('Starting climo job with job_id %s', job_id)
-                    message = "## year_set {set} status change to {status}".format(set=self.year_set, status=self.status)
+                    message = '## {type} id: {id} changed state to {state}'.format(
+                        type=self.get_type(),
+                        id=self.job_id,
+                        state=self.status)
                     logging.info(message)
-                    # print_message('+++++ STARTING CLIMO JOB {0} +++++'.format(self.job_id))
-                elif retry_count <= 0:
-                    logging.warning("Error starting climo job\n%s", output)
-                    message = "## Error starting job {set}".format(set=self.job_id)
-                    logging.warning(message)
-                    print_message("Error starting climo job")
-                    print_message(output)
-                    self.job_id = 0
-                    break
+
                 else:
-                    logging.warning('Failed to start job trying again, attempt %s', str(retry_count))
-                    message = "## year_set {set} status change to {status}".format(set=self.year_set, status=self.status)
-                    logging.warning(message)
-                    print_message('Failed to start job, trying again')
+                    logging.warning('Error starting climo job, trying again attempt %s', str(retry_count))
                     retry_count += 1
-                    continue
+
+            if retry_count >= 5:
+                self.status = JobStatus.FAILED
+                message = '## {type} id: {id} changed state to {state}'.format(
+                    type=self.get_type(),
+                    id=self.job_id,
+                    state=self.status)
+                logging.info(message)
+                self.job_id = 0
             return self.job_id
 
     def set_status(self, status):
@@ -199,18 +198,33 @@ class Climo(object):
 
         # after checking that the job is valid to run,
         # check if the output already exists and the job actually needs to run
-    #    if os.path.exists(self.config.get('climo_output_directory')):
-    #        contents = os.listdir(self.config.get('climo_output_directory'))
-    #        if len(contents) <= 10:
-    #            return 0
-    #        else:
-    #            for i in contents:
-    #                if os.path.isdir(self.config.get('climo_output_directory') + '/' + i):
-    #                    continue
-    #                if not re.match(self.config.get('caseId'), i):
-    #                    return 0
-    #            self.status = 'COMPLETED'
-        return 0
+        if os.path.exists(self.config.get('climo_output_directory')):
+            set_start_year = self.config.get('start_year')
+            set_end_year = self.config.get('end_year')
+            contents = os.listdir(self.config.get('climo_output_directory'))
+
+            file_list_tmp = [s for s in contents if not os.path.isdir(s)]
+            file_list = []
+            for file in file_list_tmp:
+                start_search = re.search(r'\_\d\d\d\d', file)
+                if not start_search:
+                    continue
+                start_index = start_search.start() + 1
+                start_year = int(file[start_index: start_index + 4])
+
+                end_search = re.search(r'\_\d\d\d\d', file[start_index:])
+                if not end_search:
+                    continue
+                end_index = end_search.start() + start_index + 1
+                end_year = int(file[end_index: end_index + 4])
+
+                if start_year == set_start_year and end_year == set_end_year:
+                    file_list.append(file)
+
+            if len(file_list) >= 17:
+                self.status = JobStatus.COMPLETED
+                print_message('Ncclimo job already computed, skipping')
+            return 0
 
     def postvalidate(self):
         """

@@ -58,12 +58,14 @@ def check_year_sets(job_sets, file_list, sim_start_year, sim_end_year, debug, ad
 
 def start_ready_job_sets(job_sets, thread_list, debug, event):
     """
-    Iterates over the job sets, and starts ready jobs
-    """
-    # iterate over the job_sets
-    if debug:
-        print_message('=== Checking for ready jobs ===', 'ok')
+    Iterates over the job sets checking for ready ready jobs, and starts them
 
+    input:
+        job_sets: a list of YearSets,
+        thread_list: the list of currently running threads,
+        debug: boolean debug flag,
+        event: an event to pass to any threads we start so we can destroy them if needed
+    """
     for job_set in job_sets:
         # if the job state is ready, but hasnt started yet
         if debug:
@@ -83,19 +85,22 @@ def start_ready_job_sets(job_sets, thread_list, debug, event):
 
                 if job.get_type() == 'climo' and job.status == JobStatus.VALID:
                     # for debug purposes only
-                    job.status = JobStatus.COMPLETED
-                    return
+                    # job.status = JobStatus.COMPLETED
+                    # return
 
                     job_id = job.execute(batch=True)
-                    job_set.status = SetStatus.RUNNING
                     job.set_status(JobStatus.SUBMITTED)
-                    print_message('Submitted Ncclimo for year_set {}'.format(job_set.set_number))
-                    message = "## job_set {set} status change to {status}".format(set=job_set.set_number, status=job_set.status)
-                    logging.info(message)
-                    message = "## {job}: {id} status changed to {status}".format(job=job.get_type(), id=job.job_id, status=job.status)
+                    print_message('Submitted Ncclimo for year_set {}'.format(job_set.set_number), 'ok')
+
+                    message = "## {job} id: {id} status changed to {status}".format(
+                        job=job.get_type(),
+                        id=job.job_id,
+                        status=job.status)
                     logging.info(message)
 
-                    thread = threading.Thread(target=monitor_job, args=(job_id, job, job_set, event))
+                    thread = threading.Thread(
+                        target=monitor_job,
+                        args=(job_id, job, job_set, event))
                     thread_list.append(thread)
                     thread.start()
                     return
@@ -110,23 +115,25 @@ def start_ready_job_sets(job_sets, thread_list, debug, event):
 
                     if ready:
                         job_id = job.execute(batch=True)
-
                         job.set_status(JobStatus.SUBMITTED)
-
-                        message = "## year_set {set} status change to {status}".format(set=job_set.set_number, status=job_set.status)
-                        logging.info(message)
-                        message = "## {job}: {id} status changed to {status}".format(job=job.get_type(), id=job.job_id, status=job.status)
+                        message = "## {job}: {id} status changed to {status}".format(
+                            job=job.get_type(),
+                            id=job.job_id,
+                            status=job.status)
                         logging.info(message)
                         print_message(message, 'ok')
 
-
-                        thread = threading.Thread(target=monitor_job, args=(job_id, job, job_set, event, debug))
+                        thread = threading.Thread(
+                            target=monitor_job,
+                            args=(job_id, job, job_set, event, debug))
                         thread_list.append(thread)
                         thread.start()
                         return
                 elif job.status == 'invalid':
-                    logging.error('Job in invalid state: \n%s', pformat(str(job)))
-                    message = "UploadDiagnosticJob: {set} status changed to {status}".format(set=job.job_id, status=status)
+                    message = "{type} id: {id} status changed to {status}".format(
+                        id=job.job_id,
+                        status=job.status,
+                        type=job.get_type())
                     logging.error(message)
                     print_message('===== INVALID JOB =====\n{}'.format(str(job)))
 
@@ -158,7 +165,7 @@ def monitor_job(job_id, job, job_set, event=None, debug=False, batch_type='slurm
 
         if not valid:
             # if the controller errors 5 times in a row, its probably an unrecoverable error
-            logging.info('SLURM controller not responding')
+            logging.error('SLURM controller not responding')
             return None
 
         # loop through the scontrol output looking for the JobState field
@@ -222,11 +229,12 @@ def monitor_job(job_id, job, job_set, event=None, debug=False, batch_type='slurm
         if not status:
             if error_count <= 10:
                 logging.error('Unable to communicate to controller after 10 attempts')
-                logging.error(
-                    'Setting %s job with job_id %s to status FAILED',
-                    job.get_type(),
-                    job_id)
                 job.status = JobStatus.FAILED
+                message = "## {job}: {id} status changed to {status}".format(
+                    job=job.get_type(),
+                    id=job.job_id,
+                    status=job.status)
+                logging.error(message)
             error_count += 1
             if thread_sleep(5, event):
                 return
@@ -242,27 +250,18 @@ def monitor_job(job_id, job, job_set, event=None, debug=False, batch_type='slurm
             if status == JobStatus.FAILED:
                 print_message('Job {0} has failed'.format(job_id))
 
-            logging.info(
-                'Setting %s job with job_id %s to status %s',
-                job.get_type(),
-                job_id,
-                status)
-            message = "## UploadDiagnosticJob: {set} status changed to {status}".format(set=job.job_id, status=status)
-            logging.info(message)
             job.status = status
-            if status == JobStatus.RUNNING:
+            message = "## {type}: {id} status changed to {status}".format(
+                id=job.job_id,
+                status=status,
+                type=job.get_type())
+            logging.info(message)
+
+            if status == JobStatus.RUNNING and job_set.status != SetStatus.RUNNING:
                 job_set.status = SetStatus.RUNNING
 
         # if the job is done, or there has been an error, exit
         if status == JobStatus.COMPLETED:
-            logging.info(
-                '%s job  with job_id %s completed',
-                job.get_type(),
-                job_id)
-
-            message = "## UploadDiagnosticJob: {set} status changed to {status}".format(set=job.job_id, status=status)
-            logging.info(message)
-
             job_set_done = True
             for job in job_set.jobs:
                 if job.status != JobStatus.COMPLETED:
@@ -272,15 +271,11 @@ def monitor_job(job_id, job, job_set, event=None, debug=False, batch_type='slurm
             if job_set_done:
                 job_set.status = SetStatus.COMPLETED
             return
-        if status == JobStatus.FAILED:
-            logging.info(
-                '%s job  with job_id %s FAILED',
-                job.get_type(),
-                job_id)
 
-            message = "## UploadDiagnosticJob: {set} status changed to {status}".format(set=job.job_id, status=status)
-            logging.info(message)
+        if status == JobStatus.FAILED:
+            job_set.status == SetStatus.FAILED
             return
+
         # wait for 10 seconds, or if the kill_thread event has been set, exit
         if thread_sleep(10, event):
             return
@@ -399,7 +394,6 @@ def render(variables, input_path, output_path, delimiter):
                 else:
                     continue
         else:
-            print 'no match'
             rendered_string = line
         outfile.write(rendered_string)
 
@@ -418,7 +412,7 @@ def filename_to_file_list_key(filename, output_pattern, date_pattern):
     if index:
         index = index.start()
     else:
-        msg = 'unable to find pattern {0} in {1}'.format(date_pattern, filename)
+        msg = 'Unable to find pattern {0} in {1}'.format(date_pattern, filename)
         print_message(msg)
         logging.error(msg)
         return ''
@@ -445,7 +439,6 @@ def filename_to_year_set(filename, pattern, freq):
     """
     Takes a filename and returns the year_set that the file belongs to
     """
-    # these offsets need to change if the output_pattern changes. This is unavoidable given the escape characters
     pattern_format = 'YYYY-MM'
     file_format = '.nc'
     if not filename.endswith(file_format):
