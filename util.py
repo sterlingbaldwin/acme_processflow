@@ -83,16 +83,15 @@ def start_ready_job_sets(job_sets, thread_list, debug, event):
 
                 if job.get_type() == 'climo' and job.status == JobStatus.VALID:
                     # for debug purposes only
-                    job.status = JobStatus.COMPLETED
-                    return
+                    # job.status = JobStatus.COMPLETED
+                    # return
 
                     job_id = job.execute(batch=True)
                     job_set.status = SetStatus.RUNNING
                     job.set_status(JobStatus.SUBMITTED)
-                    print_message('Submitted Ncclimo for year_set {}'.format(job_set.set_number))
-                    message = "## job_set {set} status change to {status}".format(set=job_set.set_number, status=job_set.status)
-                    logging.info(message)
-                    message = "## {job}: {id} status changed to {status}".format(job=job.get_type(), id=job.job_id, status=job.status)
+                    print_message('Submitted Ncclimo for year_set {}'.format(job_set.set_number), 'ok')
+
+                    message = "## {job} id: {id} status changed to {status}".format(job=job.get_type(), id=job.job_id, status=job.status)
                     logging.info(message)
 
                     thread = threading.Thread(target=monitor_job, args=(job_id, job, job_set, event))
@@ -110,23 +109,17 @@ def start_ready_job_sets(job_sets, thread_list, debug, event):
 
                     if ready:
                         job_id = job.execute(batch=True)
-
                         job.set_status(JobStatus.SUBMITTED)
-
-                        message = "## year_set {set} status change to {status}".format(set=job_set.set_number, status=job_set.status)
-                        logging.info(message)
                         message = "## {job}: {id} status changed to {status}".format(job=job.get_type(), id=job.job_id, status=job.status)
                         logging.info(message)
                         print_message(message, 'ok')
-
 
                         thread = threading.Thread(target=monitor_job, args=(job_id, job, job_set, event, debug))
                         thread_list.append(thread)
                         thread.start()
                         return
                 elif job.status == 'invalid':
-                    logging.error('Job in invalid state: \n%s', pformat(str(job)))
-                    message = "UploadDiagnosticJob: {set} status changed to {status}".format(set=job.job_id, status=status)
+                    message = "{type} id: {id} status changed to {status}".format(id=job.job_id, status=job.status, type=job.get_type())
                     logging.error(message)
                     print_message('===== INVALID JOB =====\n{}'.format(str(job)))
 
@@ -242,12 +235,7 @@ def monitor_job(job_id, job, job_set, event=None, debug=False, batch_type='slurm
             if status == JobStatus.FAILED:
                 print_message('Job {0} has failed'.format(job_id))
 
-            logging.info(
-                'Setting %s job with job_id %s to status %s',
-                job.get_type(),
-                job_id,
-                status)
-            message = "## UploadDiagnosticJob: {set} status changed to {status}".format(set=job.job_id, status=status)
+            message = "## {type}: {id} status changed to {status}".format(id=job.job_id, status=status, type=job.get_type())
             logging.info(message)
             job.status = status
             if status == JobStatus.RUNNING:
@@ -260,7 +248,7 @@ def monitor_job(job_id, job, job_set, event=None, debug=False, batch_type='slurm
                 job.get_type(),
                 job_id)
 
-            message = "## UploadDiagnosticJob: {set} status changed to {status}".format(set=job.job_id, status=status)
+            message = "## {type}: {set} status changed to {status}".format(set=job.job_id, status=status, type=job.get_type())
             logging.info(message)
 
             job_set_done = True
@@ -278,7 +266,7 @@ def monitor_job(job_id, job, job_set, event=None, debug=False, batch_type='slurm
                 job.get_type(),
                 job_id)
 
-            message = "## UploadDiagnosticJob: {set} status changed to {status}".format(set=job.job_id, status=status)
+            message = "## {type}: {set} status changed to {status}".format(set=job.job_id, status=status, type=job.get_type())
             logging.info(message)
             return
         # wait for 10 seconds, or if the kill_thread event has been set, exit
@@ -399,7 +387,6 @@ def render(variables, input_path, output_path, delimiter):
                 else:
                     continue
         else:
-            print 'no match'
             rendered_string = line
         outfile.write(rendered_string)
 
