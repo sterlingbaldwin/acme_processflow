@@ -280,7 +280,7 @@ class Diagnostic(object):
             return 0
         inputs = config
         for i in inputs:
-            if i in self.inputs: 
+            if i in self.inputs:
                 if i == '--model':
                     self.config['--model'] = 'path=' + inputs[i] + ',climos=yes'
                 elif i == '--obs':
