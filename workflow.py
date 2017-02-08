@@ -113,6 +113,8 @@ def setup(parser):
                 if debug:
                     print_message('Loading from saved state {}'.format(args.state), 'ok')
                     logging.info('Loading from saved state {}'.format(args.state))
+                    message = "## year_set {set} status change to {status}".format(set=year_set.set_number, status=year_set.status)
+                    logging.info(message)
                 config = state.get('config')
                 file_list = state.get('file_list')
                 job_sets = state.get('job_sets')
@@ -157,6 +159,8 @@ def setup(parser):
                 print_message(msg)
                 logging.error(msg)
                 logging.error(format_debug(e))
+                message = "## year_set {set} status change to {status}".format(set=year_set.set_number, status=year_set.status)
+                logging.info(message)
                 return -1
 
             for field in required_fields:
@@ -186,6 +190,8 @@ def setup(parser):
                         msg = 'Unable to parse output_pattern {}, exiting'.format(output_pattern)
                         print_message(msg)
                         logging.error(msg)
+                        message = "## year_set {set} status change to {status}".format(set=year_set.set_number, status=year_set.status)
+                        logging.error(message)
                         sys.exit(1)
         else:
             parser.print_help()
@@ -196,7 +202,22 @@ def setup(parser):
                     config[field] = getpass('{0}: '.format(field))
                 else:
                     config[field] = raw_input('{0}: '.format(field))
+    #print config
+    #sys.exit()
     return config
+
+
+def path_exists(config_items):
+    for k, v in config_items.items():
+        for j, m in v.items():
+            if j != 'output_pattern':
+                if str(m).endswith('.nc'):
+                    if os.path.exists(m):
+                        print(m)
+                    else: 
+                        print "File {key}: {value} does not exist, exiting.".format(key=j, value=m)
+                        sys.exit(1)
+
 
 def add_jobs(year_set):
     """
@@ -220,6 +241,8 @@ def add_jobs(year_set):
         if not os.path.exists(climo_output_dir):
             if debug:
                 logging.info("Creating climotology output directory {}".format(climo_output_dir))
+                message = "## year_set {set} status change to {status}".format(set=year_set.set_number, status=year_set.status)
+                logging.info(message)
             os.makedirs(climo_output_dir)
         regrid_output_dir = os.path.join(config.get('global').get('output_path'), 'regrid')
         if not os.path.exists(regrid_output_dir):
@@ -258,6 +281,8 @@ def add_jobs(year_set):
         climo = Climo(climo_config)
         msg = 'Adding Ncclimo job to the job list: {}'.format(str(climo))
         logging.info(msg)
+        message = "## year_set {set} status change to {status}".format(set=year_set.set_number, status=year_set.status)
+        logging.info(message)
         year_set.add_job(climo)
 
     # init the diagnostic job
@@ -308,6 +333,8 @@ def add_jobs(year_set):
         diag = Diagnostic(diag_config)
         msg = 'Adding Diagnostic to the job list: {}'.format(str(diag))
         logging.info(msg)
+        message = "## year_set {set} status change to {status}".format(set=year_set.set_number, status=year_set.status)
+        logging.info(message)
         year_set.add_job(diag)
 
         # coupled_project_dir = os.path.join(os.getcwd(), 'coupled_daigs', str(year_set.set_number))
@@ -361,7 +388,10 @@ def add_jobs(year_set):
             'depends_on': [len(year_set.jobs) - 1] # set the upload job to wait for the diag job to finish
         }
         upload = UploadDiagnosticOutput(upload_config)
+
         msg = 'Adding Upload job to the job list: {}'.format(str(upload))
+        logging.info(message)
+
         logging.info(msg)
         year_set.add_job(upload)
 
@@ -519,12 +549,16 @@ def cleanup():
     Clean up temp files created during the run
     """
     logging.info('Cleaning up temp directories')
+    message = "## year_set {set} status change to {status}".format(set=year_set.set_number, status=year_set.status)
+    logging.info(message)
     try:
         cwd = os.getcwd()
         tmp_path = os.path.join(cwd, 'tmp')
         rmtree(tmp_path)
     except Exception as e:
         logging.error(format_debug(e))
+        message = "## year_set {set} status change to {status}".format(set=year_set.set_number, status=year_set.status)
+        logging.error(message)
         print_message('Error removing temp directories')
 
     try:
@@ -535,6 +569,8 @@ def cleanup():
         move(run_script_path, archive_path)
     except Exception as e:
         logging.error(format_debug(e))
+        message = "## year_set {set} status change to {status}".format(set=year_set.set_number, status=year_set.status)
+        logging.error(message)
         print_message('Error archiving run_scripts directory')
 
 
@@ -565,6 +601,7 @@ if __name__ == "__main__":
         print "Error in setup, exiting"
         sys.exit(1)
 
+    path_exists(config)
     # compute number of expected year sets
     sim_start_year = int(config.get('global').get('simulation_start_year'))
     sim_end_year = int(config.get('global').get('simulation_end_year'))
