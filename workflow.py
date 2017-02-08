@@ -59,6 +59,27 @@ logging.basicConfig(
     level=logging.DEBUG
 )
 
+#def lista():
+#    file = open('config.json', 'r')
+#    lines = file.readlines()
+#    okay = {}
+#
+#    for i in range(len(lines)):
+#        okay.update({i: lines[i]})
+#
+#    return okay
+
+cosas = setup()
+
+def existe(cosas):
+    triste = [] 
+    for k, v in cosas.iteritems():
+        if isinstance(v, dict):
+            myprint(v)
+        else:
+            print "{0}".format(k)
+
+
 @atexit.register
 def save_state():
     state_path = config.get('state_path')
@@ -202,13 +223,13 @@ def setup(parser):
                     config[field] = getpass('{0}: '.format(field))
                 else:
                     config[field] = raw_input('{0}: '.format(field))
-    #print config
-    #sys.exit()
     return config
 
 
 def path_exists(config_items):
     for k, v in config_items.items():
+        if type(v) != dict:
+            continue
         for j, m in v.items():
             if j != 'output_pattern':
                 if str(m).endswith('.nc'):
