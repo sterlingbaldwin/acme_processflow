@@ -19,18 +19,18 @@ from time import sleep
 from pprint import pformat
 from subprocess import Popen
 
-from jobs.Diagnostic import Diagnostic
-from jobs.Transfer import Transfer
-from jobs.Ncclimo import Climo
-from jobs.UploadDiagnosticOutput import UploadDiagnosticOutput
-from jobs.Publication import Publication
-from jobs.PrimaryDiagnostic import PrimaryDiagnostic
-from jobs.JobStatus import JobStatus
-from Monitor import Monitor
-from YearSet import YearSet
-from YearSet import SetStatus
+from acme_workflow.jobs.Diagnostic import Diagnostic
+from acme_workflow.jobs.Transfer import Transfer
+from acme_workflow.jobs.Ncclimo import Climo
+from acme_workflow.jobs.UploadDiagnosticOutput import UploadDiagnosticOutput
+from acme_workflow.jobs.Publication import Publication
+from acme_workflow.jobs.PrimaryDiagnostic import PrimaryDiagnostic
+from acme_workflow.jobs.JobStatus import JobStatus
+from acme_workflow.lib.Monitor import Monitor
+from acme_workflow.lib.YearSet import YearSet
+from acme_workflow.lib.YearSet import SetStatus
 
-from util import *
+from acme_workflow.lib.util import *
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-c', '--config', help='Path to configuration file')
