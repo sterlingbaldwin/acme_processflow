@@ -97,4 +97,4 @@ If you're going to be running this on a server, instead of uvcdat, use uvcdat-no
 
 
 ## Example
-An example can be found: [here](https://github.com/sterlingbaldwin/acme_workflow/blob/master/config.json)
+An example can be found here:  https://github.com/sterlingbaldwin/acme_workflow/blob/master/config.json

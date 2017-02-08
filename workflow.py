@@ -11,6 +11,7 @@ import threading
 import atexit
 import logging
 import time
+import pickle
 
 from shutil import rmtree
 from shutil import move
@@ -44,8 +45,8 @@ logging.basicConfig(
     filemode='w',
     level=logging.DEBUG)
 
-@atexit.register
-def save_state():
+#@atexit.register
+def save_state(config, file_list, job_sets, file_name_list):
     state_path = config.get('state_path')
     if not state_path:
         print_message('no state path')
@@ -58,10 +59,13 @@ def save_state():
                 'job_sets': job_sets,
                 'config': config
             }
-            json.dump(state, outfile)
+            pickle.dump(state, outfile)
     except IOError as e:
         logging.error("Error saving state file")
-        logging.error(format_debug(e))
+    for job_set in job_sets:
+        for job in job_set.jobs:
+            if hasattr(job, 'proc'):
+                job.proc = None
 
 def setup(parser):
     """
@@ -92,7 +96,7 @@ def setup(parser):
             from_saved_state = True
             try:
                 with open(args.state, 'r') as statefile:
-                    state = json.load(statefile)
+                    state = pickle.load(statefile)
                 if debug:
                     print_message('Loading from saved state {}'.format(args.state), 'ok')
                     logging.info('Loading from saved state {}'.format(args.state))
@@ -112,6 +116,11 @@ def setup(parser):
                 print_message('saved file_list: \n{}'.format(pformat(sorted(file_list, cmp=file_list_cmp))))
                 print_message('saved job_sets: \n{}'.format(pformat(job_sets)))
                 print_message('saved config: \n{}'.format(pformat(config)))
+            for job_set in job_sets:
+                for job in job_set.jobs:
+                    if job.status != JobStatus.COMPLETED:
+                        job.status = JobStatus.UNVALIDATED
+                        job.prevalidate(job, job.config)
 
     if not from_saved_state:
         required_fields = [
@@ -556,6 +565,7 @@ if __name__ == "__main__":
         print "Error in setup, exiting"
         sys.exit(1)
 
+    atexit.register(save_state, config, file_list, job_sets, file_name_list)
     # check that all netCDF files exist
     path_exists(config)
 
@@ -685,3 +695,4 @@ if __name__ == "__main__":
         for t in thread_list:
             thread_kill_event.set()
             t.join()
+
