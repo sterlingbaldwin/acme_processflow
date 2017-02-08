@@ -14,6 +14,8 @@ from time import sleep
 from util import print_debug
 from util import print_message
 from util import check_slurm_job_submission
+from JobStatus import JobStatus
+
 
 class Climo(object):
     """
@@ -21,7 +23,7 @@ class Climo(object):
     """
     def __init__(self, config):
         self.config = {}
-        self.status = 'unvarified'
+        self.status = JobStatus.INVALID
         self.type = 'climo'
         self.uuid = uuid4().hex
         self.yearset = config.get('yearset', 0)
@@ -43,6 +45,7 @@ class Climo(object):
             'regrid_output_directory': '',
             'regrid_map_path': '',
             'yearset': '',
+            'ncclimo_path': ''
         }
         self.proc = None
         self.slurm_args = {
@@ -62,8 +65,9 @@ class Climo(object):
         """
         Calls ncclimo in a subprocess
         """
+        ncclimo = os.path.join(self.config['ncclimo_path'], 'ncclimo')
         cmd = [
-            '/export/baldwin32/scripts/ncclimo',
+            ncclimo,
             '-c', self.config['caseId'],
             '-a', self.config['annual_mode'],
             '-s', str(self.config['start_year']),
@@ -80,7 +84,7 @@ class Climo(object):
                 stdout=PIPE,
                 stderr=PIPE,
                 shell=False)
-            self.status = 'RUNNING'
+            self.status = JobStatus.RUNNING
             done = 2
             console_output = ''
             while done != 0:
@@ -98,7 +102,7 @@ class Climo(object):
                 self.outputs['console_output'] = console_output
                 print console_output
 
-            self.status = 'COMPLETED'
+            self.status = JobStatus.COMPLETED
             return 0
         else:
             # Submitting the job to SLURM
@@ -127,21 +131,26 @@ class Climo(object):
                 output, err = self.proc.communicate()
                 started, job_id = check_slurm_job_submission(expected_name)
                 if started:
-                    self.status = 'RUNNING'
+                    self.status = JobStatus.RUNNING
                     self.job_id = job_id
-                    logging.info('Starting climo job with job_id %s', job_id)
-                    # print_message('+++++ STARTING CLIMO JOB {0} +++++'.format(self.job_id))
-                elif retry_count <= 0:
-                    logging.warning("Error starting climo job\n%s", output)
-                    print_message("Error starting climo job")
-                    print_message(output)
-                    self.job_id = 0
-                    break
+                    message = '## {type} id: {id} changed state to {state}'.format(
+                        type=self.get_type(),
+                        id=self.job_id,
+                        state=self.status)
+                    logging.info(message)
+
                 else:
-                    logging.warning('Failed to start job trying again, attempt %s', str(retry_count))
-                    print_message('Failed to start job, trying again')
+                    logging.warning('Error starting climo job, trying again attempt %s', str(retry_count))
                     retry_count += 1
-                    continue
+
+            if retry_count >= 5:
+                self.status = JobStatus.FAILED
+                message = '## {type} id: {id} changed state to {state}'.format(
+                    type=self.get_type(),
+                    id=self.job_id,
+                    state=self.status)
+                logging.info(message)
+                self.job_id = 0
             return self.job_id
 
     def set_status(self, status):
@@ -178,29 +187,44 @@ class Climo(object):
         """
         Prerun validation for inputs
         """
-        if self.status == 'valid':
+        if self.status == JobStatus.VALID:
             return 0
         for i in config:
             if i not in self.inputs:
                 print_message("Unexpected arguement: {}, {}".format(i, config[i]))
             else:
                 self.config[i] = config.get(i)
-        self.status = 'valid'
+        self.status = JobStatus.VALID
 
         # after checking that the job is valid to run,
         # check if the output already exists and the job actually needs to run
         if os.path.exists(self.config.get('climo_output_directory')):
+            set_start_year = self.config.get('start_year')
+            set_end_year = self.config.get('end_year')
             contents = os.listdir(self.config.get('climo_output_directory'))
-            if len(contents) <= 10:
-                return 0
-            else:
-                for i in contents:
-                    if os.path.isdir(self.config.get('climo_output_directory') + '/' + i):
-                        continue
-                    if not re.match(self.config.get('caseId'), i):
-                        return 0
-                self.status = 'COMPLETED'
-        return 0
+
+            file_list_tmp = [s for s in contents if not os.path.isdir(s)]
+            file_list = []
+            for file in file_list_tmp:
+                start_search = re.search(r'\_\d\d\d\d', file)
+                if not start_search:
+                    continue
+                start_index = start_search.start() + 1
+                start_year = int(file[start_index: start_index + 4])
+
+                end_search = re.search(r'\_\d\d\d\d', file[start_index:])
+                if not end_search:
+                    continue
+                end_index = end_search.start() + start_index + 1
+                end_year = int(file[end_index: end_index + 4])
+
+                if start_year == set_start_year and end_year == set_end_year:
+                    file_list.append(file)
+
+            if len(file_list) >= 17:
+                self.status = JobStatus.COMPLETED
+                print_message('Ncclimo job already computed, skipping')
+            return 0
 
     def postvalidate(self):
         """

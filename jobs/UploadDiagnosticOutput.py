@@ -12,6 +12,8 @@ from util import print_message
 from util import format_debug
 from util import check_slurm_job_submission
 from output_viewer.diagsviewer import DiagnosticsViewerClient
+from JobStatus import JobStatus
+
 
 class UploadDiagnosticOutput(object):
     def __init__(self, config):
@@ -28,7 +30,7 @@ class UploadDiagnosticOutput(object):
         self.config = {}
         self.outputs = {}
         self.uuid = uuid4().hex
-        self.status = 'unvalidated'
+        self.status = JobStatus.INVALID
         self.depends_on = []
         self.type = 'upload_diagnostic_output'
         self.job_id = 0
@@ -77,7 +79,7 @@ class UploadDiagnosticOutput(object):
         Iterate over given config dictionary making sure all the inputs are set
         and rejecting any inputs that arent in the input dict
         """
-        if self.status == 'valid':
+        if self.status == JobStatus.VALID:
             return 0
         for i in config:
             if i not in self.inputs:
@@ -91,9 +93,9 @@ class UploadDiagnosticOutput(object):
         for i in self.inputs:
             if i not in self.config:
                 logging.error('Missing UploadDiagnosticOutput argument %s', i)
-                self.status = 'invalid'
+                self.status = JobStatus.INVALID
                 return -1
-        self.status = 'valid'
+        self.status = JobStatus.VALID
         return 0
 
     def postvalidate(self):
@@ -101,12 +103,12 @@ class UploadDiagnosticOutput(object):
         Check that what the job was supposed to do actually happened
         """
         if not self.outputs.get('dataset_id'):
-            self.status = 'error'
+            self.status = JobStatus.FAILED
             return
         if not self.outputs.get('id'):
-            self.status = 'error'
+            self.status = JobStatus.FAILED
             return
-        self.status = 'COMPLETED'
+        self.status = JobStatus.COMPLETED
 
     def execute(self, batch=True):
         """
@@ -122,22 +124,25 @@ class UploadDiagnosticOutput(object):
                     self.config.get('username'),
                     self.config.get('password'))
             except Exception as e:
-                logging.error('Upload_Diagnostic unable error connecting to server')
+                message = "## {type} job {id} unable to connect to server".format(
+                    id=self.job_id,
+                    type=self.type)
+                logging.error(message)
                 logging.error(format_debug(e))
                 return -1
             self.outputs['id'] = client_id
             try:
-                logging.info(
-                    'uploading diagnostic package from %s',
-                    self.config.get('path_to_diagnostic')
-                )
+                message = '## uploading diagnostic package from {}'.format(
+                    self.config.get('path_to_diagnostic'))
+                logging.info(message)
                 dataset_id = client.upload_package(self.config.get('path_to_diagnostic'))
             except Exception as e:
-                logging.error('Error uploading diagnostic set to server')
                 logging.error(format_debug(e))
+                message = "## {type}: {id} has failed".format(id=self.job_id, type=self.type)
+                logging.info(message)
                 return -1
             self.outputs['dataset_id'] = dataset_id
-            self.status = 'COMPLETED'
+            self.status = JobStatus.COMPLETED
         # running in batch mode
         else:
             expected_name = 'upload_diag_job_' + str(self.uuid)
@@ -176,23 +181,30 @@ except Exception as e:\n\
             started = False
             retry_count = 0
             while not started and retry_count < 5:
-                logging.info('Starting upload_diag')
                 self.proc = Popen(slurm_cmd, stdout=PIPE, stderr=PIPE)
                 output, err = self.proc.communicate()
                 # print_message('upload job output:\n {0}\nerr: {1}'.format(output, err))
                 started, job_id = check_slurm_job_submission(expected_name)
                 if started:
-                    self.status = 'RUNNING'
-                    logging.info('Started upload_diag job with job_id %s', job_id)
+                    self.status = JobStatus.RUNNING
+                    message = "## {type} id: {id} status change to {status}".format(
+                        type=self.type,
+                        id=self.job_id,
+                        status=self.status)
+                    logging.info(message)
                     self.job_id = job_id
                 elif retry_count >= 5:
-                    logging.warning("Failed starting upload_diag job\n%s", output)
-                    print_message("Failed starting upload_diag job")
-                    print_message(output)
+                    logging.error(output)
+
+                    self.status = JobStatus.FAILED
+                    message = "## {type} id: {id} status change to {status}".format(
+                        type=self.type,
+                        id=self.job_id,
+                        status=self.status)
+                    logging.error(message)
                     return 0
                 else:
                     logging.warning('Error starting job trying again, attempt %s', str(retry_count))
-                    print_message('Error starting job, trying again')
                     retry_count += 1
                     sleep(5)
                     continue
