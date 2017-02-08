@@ -120,7 +120,7 @@ def setup(parser):
                 for job in job_set.jobs:
                     if job.status != JobStatus.COMPLETED:
                         job.status = JobStatus.UNVALIDATED
-                        job.prevalidate(job, config)
+                        job.prevalidate(job, job.config)
 
     if not from_saved_state:
         required_fields = [
