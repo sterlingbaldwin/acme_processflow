@@ -29,7 +29,7 @@ class Diagnostic(object):
         self.proc = None
         self.type = 'diagnostic'
         self.status = JobStatus.INVALID
-        self.yearset = config.get('yearset', 0)
+        self.year_set = config.get('year_set', 0)
         self.uuid = uuid4().hex
         self.depends_on = []
         self.job_id = 0
@@ -141,7 +141,7 @@ class Diagnostic(object):
         if self.setup_input_directory() == -1:
             return
 
-        dataset_name = time.strftime("%d-%m-%Y") + '-year-set-' + str(self.yearset) + '-' + self.uuid
+        dataset_name = time.strftime("%d-%m-%Y") + '-year-set-' + str(self.year_set) + '-' + self.uuid
         cmd = ['metadiags', '--dsname', dataset_name]
 
         cmd_config = {
@@ -212,21 +212,22 @@ class Diagnostic(object):
                 if started:
                     self.status = JobStatus.RUNNING
                     self.job_id = job_id
-                    message = "## year_set {set} status change to {status}".format(set=self.yearset, status=self.status)
+                    message = "## year_set {set} status change to {status}".format(
+                        set=self.year_set,
+                        status=self.status)
                     logging.info(message)
-                    # print_message('+++++ STARTING CLIMO JOB {0} +++++'.format(self.job_id))
-                elif retry_count <= 0:
-                    print_message("Error starting diagnostic job")
-                    print_message(output)
-                    self.job_id = 0
-                    break
                 else:
-                    logging.warning('Failed to start job trying again, attempt %s', str(retry_count))
-                    message = "## year_set {set} status change to {status}".format(set=self.yearset, status=self.status)
-                    logging.warning(message)
-                    print_message('Failed to start job, trying again')
+                    logging.warning('Failed to start diag job trying again, attempt %s', str(retry_count))
+                    logging.warning('%s \n%s', output, err)
                     retry_count += 1
-                    continue
+
+            if retry_count >= 5:
+                self.status = JobStatus.FAILED
+                message = "## year_set {set} status change to {status}".format(
+                    set=self.year_set,
+                    status=self.status)
+                logging.error(message)
+                self.job_id = 0
             return self.job_id
 
         if self.config['--archive'] == 'True':
