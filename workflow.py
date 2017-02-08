@@ -12,15 +12,12 @@ import atexit
 import logging
 import time
 
-from math import floor
-from shutil import copy
 from shutil import rmtree
 from shutil import move
 from getpass import getpass
 from time import sleep
 from pprint import pformat
-from subprocess import Popen, PIPE
-from functools import partial
+from subprocess import Popen
 
 from jobs.Diagnostic import Diagnostic
 from jobs.Transfer import Transfer
@@ -33,17 +30,6 @@ from Monitor import Monitor
 from YearSet import YearSet
 from YearSet import SetStatus
 
-# from util import print_debug
-# from util import print_message
-# from util import filename_to_file_list_key
-# from util import filename_to_year_set
-# from util import create_symlink_dir
-# from util import file_list_cmp
-# from util import thread_sleep
-# from util import format_debug
-# from util import check_year_sets
-# from util import check_for_inplace_data
-# from util import start_ready_job_sets
 from util import *
 
 parser = argparse.ArgumentParser()
@@ -56,29 +42,7 @@ logging.basicConfig(
     datefmt='%m/%d/%Y %I:%M:%S %p',
     filename='workflow.log',
     filemode='w',
-    level=logging.DEBUG
-)
-
-#def lista():
-#    file = open('config.json', 'r')
-#    lines = file.readlines()
-#    okay = {}
-#
-#    for i in range(len(lines)):
-#        okay.update({i: lines[i]})
-#
-#    return okay
-
-cosas = setup()
-
-def existe(cosas):
-    triste = [] 
-    for k, v in cosas.iteritems():
-        if isinstance(v, dict):
-            myprint(v)
-        else:
-            print "{0}".format(k)
-
+    level=logging.DEBUG)
 
 @atexit.register
 def save_state():
@@ -98,8 +62,6 @@ def save_state():
     except IOError as e:
         logging.error("Error saving state file")
         logging.error(format_debug(e))
-        # print_debug(e)
-        # print_message("Error saving state file")
 
 def setup(parser):
     """
@@ -233,9 +195,7 @@ def path_exists(config_items):
         for j, m in v.items():
             if j != 'output_pattern':
                 if str(m).endswith('.nc'):
-                    if os.path.exists(m):
-                        print(m)
-                    else: 
+                    if not os.path.exists(m):
                         print "File {key}: {value} does not exist, exiting.".format(key=j, value=m)
                         sys.exit(1)
 
@@ -258,14 +218,14 @@ def add_jobs(year_set):
     year_set_str = 'year_set_' + str(year_set.set_number)
     # first initialize the climo job
     if not required_jobs['climo']:
-        climo_output_dir = os.path.join(config.get('global').get('output_path'))
+        climo_output_dir = config.get('global').get('output_path')
         if not os.path.exists(climo_output_dir):
             if debug:
-                logging.info("Creating climotology output directory {}".format(climo_output_dir))
-                message = "## year_set {set} status change to {status}".format(set=year_set.set_number, status=year_set.status)
-                logging.info(message)
+                msg = "Creating climotology output directory {}".format(climo_output_dir)
+                logging.info(msg)
             os.makedirs(climo_output_dir)
-        regrid_output_dir = os.path.join(config.get('global').get('output_path'), 'regrid')
+
+        regrid_output_dir = os.path.join(climo_output_dir, 'regrid')
         if not os.path.exists(regrid_output_dir):
             os.makedirs(regrid_output_dir)
 
@@ -302,8 +262,6 @@ def add_jobs(year_set):
         climo = Climo(climo_config)
         msg = 'Adding Ncclimo job to the job list: {}'.format(str(climo))
         logging.info(msg)
-        message = "## year_set {set} status change to {status}".format(set=year_set.set_number, status=year_set.status)
-        logging.info(message)
         year_set.add_job(climo)
 
     # init the diagnostic job
@@ -320,23 +278,6 @@ def add_jobs(year_set):
         if not os.path.exists(diag_temp_dir):
             os.makedirs(diag_temp_dir)
 
-        # diag_file_list_tmp = [s for s in os.listdir(regrid_output_dir) if not os.path.islink(s)]
-        # diag_file_list = []
-        # for d_file in diag_file_list_tmp:
-        #     start_index = re.search(r'\_\d\d\d\d', d_file).start() + 1
-        #     start_year = int(d_file[start_index: start_index + 4])
-
-        #     end_index = re.search(r'\_\d\d\d\d', d_file[start_index:]).start() + start_index + 1
-        #     end_year = int(d_file[end_index: end_index + 4])
-
-        #     if start_year == year_set.set_start_year and end_index == year_set.set_end_year:
-        #         diag_file_list.append(d_file)
-
-        # create_symlink_dir(
-        #     src_dir=regrid_output_dir,
-        #     src_list=diag_file_list,
-        #     dst=diag_temp_dir)
-        # create the configuration object for the diag job
         diag_config = {
             '--model': diag_temp_dir,
             '--obs': config.get('meta_diags').get('obs_for_diagnostics_path'),
@@ -354,8 +295,6 @@ def add_jobs(year_set):
         diag = Diagnostic(diag_config)
         msg = 'Adding Diagnostic to the job list: {}'.format(str(diag))
         logging.info(msg)
-        message = "## year_set {set} status change to {status}".format(set=year_set.set_number, status=year_set.status)
-        logging.info(message)
         year_set.add_job(diag)
 
         # coupled_project_dir = os.path.join(os.getcwd(), 'coupled_daigs', str(year_set.set_number))
@@ -438,7 +377,7 @@ def monitor_check(monitor):
     if there are any new files, create new transfer jobs. If they're in a new job_set,
     spawn the jobs for that set.
 
-    inputs: 
+    inputs:
         monitor: a monitor object setup with a remote directory and an SSH session
     """
     global job_sets
@@ -516,7 +455,6 @@ def monitor_check(monitor):
     thread.start()
     active_transfers += 1
 
-
 def handle_transfer(transfer_job, f_list, event):
     global active_transfers
     """
@@ -570,16 +508,12 @@ def cleanup():
     Clean up temp files created during the run
     """
     logging.info('Cleaning up temp directories')
-    message = "## year_set {set} status change to {status}".format(set=year_set.set_number, status=year_set.status)
-    logging.info(message)
     try:
         cwd = os.getcwd()
         tmp_path = os.path.join(cwd, 'tmp')
         rmtree(tmp_path)
     except Exception as e:
         logging.error(format_debug(e))
-        message = "## year_set {set} status change to {status}".format(set=year_set.set_number, status=year_set.status)
-        logging.error(message)
         print_message('Error removing temp directories')
 
     try:
@@ -622,8 +556,10 @@ if __name__ == "__main__":
         print "Error in setup, exiting"
         sys.exit(1)
 
+    # check that all netCDF files exist
     path_exists(config)
-    # compute number of expected year sets
+
+    # compute number of expected year_sets
     sim_start_year = int(config.get('global').get('simulation_start_year'))
     sim_end_year = int(config.get('global').get('simulation_end_year'))
     number_of_sim_years = sim_end_year - (sim_start_year - 1)
@@ -645,18 +581,7 @@ if __name__ == "__main__":
                     end_year=set_end_year)
                 job_sets.append(new_set)
 
-    if debug:
-            print_message(
-                'set_frequency: {freq},\n     number of year_sets: {ys}\n'.format(
-                    ys=year_set,
-                    freq=freq),
-                'ok')
-
     # initialize the file_list
-    if debug:
-        print_message('initializing file_list with {num_years} years'.format(
-            num_years=number_of_sim_years))
-
     for year in range(1, number_of_sim_years + 1):
         for month in range(1, 13):
             key = str(year) + '-' + str(month)
