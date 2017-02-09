@@ -11,9 +11,9 @@ from pprint import pformat
 from subprocess import Popen, PIPE
 from time import sleep
 
-from util import print_debug
-from util import print_message
-from util import check_slurm_job_submission
+from lib.util import print_debug
+from lib.util import print_message
+from lib.util import check_slurm_job_submission
 from JobStatus import JobStatus
 
 

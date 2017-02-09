@@ -7,10 +7,10 @@ from time import sleep
 from subprocess import Popen, PIPE
 from pprint import pformat
 
-from util import print_debug
-from util import print_message
-from util import format_debug
-from util import check_slurm_job_submission
+from lib.util import print_debug
+from lib.util import print_message
+from lib.util import format_debug
+from lib.util import check_slurm_job_submission
 from output_viewer.diagsviewer import DiagnosticsViewerClient
 from JobStatus import JobStatus
 

@@ -13,10 +13,10 @@ from uuid import uuid4
 from time import sleep
 from subprocess import Popen, PIPE
 
-from util import print_debug
-from util import print_message
-from util import check_slurm_job_submission
-from util import create_symlink_dir
+from lib.util import print_debug
+from lib.util import print_message
+from lib.util import check_slurm_job_submission
+from lib.util import create_symlink_dir
 from JobStatus import JobStatus
 
 class Diagnostic(object):

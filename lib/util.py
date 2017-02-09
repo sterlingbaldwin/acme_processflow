@@ -114,7 +114,7 @@ def start_ready_job_sets(job_sets, thread_list, debug, event):
                             break
 
                     if ready:
-                        job_id = job.execute(batch=True)
+                        job_id = job.execute(batch='slurm')
                         job.set_status(JobStatus.SUBMITTED)
                         message = "## {job}: {id} status changed to {status}".format(
                             job=job.get_type(),
@@ -136,6 +136,9 @@ def start_ready_job_sets(job_sets, thread_list, debug, event):
                         type=job.get_type())
                     logging.error(message)
                     print_message('===== INVALID JOB =====\n{}'.format(str(job)))
+
+def cmd_exists(cmd):
+    return any(os.access(os.path.join(path, cmd), os.X_OK) for path in os.environ["PATH"].split(os.pathsep))
 
 def monitor_job(job_id, job, job_set, event=None, debug=False, batch_type='slurm'):
     """
