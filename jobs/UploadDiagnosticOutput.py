@@ -152,18 +152,29 @@ class UploadDiagnosticOutput(object):
             with open(run_script, 'w') as batchfile:
                 batchfile.write("from output_viewer.diagsviewer import DiagnosticsViewerClient\n\
 import sys\n\
+import traceback\n\
+def print_debug(e):\n\
+    print '1', e.__doc__\n\
+    print '2', sys.exc_info()\n\
+    print '3', sys.exc_info()[0]\n\
+    print '4', sys.exc_info()[1]\n\
+    print '5', traceback.tb_lineno(sys.exc_info()[2])\n\
+    ex_type, ex, tb = sys.exc_info()\n\
+    print '6', traceback.print_tb(tb)\n\
 client = DiagnosticsViewerClient(\n\
     server='{s}',\n\
     cert=False)\n\
 try: \n\
     client_id, key = client.login('{u}','{p}')\n\
 except Exception as e:\n\
-    print 'Upload_Diagnostic unable error connecting to server'\n\
+    print 'Upload_Diagnostic error connecting to server'\n\
+    print_debug(e)\n\
     sys.exit(1)\n\
 try:\n\
     dataset_id = client.upload_package('{d}')\n\
 except Exception as e:\n\
     print 'Error uploading diagnostic set to server'\n\
+    print_debug(e)\n\
     sys.exit(1)".format(
         s=self.config.get('server'),
         u=self.config.get('username'),
