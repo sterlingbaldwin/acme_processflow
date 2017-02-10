@@ -27,7 +27,7 @@
 #       short_term_archive:     Adds /atm/hist after the casename. If the data sits in a different structure, add it after
 #       the casename in test_casename
 setenv PATH                             %%nco_path%%:$PATH
-echo $PATH
+
 set projdir =                           %%coupled_project_dir%%
 set coupled_diags_home =                %%coupled_diags_home%%
 #USER DEFINED CASE SPECIFIC VARIABLES TO SPECIFY (REQUIRED)
