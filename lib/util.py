@@ -12,12 +12,23 @@ from YearSet import SetStatus
 from YearSet import YearSet
 from jobs.JobStatus import JobStatus
 
+def path_exists(config_items):
+    for k, v in config_items.items():
+        if type(v) != dict:
+            continue
+        for j, m in v.items():
+            if j != 'output_pattern':
+                if str(m).endswith('.nc'):
+                    if not os.path.exists(m):
+                        print "File {key}: {value} does not exist, exiting.".format(key=j, value=m)
+                        sys.exit(1)
+
 def check_year_sets(job_sets, file_list, sim_start_year, sim_end_year, debug, add_jobs):
     """
     Checks the file_list, and sets the year_set status to ready if all the files are in place,
     otherwise, checks if there is partial data, or zero data
     """
-    incomplete_job_sets = [s for s in job_sets if s.status != SetStatus.COMPLETED and s.status != SetStatus.RUNNING]
+    incomplete_job_sets = [s for s in job_sets if s.status != SetStatus.COMPLETED and s.status != SetStatus.RUNNING and s.status != SetStatus.FAILED]
     for job_set in incomplete_job_sets:
 
         start_year = job_set.set_start_year
@@ -44,16 +55,16 @@ def check_year_sets(job_sets, file_list, sim_start_year, sim_end_year, debug, ad
         if not data_ready and not non_zero_data:
             job_set.status = SetStatus.NO_DATA
 
-    if debug:
-        for job_set in job_sets:
-            start_year = job_set.set_start_year
-            end_year = job_set.set_end_year
-            print_message('year_set: {0}: {1}'.format(job_set.set_number, job_set.status), 'ok')
-            for i in range(start_year, end_year + 1):
-                for j in range(1, 13):
-                    file_key = '{0}-{1}'.format(i, j)
-                    status = file_list[file_key]
-                    print_message('  {key}: {value}'.format(key=file_key, value=status), 'ok')
+    # if debug:
+    #     for job_set in job_sets:
+    #         start_year = job_set.set_start_year
+    #         end_year = job_set.set_end_year
+    #         print_message('year_set: {0}: {1}'.format(job_set.set_number, job_set.status), 'ok')
+    #         for i in range(start_year, end_year + 1):
+    #             for j in range(1, 13):
+    #                 file_key = '{0}-{1}'.format(i, j)
+    #                 status = file_list[file_key]
+    #                 print_message('  {key}: {value}'.format(key=file_key, value=status), 'ok')
 
 
 def start_ready_job_sets(job_sets, thread_list, debug, event):
@@ -175,6 +186,10 @@ def monitor_job(job_id, job, job_set, event=None, debug=False, batch_type='slurm
         job_status = None
         run_time = None
         for line in out.split('\n'):
+            # pattern = 'JobState'
+            # index = re.search(pattern, line)
+            # if index:
+            #     job_status = line
             for word in line.split():
                 if 'JobState' in word:
                     index = word.find('=')
@@ -246,9 +261,17 @@ def monitor_job(job_id, job, job_set, event=None, debug=False, batch_type='slurm
         if job.status != status:
             if debug:
                 if status != JobStatus.FAILED:
-                    print_message('Setting job status: {0}'.format(status), 'ok')
+                    message = "## {type}: {id} status changed to {status}".format(
+                        id=job.job_id,
+                        status=status,
+                        type=job.get_type())
+                    print_message(message, 'ok')
                 else:
-                    print_message('Setting job status: {0}'.format(status))
+                    message = "## {type}: {id} status changed to {status}".format(
+                        id=job.job_id,
+                        status=status,
+                        type=job.get_type())
+                    print_message(message)
 
             if status == JobStatus.FAILED:
                 print_message('Job {0} has failed'.format(job_id))
@@ -258,25 +281,37 @@ def monitor_job(job_id, job, job_set, event=None, debug=False, batch_type='slurm
                 id=job.job_id,
                 status=status,
                 type=job.get_type())
+            print_message(message, 'ok')
             logging.info(message)
 
             if status == JobStatus.RUNNING and job_set.status != SetStatus.RUNNING:
                 job_set.status = SetStatus.RUNNING
 
+        if status == JobStatus.FAILED:
+            print_message('Setting set to status FAILED')
+            job_set.status = SetStatus.FAILED
+            return
+
         # if the job is done, or there has been an error, exit
         if status == JobStatus.COMPLETED:
+            print_message('{} JOB COMPLETED'.format(job.get_type()))
+
+            if job.get_type() == 'coupled_diagnostic':
+                job.generateIndex()
+
             job_set_done = True
             for job in job_set.jobs:
                 if job.status != JobStatus.COMPLETED:
                     job_set_done = False
                     break
+                if job.status == JobStatus.FAILED:
+                    print_message('Setting set to status FAILED')
+                    job_set.status = SetStatus.FAILED
+                    return
 
             if job_set_done:
                 job_set.status = SetStatus.COMPLETED
-            return
 
-        if status == JobStatus.FAILED:
-            job_set.status == SetStatus.FAILED
             return
 
         # wait for 10 seconds, or if the kill_thread event has been set, exit
