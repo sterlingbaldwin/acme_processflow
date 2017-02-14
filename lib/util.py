@@ -67,7 +67,7 @@ def check_year_sets(job_sets, file_list, sim_start_year, sim_end_year, debug, ad
     #                 print_message('  {key}: {value}'.format(key=file_key, value=status), 'ok')
 
 
-def start_ready_job_sets(job_sets, thread_list, debug, event):
+def start_ready_job_sets(job_sets, thread_list, debug, event, upload_config):
     """
     Iterates over the job sets checking for ready ready jobs, and starts them
 
@@ -111,7 +111,7 @@ def start_ready_job_sets(job_sets, thread_list, debug, event):
 
                     thread = threading.Thread(
                         target=monitor_job,
-                        args=(job_id, job, job_set, event))
+                        args=(job_id, job, job_set, event, 'slurm', upload_config))
                     thread_list.append(thread)
                     thread.start()
                     return
@@ -136,7 +136,7 @@ def start_ready_job_sets(job_sets, thread_list, debug, event):
 
                         thread = threading.Thread(
                             target=monitor_job,
-                            args=(job_id, job, job_set, event, debug))
+                            args=(job_id, job, job_set, event, debug, 'slurm', upload_config))
                         thread_list.append(thread)
                         thread.start()
                         return
@@ -151,7 +151,7 @@ def start_ready_job_sets(job_sets, thread_list, debug, event):
 def cmd_exists(cmd):
     return any(os.access(os.path.join(path, cmd), os.X_OK) for path in os.environ["PATH"].split(os.pathsep))
 
-def monitor_job(job_id, job, job_set, event=None, debug=False, batch_type='slurm'):
+def monitor_job(job_id, job, job_set, event=None, debug=False, batch_type='slurm', upload_config=None):
     """
     Monitor the slurm job, and update the status to 'complete' when it finishes
     This function should only be called from within a thread
@@ -169,6 +169,8 @@ def monitor_job(job_id, job, job_set, event=None, debug=False, batch_type='slurm
             # sometimes there will be a communication error with the SLURM controller
             # in which case the controller returns 'error: some message'
             if 'error' in out or len(out) == 0:
+                print_message('SLURM COMMUNICATION ERROR')
+                print_message(out)
                 logging.info('Error communication with SLURM controller, attempt number %s', count)
                 valid = False
                 count += 1
@@ -186,10 +188,6 @@ def monitor_job(job_id, job, job_set, event=None, debug=False, batch_type='slurm
         job_status = None
         run_time = None
         for line in out.split('\n'):
-            # pattern = 'JobState'
-            # index = re.search(pattern, line)
-            # if index:
-            #     job_status = line
             for word in line.split():
                 if 'JobState' in word:
                     index = word.find('=')
@@ -231,6 +229,7 @@ def monitor_job(job_id, job, job_set, event=None, debug=False, batch_type='slurm
         return 'Zug zug'
 
     error_count = 0
+    status = None
     while True:
         # this check is here in case the loop is stuck and the thread needs to be canceled
         if event and event.is_set():
@@ -245,7 +244,7 @@ def monitor_job(job_id, job, job_set, event=None, debug=False, batch_type='slurm
             # TODO: figure out how to get this working
 
         if not status:
-            if error_count <= 10:
+            if error_count >= 10:
                 logging.error('Unable to communicate to controller after 10 attempts')
                 job.status = JobStatus.FAILED
                 message = "## {job}: {id} status changed to {status}".format(
@@ -253,8 +252,9 @@ def monitor_job(job_id, job, job_set, event=None, debug=False, batch_type='slurm
                     id=job.job_id,
                     status=job.status)
                 logging.error(message)
+                print_message(message)
             error_count += 1
-            if thread_sleep(5, event):
+            if thread_sleep(10, event):
                 return
             continue
 
@@ -298,6 +298,28 @@ def monitor_job(job_id, job, job_set, event=None, debug=False, batch_type='slurm
 
             if job.get_type() == 'coupled_diagnostic':
                 job.generateIndex()
+                    # coupled_diag upload
+                index_path = os.path.join(
+                    job.config.get('coupled_project_dir'),
+                    os.environ['USER'])
+                if not os.path.exists(index_path):
+                    os.makedirs(index_path)
+                suffix = [s for s in os.listdir(index_path)
+                        if 'coupled' in s
+                        and not s.endswith('.logs')].pop()
+                index_path = os.path.join(index_path, suffix)
+
+                upload_config = {
+                    'path_to_diagnostic': index_path,
+                    'username': upload_config.get('diag_viewer_username'),
+                    'password': upload_config.get('diag_viewer_password'),
+                    'server': upload_config.get('diag_viewer_server'),
+                    'depends_on': [len(job_set.jobs) - 2] # set the upload job to wait for the coupled_diag job to finish
+                }
+                upload_2 = UploadDiagnosticOutput(upload_config)
+                msg = 'Adding Upload job to the job list: {}'.format(str(upload_2))
+                logging.info(msg)
+                job_set.add_job(upload_2)
 
             job_set_done = True
             for job in job_set.jobs:
@@ -565,3 +587,5 @@ def check_slurm_job_submission(expected_name):
         sleep(1)
         error_count += 1
     return found_job, job_id
+
+from jobs.UploadDiagnosticOutput import UploadDiagnosticOutput

@@ -119,14 +119,16 @@ class CoupledDiagnostic(object):
 
     def generateIndex(self):
         print_message('Starting index generataion', 'ok')
-        outpage = OutputPage(self.config.get('test_casename'))
+        outpage = OutputPage('Coupled Diagnostic')
         version = time.strftime("%d-%m-%Y-%I:%M") + '-year-set-' + str(self.year_set) + '-coupled-diagnostic'
-        index = OutputIndex(self.config.get('test_casename'), version=version)
+        index = OutputIndex('Coupled Diagnostic', version=version)
 
         images_path = os.path.join(
             self.config.get('coupled_project_dir'),
             os.environ['USER'])
-        suffix = [s for s in os.listdir(images_path) if 'coupled' in s and not s.endswith('.logs')].pop()
+        suffix = [s for s in os.listdir(images_path)
+                  if 'coupled' in s
+                  and not s.endswith('.logs')].pop()
         images_path = os.path.join(images_path, suffix)
 
         image_list = os.listdir(images_path)
