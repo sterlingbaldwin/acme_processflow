@@ -1,4 +1,3 @@
-#!/usr/bin/python
 # pylint: disable=C0103
 # pylint: disable=C0111
 # pylint: disable=C0301
@@ -12,6 +11,7 @@ import atexit
 import logging
 import time
 import pickle
+import curses
 
 from shutil import rmtree
 from shutil import move
@@ -37,6 +37,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('-c', '--config', help='Path to configuration file')
 parser.add_argument('-d', '--debug', help='Run in debug mode', action='store_true')
 parser.add_argument('-s', '--state', help='Path to a json state file')
+parser.add_argument('-n', '--no-ui', help='Turn off the GUI', action='store_true')
 
 logging.basicConfig(
     format='%(asctime)s:%(levelname)s: %(message)s',
@@ -49,7 +50,6 @@ logging.basicConfig(
 def save_state(config, file_list, job_sets, file_name_list):
     state_path = config.get('state_path')
     if not state_path:
-        print_message('no state path')
         return
     print_message('saving execution state to {0}'.format(state_path))
     try:
@@ -79,12 +79,14 @@ def setup(parser):
     global from_saved_state
 
     args = parser.parse_args()
+        
     if args.debug:
         debug = True
         print_message('Running in debug mode', 'ok')
 
     config = {}
 
+    # load from the state file given
     if args.state:
         state_path = os.path.abspath(args.state)
         if not os.path.exists(state_path):
@@ -122,6 +124,7 @@ def setup(parser):
                         job.status = JobStatus.UNVALIDATED
                         job.prevalidate(job, job.config)
 
+    # no state file, load from config
     if not from_saved_state:
         required_fields = [
             "output_path",
@@ -196,6 +199,9 @@ def setup(parser):
                     config[field] = getpass('{0}: '.format(field))
                 else:
                     config[field] = raw_input('{0}: '.format(field))
+    
+    config['global']['ui'] = False if args.no_ui else True
+        
     return config
 
 def add_jobs(year_set):
@@ -558,6 +564,47 @@ def cleanup():
         logging.error(message)
         print_message('Error archiving run_scripts directory')
 
+def display(stdscr, event):
+    height,width = stdscr.getmaxyx()
+    hmax = height - 3
+    wmax = width - 5
+    curses.init_pair(1, curses.COLOR_BLACK, curses.COLOR_WHITE)
+    stdscr.bkgd(curses.color_pair(1))
+
+    pad = curses.newpad(100, 100)
+    y = 0
+    x = 0
+    while True:
+        height,width = stdscr.getmaxyx()
+        hmax = height - 3
+        wmax = width - 5
+        y = 0
+        for year_set in job_sets:
+            line = 'Year_set {num}: {start} - {end}'.format(
+                num=year_set.set_number,
+                start=year_set.set_start_year,
+                end=year_set.set_end_year)
+            pad.addstr(y,0, line, curses.color_pair(1))
+
+            y += 1
+            for job in year_set.jobs:
+                line = '    {type} is {status}'.format(
+                    type=job.get_type(),
+                    status=job.status)
+                pad.addstr(y,0, line)
+                y += 1
+            
+            pad.refresh(0,0, 3,5, hmax,wmax)
+        if event and event.is_set():
+            return
+        sleep(1)
+    #sleep(10)
+
+def start_display(config, event):
+    try:
+        curses.wrapper(display, event)
+    except KeyboardInterrupt as e:
+        return
 
 if __name__ == "__main__":
 
@@ -589,6 +636,19 @@ if __name__ == "__main__":
     atexit.register(save_state, config, file_list, job_sets, file_name_list)
     # check that all netCDF files exist
     path_exists(config)
+
+    if config.get('global').get('ui'):
+        try:
+            import random
+            print_message('Turning on the display', 'ok')
+            sleep(.8)
+            display_event = threading.Event()
+            diaplay_thread = threading.Thread(target=start_display, args=(config, display_event))
+            diaplay_thread.start()
+
+        except KeyboardInterrupt as e:
+            display_event.set()
+            sys.exit()
 
     # compute number of expected year_sets
     sim_start_year = int(config.get('global').get('simulation_start_year'))
@@ -713,6 +773,7 @@ if __name__ == "__main__":
     except KeyboardInterrupt as e:
         print_message('----- KEYBOARD INTERUPT -----')
         print_message('cleaning up threads', 'ok')
+        display_event.set()
         for t in thread_list:
             thread_kill_event.set()
             t.join()
