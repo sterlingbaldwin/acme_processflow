@@ -121,11 +121,9 @@ class Diagnostic(object):
             end_index = end_search.start() + start_index + 1
             end_year = int(d_file[end_index: end_index + 4])
 
-            print start_year, end_year
             if start_year == set_start_year and end_year == set_end_year:
                 diag_file_list.append(d_file)
 
-        print diag_file_list
 
         create_symlink_dir(
             src_dir=regrid_path,
