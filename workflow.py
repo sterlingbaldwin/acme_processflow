@@ -24,14 +24,14 @@ from jobs.Diagnostic import Diagnostic
 from jobs.Transfer import Transfer
 from jobs.Ncclimo import Climo
 from jobs.UploadDiagnosticOutput import UploadDiagnosticOutput
-from jobs.Publication import Publication
-from jobs.PrimaryDiagnostic import PrimaryDiagnostic
+# from jobs.Publication import Publication
+from jobs.CoupledDiagnostic import CoupledDiagnostic
 from jobs.JobStatus import JobStatus
-from Monitor import Monitor
-from YearSet import YearSet
-from YearSet import SetStatus
+from lib.Monitor import Monitor
+from lib.YearSet import YearSet
+from lib.YearSet import SetStatus
 
-from util import *
+from lib.util import *
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-c', '--config', help='Path to configuration file')
@@ -182,7 +182,9 @@ def setup(parser):
                         msg = 'Unable to parse output_pattern {}, exiting'.format(output_pattern)
                         print_message(msg)
                         logging.error(msg)
-                        message = "## year_set {set} status change to {status}".format(set=year_set.set_number, status=year_set.status)
+                        message = "## year_set {set} status change to {status}".format(
+                            set=year_set.set_number,
+                            status=year_set.status)
                         logging.error(message)
                         sys.exit(1)
         else:
@@ -196,19 +198,6 @@ def setup(parser):
                     config[field] = raw_input('{0}: '.format(field))
     return config
 
-
-def path_exists(config_items):
-    for k, v in config_items.items():
-        if type(v) != dict:
-            continue
-        for j, m in v.items():
-            if j != 'output_pattern':
-                if str(m).endswith('.nc'):
-                    if not os.path.exists(m):
-                        print "File {key}: {value} does not exist, exiting.".format(key=j, value=m)
-                        sys.exit(1)
-
-
 def add_jobs(year_set):
     """
     Initializes and adds all the jobs to the year_set
@@ -219,6 +208,7 @@ def add_jobs(year_set):
         'climo': False,
         'diagnostic': False,
         'upload_diagnostic_output': False,
+        'coupled_diagnostic': False
     }
     for job in year_set.jobs:
         if not required_jobs[job.get_type()]:
@@ -253,8 +243,8 @@ def add_jobs(year_set):
         create_symlink_dir(
             src_dir=config.get('global').get('data_cache_path'),
             src_list=climo_file_list,
-            dst=climo_temp_dir
-        )
+            dst=climo_temp_dir)
+
         # create the configuration object for the climo job
         climo_config = {
             'start_year': climo_start_year,
@@ -306,63 +296,94 @@ def add_jobs(year_set):
         logging.info(msg)
         year_set.add_job(diag)
 
-        # coupled_project_dir = os.path.join(os.getcwd(), 'coupled_daigs', str(year_set.set_number))
-        # if not os.path.exists(coupled_project_dir):
-        #     os.makedirs(coupled_project_dir)
-        # g_config = config.get('global')
-        # p_config = config.get('primary_diags')
-        # coupled_diag_config = {
-        #     'coupled_project_dir': coupled_project_dir,
-        #     'test_casename': g_config.get('experiment'),
-        #     'test_native_res': p_config.get('test_native_res'),
-        #     'test_archive_dir': diag_temp_dir,
-        #     'test_begin_yr_climo': year_set.set_start_year,
-        #     'test_end_yr_climo': year_set.set_end_year,
-        #     'test_begin_yr_ts': year_set.set_start_year,
-        #     'test_end_yr_ts': year_set.set_end_year,
-        #     'ref_case': p_config.get('obs'),
-        #     'ref_archive_dir': config.get('meta_diags').get('obs_for_diagnostics_path'),
-        #     'mpas_meshfile': p_config.get('mpas_meshfile'),
-        #     'mpas_remapfile': p_config.get('mpas_remapfile'),
-        #     'pop_remapfile': p_config.get('pop_remapfile'),
-        #     'remap_files_dir': p_config.get('remap_files_dir'),
-        #     'GPCP_regrid_wgt_file': p_config.get('GPCP_regrid_wgt_file'),
-        #     'CERES_EBAF_regrid_wgt_file': p_config.get('CERES_EBAF_regrid_wgt_file'),
-        #     'ERS_regrid_wgt_file': p_config.get('ERS_regrid_wgt_file'),
-        #     'coupled_home_directory': p_config.get('coupled_home_directory'),
-        #     'coupled_template_path': os.path.join(os.getcwd(), 'resources', 'run_AIMS_template.csh'),
-        #     'rendered_output_path': os.path.join(coupled_project_dir, 'run_AIMS.csh'),
-        #     'obs_ocndir': p_config.get('obs_ocndir'),
-        #     'obs_seaicedir': p_config.get('obs_seaicedir'),
-        #     'obs_sstdir': p_config.get('obs_sstdir'),
-        #     'obs_iceareaNH': p_config.get('obs_iceareaNH'),
-        #     'obs_iceareaSH': p_config.get('obs_iceareaSH'),
-        #     'obs_icevolNH': p_config.get('obs_icevolNH'),
-        #     'obs_icevolSH': 'None',
-        #     'depends_on': [len(year_set.jobs) - 2],
-        #     'yr_offset': p_config.get('yr_offset')
-        # }
-        # job = PrimaryDiagnostic(coupled_diag_config)
-        # print_message(str(job))
-        # job.execute()
-        # sys.exit(1)
+        coupled_project_dir = os.path.join(
+            config.get('global').get('output_path'),
+            'coupled_diags',
+            'year_set_' + str(year_set.set_number))
+        if not os.path.exists(coupled_project_dir):
+            os.makedirs(coupled_project_dir)
+
+        g_config = config.get('global')
+        c_config = config.get('coupled_diags')
+        coupled_diag_config = {
+            'year_set': year_set.set_number,
+            'climo_tmp_dir': climo_temp_dir,
+            'regrid_path': regrid_output_dir,
+            'diag_temp_dir': diag_temp_dir,
+            'year_set': year_set.set_number,
+            'start_year': year_set.set_start_year,
+            'end_year': year_set.set_end_year,
+            'nco_path': config.get('ncclimo').get('ncclimo_path'),
+            'coupled_project_dir': coupled_project_dir,
+            'test_casename': g_config.get('experiment'),
+            'test_native_res': c_config.get('test_native_res'),
+            'test_archive_dir': diag_temp_dir,
+            'test_begin_yr_climo': year_set.set_start_year,
+            'test_end_yr_climo': year_set.set_end_year,
+            'test_begin_yr_ts': year_set.set_start_year,
+            'test_end_yr_ts': year_set.set_end_year,
+            'ref_case': c_config.get('ref_case'),
+            'ref_archive_dir': c_config.get('ref_archive_dir'),
+            'mpas_meshfile': c_config.get('mpas_meshfile'),
+            'mpas_remapfile': c_config.get('mpas_remapfile'),
+            'pop_remapfile': c_config.get('pop_remapfile'),
+            'remap_files_dir': c_config.get('remap_files_dir'),
+            'GPCP_regrid_wgt_file': c_config.get('GPCP_regrid_wgt_file'),
+            'CERES_EBAF_regrid_wgt_file': c_config.get('CERES_EBAF_regrid_wgt_file'),
+            'ERS_regrid_wgt_file': c_config.get('ERS_regrid_wgt_file'),
+            'coupled_diags_home': c_config.get('coupled_diags_home'),
+            'coupled_template_path': os.path.join(os.getcwd(), 'resources', 'run_AIMS_template.csh'),
+            'rendered_output_path': os.path.join(coupled_project_dir, 'run_AIMS.csh'),
+            'obs_ocndir': c_config.get('obs_ocndir'),
+            'obs_seaicedir': c_config.get('obs_seaicedir'),
+            'obs_sstdir': c_config.get('obs_sstdir'),
+            'obs_iceareaNH': c_config.get('obs_iceareaNH'),
+            'obs_iceareaSH': c_config.get('obs_iceareaSH'),
+            'obs_icevolNH': c_config.get('obs_icevolNH'),
+            'obs_icevolSH': 'None',
+            'depends_on': [len(year_set.jobs) - 2],
+            'yr_offset': c_config.get('yr_offset')
+        }
+        coupled_diag = CoupledDiagnostic(coupled_diag_config)
+        msg = 'Adding CoupledDiagnostic job to the job list: {}'.format(str(coupled_diag))
+        logging.info(msg)
+        year_set.add_job(coupled_diag)
 
     # init the upload job
     if not required_jobs['upload_diagnostic_output']:
+        # uvcmetrics diag upload
         upload_config = {
             'path_to_diagnostic': os.path.join(diag_output_path, 'amwg'),
             'username': config.get('upload_diagnostic').get('diag_viewer_username'),
             'password': config.get('upload_diagnostic').get('diag_viewer_password'),
             'server': config.get('upload_diagnostic').get('diag_viewer_server'),
-            'depends_on': [len(year_set.jobs) - 1] # set the upload job to wait for the diag job to finish
+            'depends_on': [len(year_set.jobs) - 2] # set the upload job to wait for the diag job to finish
         }
-        upload = UploadDiagnosticOutput(upload_config)
-
-        msg = 'Adding Upload job to the job list: {}'.format(str(upload))
-        logging.info(message)
-
+        upload_1 = UploadDiagnosticOutput(upload_config)
+        msg = 'Adding Upload job to the job list: {}'.format(str(upload_1))
         logging.info(msg)
-        year_set.add_job(upload)
+        year_set.add_job(upload_1)
+
+        # coupled_diag upload
+        index_path = os.path.join(
+            coupled_project_dir,
+            os.environ['USER'])
+        suffix = [s for s in os.listdir(index_path)
+                  if 'coupled' in s
+                  and not s.endswith('.logs')].pop()
+        index_path = os.path.join(index_path, suffix)
+
+        upload_config = {
+            'path_to_diagnostic': index_path,
+            'username': config.get('upload_diagnostic').get('diag_viewer_username'),
+            'password': config.get('upload_diagnostic').get('diag_viewer_password'),
+            'server': config.get('upload_diagnostic').get('diag_viewer_server'),
+            'depends_on': [len(year_set.jobs) - 2] # set the upload job to wait for the coupled_diag job to finish
+        }
+        upload_2 = UploadDiagnosticOutput(upload_config)
+        msg = 'Adding Upload job to the job list: {}'.format(str(upload_2))
+        logging.info(msg)
+        year_set.add_job(upload_2)
 
     """
     # finally init the publication job

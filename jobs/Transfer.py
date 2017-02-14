@@ -20,10 +20,10 @@ from globusonline.transfer.api_client import TransferAPIError
 from globusonline.transfer.api_client import x509_proxy
 from globusonline.transfer.api_client.goauth import get_access_token
 
-from util import print_debug
-from util import print_message
-from util import filename_to_year_set
-from util import format_debug
+from lib.util import print_debug
+from lib.util import print_message
+from lib.util import filename_to_year_set
+from lib.util import format_debug
 from JobStatus import JobStatus
 
 class Transfer(object):

@@ -26,6 +26,7 @@
 #                       This includes climos, remapped climos, condensed files and data files used for plotting.
 #       short_term_archive:     Adds /atm/hist after the casename. If the data sits in a different structure, add it after
 #       the casename in test_casename
+setenv PATH                             %%nco_path%%:$PATH
 
 set projdir =                           %%coupled_project_dir%%
 set coupled_diags_home =                %%coupled_diags_home%%
@@ -146,7 +147,7 @@ setenv www_dir /var/www/acme/acme-diags/$USER
 ##############################################################################
 ###USER SHOULD NOT NEED TO CHANGE ANYTHING HERE ONWARDS######################
 
-setenv coupled_diags_home $PWD
+#setenv coupled_diags_home $PWD
 
 #LOAD THE ANACONDA-2.7-CLIMATE ENV WHICH LOADS ALL REQUIRED PYTHON MODULES
 # put this in your .bash_profile:
