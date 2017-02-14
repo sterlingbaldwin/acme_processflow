@@ -10,21 +10,16 @@ If you're going to be running this on a server, instead of uvcdat, use uvcdat-no
 
 
     git clone https://github.com/sterlingbaldwin/acme_workflow.git
-    conda create -n <SOME ENVIRONMENT NAME> -c conda-forge -c uvcdat uvcdat
+    conda create -n <SOME ENVIRONMENT NAME> -c conda-forge -c uvcdat/label/nightly uvcdat
     source activate <SOME ENVIRONMENT NAME>
+
+    conda uninstall openblas
 
     git clone https://github.com/globusonline/transfer-api-client-python.git
     cd transfer-api-client-python
     python setup.py install
     cd ..
     rm -rf transfer-api-client-python
-
-    git clone https://github.com/UV-CDAT/cdms.git
-    cd cdms
-    git checkout Qi_xml_str_missing_issue
-    python setup.py install
-    cd ..
-    rm -rf cdms
 
     pip -r requirements.txt
 
