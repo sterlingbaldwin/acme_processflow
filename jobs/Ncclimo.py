@@ -191,7 +191,8 @@ class Climo(object):
             return 0
         for i in config:
             if i not in self.inputs:
-                print_message("Unexpected arguement: {}, {}".format(i, config[i]))
+                # print_message("Unexpected arguement: {}, {}".format(i, config[i]))
+                pass
             else:
                 self.config[i] = config.get(i)
         self.status = JobStatus.VALID
@@ -223,7 +224,7 @@ class Climo(object):
 
             if len(file_list) >= 17:
                 self.status = JobStatus.COMPLETED
-                print_message('Ncclimo job already computed, skipping')
+                print_message('Ncclimo job already computed, skipping', 'ok')
             return 0
 
     def postvalidate(self):

@@ -364,27 +364,6 @@ def add_jobs(year_set):
         logging.info(msg)
         year_set.add_job(upload_1)
 
-        # coupled_diag upload
-        index_path = os.path.join(
-            coupled_project_dir,
-            os.environ['USER'])
-        suffix = [s for s in os.listdir(index_path)
-                  if 'coupled' in s
-                  and not s.endswith('.logs')].pop()
-        index_path = os.path.join(index_path, suffix)
-
-        upload_config = {
-            'path_to_diagnostic': index_path,
-            'username': config.get('upload_diagnostic').get('diag_viewer_username'),
-            'password': config.get('upload_diagnostic').get('diag_viewer_password'),
-            'server': config.get('upload_diagnostic').get('diag_viewer_server'),
-            'depends_on': [len(year_set.jobs) - 2] # set the upload job to wait for the coupled_diag job to finish
-        }
-        upload_2 = UploadDiagnosticOutput(upload_config)
-        msg = 'Adding Upload job to the job list: {}'.format(str(upload_2))
-        logging.info(msg)
-        year_set.add_job(upload_2)
-
     """
     # finally init the publication job
     if not required_jobs['publication']:
@@ -512,17 +491,17 @@ def handle_transfer(transfer_job, f_list, event):
         logging.info(message)
 
     # update the file_list all the files that were transferred
-    output_pattern = config.get('global').get('output_pattern')
-    date_pattern = config.get('global').get('date_pattern')
-    for file in f_list:
-        list_key = filename_to_file_list_key(file, output_pattern, date_pattern)
-        file_list[list_key] = SetStatus.DATA_READY
-        file_name_list[list_key] = file
+    # output_pattern = config.get('global').get('output_pattern')
+    # date_pattern = config.get('global').get('date_pattern')
+    # for file in f_list:
+    #     list_key = filename_to_file_list_key(file, output_pattern, date_pattern)
+    #     file_list[list_key] = SetStatus.DATA_READY
+    #     file_name_list[list_key] = file
 
-    if debug:
-        print_message('file_list status: ', 'ok')
-        for key in sorted(file_list, cmp=file_list_cmp):
-            print_message('{key}: {val}'.format(key=key, val=file_list[key]), 'ok')
+    # if debug:
+    #     print_message('file_list status: ', 'ok')
+    #     for key in sorted(file_list, cmp=file_list_cmp):
+    #         print_message('{key}: {val}'.format(key=key, val=file_list[key]), 'ok')
 
 def is_all_done():
     """
@@ -648,6 +627,9 @@ if __name__ == "__main__":
         for key in sorted(file_list, cmp=file_list_cmp):
             msg = '{0}: {1}'.format(key, file_list[key])
             print_message(msg, 'ok')
+    #
+    # all_data = True
+    #
 
     if all_data:
         print_message('All data is local, disabling remote monitor', 'ok')
@@ -679,13 +661,16 @@ if __name__ == "__main__":
         else:
             print_message('unable to connect, exiting')
             sys.exit(1)
+    else:
+        monitor = None
 
     # Main loop
     try:
         while True:
             # Setup remote monitoring system
             if not all_data:
-                monitor_check(monitor)
+                if monitor:
+                    monitor_check(monitor)
             # Check if a year_set is ready to run
             check_year_sets(
                 job_sets=job_sets,
@@ -703,7 +688,8 @@ if __name__ == "__main__":
                 job_sets=job_sets,
                 thread_list=thread_list,
                 debug=debug,
-                event=thread_kill_event)
+                event=thread_kill_event,
+                upload_config=config.get('upload_diagnostic'))
             if is_all_done():
                 # cleanup()
                 print_message('All processing complete')
