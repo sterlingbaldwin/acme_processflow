@@ -23,7 +23,8 @@ class Diagnostic(object):
     """
     Performs the ACME diagnostic job
     """
-    def __init__(self, config=None):
+    def __init__(self, config=None, event_list=None):
+        self.event_list = event_list
         self.raw_config = config
         self.config = {}
         self.proc = None
@@ -232,9 +233,9 @@ class Diagnostic(object):
             archive_path = '{}/archive'.format(self.config['--outputdir'])
             if not os.path.exists(archive_path + '.tar.gz'):
                 try:
-                    print_message(
-                        'creating output archive {}'.format(archive_path + '.tar.gz'),
-                        'ok')
+                    # print_message(
+                    #     'creating output archive {}'.format(archive_path + '.tar.gz'),
+                    #     'ok')
                     shutil.make_archive(
                         archive_path,
                         'gztar',
@@ -244,7 +245,8 @@ class Diagnostic(object):
                     print_message('Error making archive {}'.format(archive_path + '.tar.gz'))
 
             else:
-                print_message('archive {} already exists'.format(archive_path + '.tar.gz'))
+                # print_message('archive {} already exists'.format(archive_path + '.tar.gz'))
+                pass
 
     def postvalidate(self):
         """

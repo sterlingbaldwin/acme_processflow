@@ -14,6 +14,7 @@ from time import sleep
 from lib.util import print_debug
 from lib.util import print_message
 from lib.util import check_slurm_job_submission
+from lib.util import push_event
 from JobStatus import JobStatus
 
 
@@ -21,7 +22,8 @@ class Climo(object):
     """
     A wrapper around ncclimo, used to compute the climotologies from raw output data
     """
-    def __init__(self, config):
+    def __init__(self, config, event_list):
+        self.event_list = event_list
         self.config = {}
         self.status = JobStatus.INVALID
         self.type = 'climo'
@@ -138,6 +140,11 @@ class Climo(object):
                         id=self.job_id,
                         state=self.status)
                     logging.info(message)
+                    message = '{type} id: {id} changed state to {state}'.format(
+                        type=self.get_type(),
+                        id=self.job_id,
+                        state=self.status)
+                    self.event_list = push_event(self.event_list, message)
 
                 else:
                     logging.warning('Error starting climo job, trying again attempt %s', str(retry_count))
@@ -150,6 +157,11 @@ class Climo(object):
                     id=self.job_id,
                     state=self.status)
                 logging.info(message)
+                message = '{type} id: {id} changed state to {state}'.format(
+                    type=self.get_type(),
+                    id=self.job_id,
+                    state=self.status)
+                self.event_list = push_event(self.event_list, message)
                 self.job_id = 0
             return self.job_id
 
@@ -224,7 +236,9 @@ class Climo(object):
 
             if len(file_list) >= 17:
                 self.status = JobStatus.COMPLETED
-                print_message('Ncclimo job already computed, skipping', 'ok')
+                # print_message('Ncclimo job already computed, skipping', 'ok')
+                message = 'Ncclimo job already computed, skipping'
+                self.event_list = push_event(self.event_list, message)
             return 0
 
     def postvalidate(self):

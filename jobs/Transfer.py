@@ -24,13 +24,15 @@ from lib.util import print_debug
 from lib.util import print_message
 from lib.util import filename_to_year_set
 from lib.util import format_debug
+from lib.util import push_event
 from JobStatus import JobStatus
 
 class Transfer(object):
     """
     Uses Globus to transfer files between DTNs
     """
-    def __init__(self, config=None):
+    def __init__(self, config=None, event_list=None):
+        self.event_list = event_list
         self.config = {}
         self.status = JobStatus.INVALID
         self.type = 'transfer'
@@ -99,7 +101,8 @@ class Transfer(object):
             return 0
         for i in config:
             if i not in self.inputs:
-                print_message("Unexpected arguement: {}, {}".format(i, config[i]))
+                # print_message("Unexpected arguement: {}, {}".format(i, config[i]))
+                pass
             else:
                 if i == 'recursive':
                     if config.get(i) == 'True':
@@ -168,7 +171,11 @@ class Transfer(object):
         # Get source and destination UUIDs
         srcendpoint = self.config.get('source_endpoint')
         dstendpoint = self.config.get('destination_endpoint')
-        logging.info('Starting transfer job from %s to %s', srcendpoint, dstendpoint)
+        message = 'Starting transfer job from {src} to {dst}'.format(
+            src=srcendpoint,
+            dst=dstendpoint)
+        logging.info(message)
+        self.event_list = push_event(self.event_list, message)
         # Get access token (This method of getting an acces token is deprecated and should be replaced by OAuth2 calls).
         globus_username = self.config.get('globus_username')
         globus_password = self.config.get('globus_password')
@@ -265,6 +272,8 @@ class Transfer(object):
             # moved to their final destination
             if data['status'] == 'SUCCEEDED':
                 logging.info('progress %d/%d', data['files_transferred'], data['files'])
+                message = 'Transfer job completed'
+                self.event_list = push_event(self.event_list, message)
                 self.status = JobStatus.COMPLETED
                 return ('success', '')
             elif data['status'] == 'FAILED':
@@ -274,4 +283,8 @@ class Transfer(object):
 
             elif data['status'] == 'ACTIVE':
                 logging.info('progress %d/%d', data['files_transferred'], data['files'])
+                message = 'Transfer job progress {0}/{1}'.format(
+                    data['files_transferred'],
+                    data['files'])
+                self.event_list = push_event(self.event_list, message)
             time.sleep(10)

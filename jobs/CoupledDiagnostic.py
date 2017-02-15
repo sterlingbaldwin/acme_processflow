@@ -19,14 +19,16 @@ from lib.util import print_debug
 from lib.util import check_slurm_job_submission
 from lib.util import cmd_exists
 from lib.util import create_symlink_dir
+from lib.util import push_event
 from JobStatus import JobStatus
 
 
 class CoupledDiagnostic(object):
-    def __init__(self, config):
+    def __init__(self, config, event_list):
         """
         Setup class attributes
         """
+        self.event_list = event_list
         self.inputs = {
             'year_set': '',
             'nco_path': '',
@@ -118,7 +120,7 @@ class CoupledDiagnostic(object):
         print 'postvalidate'
 
     def generateIndex(self):
-        print_message('Starting index generataion', 'ok')
+        self.event_list = push_event(self.event_list, 'Starting index generataion')
         outpage = OutputPage('Coupled Diagnostic')
         version = time.strftime("%d-%m-%Y-%I:%M") + '-year-set-' + str(self.year_set) + '-coupled-diagnostic'
         index = OutputIndex('Coupled Diagnostic', version=version)
@@ -157,7 +159,7 @@ class CoupledDiagnostic(object):
 
         index.addPage(outpage)
         outpath = os.path.join(images_path, 'index.json')
-        print_message('writing index file to {}'.format(outpath))
+        self.event_list = push_event(self.event_list, 'Index generataion complete')
         index.toJSON(outpath)
 
     def setup_input_directory(self):
