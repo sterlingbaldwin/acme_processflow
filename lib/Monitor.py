@@ -21,7 +21,6 @@ class Monitor(object):
         if not config:
             print "No configuration for monitoring system"
             return
-        print config
         self.remote_host = config.get('remote_host')
         if not self.remote_host:
             print "No remote host specified"
