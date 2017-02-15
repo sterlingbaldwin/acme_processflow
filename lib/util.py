@@ -67,7 +67,7 @@ def check_year_sets(job_sets, file_list, sim_start_year, sim_end_year, debug, ad
     #                 print_message('  {key}: {value}'.format(key=file_key, value=status), 'ok')
 
 
-def start_ready_job_sets(job_sets, thread_list, debug, event, upload_config):
+def start_ready_job_sets(job_sets, thread_list, debug, event, upload_config, event_list):
     """
     Iterates over the job sets checking for ready ready jobs, and starts them
 
@@ -101,7 +101,9 @@ def start_ready_job_sets(job_sets, thread_list, debug, event, upload_config):
 
                     job_id = job.execute(batch=True)
                     job.set_status(JobStatus.SUBMITTED)
-                    print_message('Submitted Ncclimo for year_set {}'.format(job_set.set_number), 'ok')
+
+                    message = 'Submitted Ncclimo for year_set {}'.format(job_set.set_number)
+                    event_list = push_event(event_list, message)
 
                     message = "## {job} id: {id} status changed to {status}".format(
                         job=job.get_type(),
@@ -111,7 +113,7 @@ def start_ready_job_sets(job_sets, thread_list, debug, event, upload_config):
 
                     thread = threading.Thread(
                         target=monitor_job,
-                        args=(job_id, job, job_set, event, 'slurm', upload_config))
+                        args=(job_id, job, job_set, event, 'slurm', upload_config, event_list))
                     thread_list.append(thread)
                     thread.start()
                     return
@@ -127,16 +129,21 @@ def start_ready_job_sets(job_sets, thread_list, debug, event, upload_config):
                     if ready:
                         job_id = job.execute(batch='slurm')
                         job.set_status(JobStatus.SUBMITTED)
+
+                        message = 'Submitted {type} for year_set {set}'.format(
+                            set=job_set.set_number,
+                            type=job.get_type())
+                        event_list = push_event(event_list, message)
+
                         message = "## {job}: {id} status changed to {status}".format(
                             job=job.get_type(),
                             id=job.job_id,
                             status=job.status)
                         logging.info(message)
-                        print_message(message, 'ok')
 
                         thread = threading.Thread(
                             target=monitor_job,
-                            args=(job_id, job, job_set, event, debug, 'slurm', upload_config))
+                            args=(job_id, job, job_set, event, debug, 'slurm', upload_config, event_list))
                         thread_list.append(thread)
                         thread.start()
                         return
@@ -151,7 +158,7 @@ def start_ready_job_sets(job_sets, thread_list, debug, event, upload_config):
 def cmd_exists(cmd):
     return any(os.access(os.path.join(path, cmd), os.X_OK) for path in os.environ["PATH"].split(os.pathsep))
 
-def monitor_job(job_id, job, job_set, event=None, debug=False, batch_type='slurm', upload_config=None):
+def monitor_job(job_id, job, job_set, event=None, debug=False, batch_type='slurm', upload_config=None, event_list=None):
     """
     Monitor the slurm job, and update the status to 'complete' when it finishes
     This function should only be called from within a thread
@@ -169,8 +176,8 @@ def monitor_job(job_id, job, job_set, event=None, debug=False, batch_type='slurm
             # sometimes there will be a communication error with the SLURM controller
             # in which case the controller returns 'error: some message'
             if 'error' in out or len(out) == 0:
-                print_message('SLURM COMMUNICATION ERROR')
-                print_message(out)
+                # print_message('SLURM COMMUNICATION ERROR')
+                # print_message(out)
                 logging.info('Error communication with SLURM controller, attempt number %s', count)
                 valid = False
                 count += 1
@@ -252,7 +259,7 @@ def monitor_job(job_id, job, job_set, event=None, debug=False, batch_type='slurm
                     id=job.job_id,
                     status=job.status)
                 logging.error(message)
-                print_message(message)
+                # print_message(message)
             error_count += 1
             if thread_sleep(10, event):
                 return
@@ -277,24 +284,24 @@ def monitor_job(job_id, job, job_set, event=None, debug=False, batch_type='slurm
                 print_message('Job {0} has failed'.format(job_id))
 
             job.status = status
-            message = "## {type}: {id} status changed to {status}".format(
+            message = "{type}: {id} status changed to {status}".format(
                 id=job.job_id,
                 status=status,
                 type=job.get_type())
-            print_message(message, 'ok')
-            logging.info(message)
+            logging.info('##' + message)
+            event_list = push_event(event_list, message)
 
             if status == JobStatus.RUNNING and job_set.status != SetStatus.RUNNING:
                 job_set.status = SetStatus.RUNNING
 
         if status == JobStatus.FAILED:
-            print_message('Setting set to status FAILED')
+            # print_message('Setting set to status FAILED')
             job_set.status = SetStatus.FAILED
             return
 
         # if the job is done, or there has been an error, exit
         if status == JobStatus.COMPLETED:
-            print_message('{} JOB COMPLETED'.format(job.get_type()))
+            # print_message('{} JOB COMPLETED'.format(job.get_type()))
 
             if job.get_type() == 'coupled_diagnostic':
                 job.generateIndex()
@@ -327,7 +334,7 @@ def monitor_job(job_id, job, job_set, event=None, debug=False, batch_type='slurm
                     job_set_done = False
                     break
                 if job.status == JobStatus.FAILED:
-                    print_message('Setting set to status FAILED')
+                    # print_message('Setting set to status FAILED')
                     job_set.status = SetStatus.FAILED
                     return
 
@@ -398,6 +405,12 @@ class colors:
     BOLD = '\033[1m'
     UNDERLINE = '\033[4m'
 
+def push_event(event_list, line):
+    event_list.append(line)
+    diff = len(event_list) - 5
+    if diff > 0:
+        event_list = event_list[diff:]
+    return event_list
 
 def print_message(message, status='error'):
     if status == 'error':

@@ -154,8 +154,6 @@ def setup(parser):
                 print_message(msg)
                 logging.error(msg)
                 logging.error(format_debug(e))
-                message = "## year_set {set} status change to {status}".format(set=year_set.set_number, status=year_set.status)
-                logging.info(message)
                 return -1
 
             for field in required_fields:
@@ -199,9 +197,12 @@ def setup(parser):
                     config[field] = getpass('{0}: '.format(field))
                 else:
                     config[field] = raw_input('{0}: '.format(field))
-    
-    config['global']['ui'] = False if args.no_ui else True
-        
+
+    if not args.no_ui:
+        debug = False
+        config['global']['ui'] = True
+    else:
+        config['global']['ui'] = False
     return config
 
 def add_jobs(year_set):
@@ -264,7 +265,7 @@ def add_jobs(year_set):
             'year_set': year_set.set_number,
             'ncclimo_path': config.get('ncclimo').get('ncclimo_path')
         }
-        climo = Climo(climo_config)
+        climo = Climo(climo_config, event_list=event_list)
         msg = 'Adding Ncclimo job to the job list: {}'.format(str(climo))
         logging.info(msg)
         year_set.add_job(climo)
@@ -297,7 +298,7 @@ def add_jobs(year_set):
             'regrid_path': regrid_output_dir,
             'diag_temp_dir': diag_temp_dir
         }
-        diag = Diagnostic(diag_config)
+        diag = Diagnostic(diag_config, event_list=event_list)
         msg = 'Adding Diagnostic to the job list: {}'.format(str(diag))
         logging.info(msg)
         year_set.add_job(diag)
@@ -350,7 +351,7 @@ def add_jobs(year_set):
             'depends_on': [len(year_set.jobs) - 2],
             'yr_offset': c_config.get('yr_offset')
         }
-        coupled_diag = CoupledDiagnostic(coupled_diag_config)
+        coupled_diag = CoupledDiagnostic(coupled_diag_config, event_list)
         msg = 'Adding CoupledDiagnostic job to the job list: {}'.format(str(coupled_diag))
         logging.info(msg)
         year_set.add_job(coupled_diag)
@@ -397,7 +398,7 @@ def monitor_check(monitor):
     """
     global job_sets
     global active_transfers
-
+    global event_list
     # if there are already three or more transfers in progress
     # hold off on starting any new ones until they complete
     if active_transfers > 1:
@@ -445,6 +446,10 @@ def monitor_check(monitor):
     g_config = config.get('global')
     m_config = config.get('monitor')
 
+    message = 'Found {} new remote files, creating transfer job'.format(
+        len(f_list))
+    event_list = push_event(event_list, message)
+
     transfer_config = {
         'file_list': f_list,
         'globus_username': t_config.get('globus_username'),
@@ -462,15 +467,15 @@ def monitor_check(monitor):
         'pattern': config.get('global').get('output_pattern'),
         'ncclimo_path': config.get('ncclimo').get('ncclimo_path')
     }
-    transfer = Transfer(transfer_config)
+    transfer = Transfer(transfer_config, event_list)
     logging.info('## Starting transfer %s with config: %s', transfer.uuid, pformat(transfer_config))
-    print_message('Starting file transfer', 'ok')
-    thread = threading.Thread(target=handle_transfer, args=(transfer, checked_new_files, thread_kill_event))
+    # print_message('Starting file transfer', 'ok')
+    thread = threading.Thread(target=handle_transfer, args=(transfer, checked_new_files, thread_kill_event, event_list))
     thread_list.append(thread)
     thread.start()
     active_transfers += 1
 
-def handle_transfer(transfer_job, f_list, event):
+def handle_transfer(transfer_job, f_list, event, event_list):
     global active_transfers
     """
     Wrapper around the transfer.execute() method, ment to be run inside a thread
@@ -492,22 +497,10 @@ def handle_transfer(transfer_job, f_list, event):
         logging.error(message)
         return
     else:
-        print_message('Finished file transfer', 'ok')
+        message = 'Finished file transfer'
+        event_list = push_event(event_list, message)
         message = "## Transfer {uuid} has completed".format(uuid=transfer_job.uuid)
         logging.info(message)
-
-    # update the file_list all the files that were transferred
-    # output_pattern = config.get('global').get('output_pattern')
-    # date_pattern = config.get('global').get('date_pattern')
-    # for file in f_list:
-    #     list_key = filename_to_file_list_key(file, output_pattern, date_pattern)
-    #     file_list[list_key] = SetStatus.DATA_READY
-    #     file_name_list[list_key] = file
-
-    # if debug:
-    #     print_message('file_list status: ', 'ok')
-    #     for key in sorted(file_list, cmp=file_list_cmp):
-    #         print_message('{key}: {val}'.format(key=key, val=file_list[key]), 'ok')
 
 def is_all_done():
     """
@@ -544,40 +537,78 @@ def cleanup():
         print_message('Error archiving run_scripts directory')
 
 def display(stdscr, event):
-    height,width = stdscr.getmaxyx()
-    hmax = height - 3
-    wmax = width - 5
-    curses.init_pair(1, curses.COLOR_BLACK, curses.COLOR_WHITE)
-    stdscr.bkgd(curses.color_pair(1))
+    try:
+        curses.curs_set(0)
+        curses.init_pair(1, curses.COLOR_BLACK, curses.COLOR_WHITE)
+        curses.init_pair(2, curses.COLOR_GREEN, curses.COLOR_WHITE)
+        curses.init_pair(3, curses.COLOR_RED, curses.COLOR_WHITE)
+        curses.init_pair(4, curses.COLOR_WHITE, curses.COLOR_BLACK)
+        curses.init_pair(5, curses.COLOR_GREEN, curses.COLOR_BLACK)
+        curses.init_pair(6, curses.COLOR_MAGENTA, curses.COLOR_BLACK)
+        stdscr.bkgd(curses.color_pair(1))
 
-    pad = curses.newpad(100, 100)
-    y = 0
-    x = 0
-    while True:
-        height,width = stdscr.getmaxyx()
-        hmax = height - 3
-        wmax = width - 5
+        pad = curses.newpad(100, 100)
         y = 0
-        for year_set in job_sets:
-            line = 'Year_set {num}: {start} - {end}'.format(
-                num=year_set.set_number,
-                start=year_set.set_start_year,
-                end=year_set.set_end_year)
-            pad.addstr(y,0, line, curses.color_pair(1))
-
-            y += 1
-            for job in year_set.jobs:
-                line = '    {type} is {status}'.format(
-                    type=job.get_type(),
-                    status=job.status)
-                pad.addstr(y,0, line)
+        x = 0
+        while True:
+            height, width = stdscr.getmaxyx()
+            hmax = height - 3
+            wmax = width - 5
+            y = 0
+            for year_set in job_sets:
+                line = 'Year_set {num}: {start} - {end}'.format(
+                    num=year_set.set_number,
+                    start=year_set.set_start_year,
+                    end=year_set.set_end_year)
+                pad.addstr(y, 0, line, curses.color_pair(1))
+                pad.clrtoeol()
                 y += 1
-            
-            pad.refresh(0,0, 3,5, hmax,wmax)
-        if event and event.is_set():
-            return
-        sleep(1)
-    #sleep(10)
+                color_pair = curses.color_pair(4)
+                if year_set.status == SetStatus.COMPLETED:
+                    color_pair = curses.color_pair(2)
+                elif year_set.status == SetStatus.FAILED:
+                    color_pair = curses.color_pair(3)
+                elif year_set.status == SetStatus.RUNNING:
+                    color_pair = curses.color_pair(6)
+                line = 'status: {status}'.format(
+                    status=year_set.status)
+                pad.addstr(y, 0, line, color_pair)
+                pad.clrtoeol()
+                y += 1
+                if year_set.status == SetStatus.COMPLETED or year_set.status == SetStatus.FAILED:
+                    continue
+                for job in year_set.jobs:
+                    line = '        {type} is '.format(type=job.get_type())
+                    pad.addstr(y, 0, line, curses.color_pair(4))
+                    color_pair = curses.color_pair(4)
+                    if job.status == JobStatus.COMPLETED:
+                        color_pair = curses.color_pair(2)
+                    elif job.status == JobStatus.FAILED:
+                        color_pair = curses.color_pair(3)
+                    elif job.status == JobStatus.RUNNING:
+                        color_pair = curses.color_pair(6)
+                    line = '{status}'.format(status=job.status)
+                    pad.addstr(line, color_pair)
+                    pad.clrtoeol()
+                    y += 1
+            pad.refresh(0, 0, 3, 5, hmax, wmax)
+            y += 5
+            for line in event_list[-5:]:
+                sleep(0.1)
+                prefix = '[+] '
+                pad.addstr(y, 0, prefix, curses.color_pair(5))
+                pad.addstr(line, curses.color_pair(4))
+                pad.clrtoeol()
+                pad.refresh(0, 0, 3, 5, hmax, wmax)
+                y += 1
+
+            if event and event.is_set():
+                return
+            pad.clrtobot()
+            pad.refresh(0, 0, 3, 5, hmax, wmax)
+            sleep(1)
+    except KeyboardInterrupt as e:
+        return
 
 def start_display(config, event):
     try:
@@ -599,6 +630,7 @@ if __name__ == "__main__":
     thread_list = []
     # An event to kill the threads on terminal exception
     thread_kill_event = threading.Event()
+    display_event = threading.Event()
     debug = False
     from_saved_state = False
     # The number of active globus transfers
@@ -607,6 +639,8 @@ if __name__ == "__main__":
     all_data = False
     # Read in parameters from config
     config = setup(parser)
+    # A list of strings for holding display info
+    event_list = []
 
     if config == -1:
         print "Error in setup, exiting"
@@ -618,10 +652,12 @@ if __name__ == "__main__":
 
     if config.get('global').get('ui'):
         try:
-            import random
-            print_message('Turning on the display', 'ok')
-            sleep(.8)
-            display_event = threading.Event()
+            sys.stdout.write('Turning on the display')
+            for i in range(8):
+                sys.stdout.write('.')
+                sys.stdout.flush()
+                sleep(0.1)
+            print '\n'
             diaplay_thread = threading.Thread(target=start_display, args=(config, display_event))
             diaplay_thread.start()
 
@@ -637,6 +673,8 @@ if __name__ == "__main__":
     if not from_saved_state:
         job_sets = []
 
+        line = 'Initializing year sets'
+        event_list = push_event(event_list, line)
         for freq in frequencies:
             freq = int(freq)
             year_set = number_of_sim_years / freq
@@ -652,6 +690,8 @@ if __name__ == "__main__":
                 job_sets.append(new_set)
 
     # initialize the file_list
+    line = 'Initializing file list'
+    event_list = push_event(event_list, line)
     for year in range(1, number_of_sim_years + 1):
         for month in range(1, 13):
             key = str(year) + '-' + str(month)
@@ -687,14 +727,15 @@ if __name__ == "__main__":
         for key in sorted(file_list, cmp=file_list_cmp):
             msg = '{0}: {1}'.format(key, file_list[key])
             print_message(msg, 'ok')
-    #
-    # all_data = True
-    #
 
     if all_data:
-        print_message('All data is local, disabling remote monitor', 'ok')
+        # print_message('All data is local, disabling remote monitor', 'ok')
+        line = 'All data is local, disabling remote monitor'
+        event_list = push_event(event_list, line)
     else:
-        print_message('More data needed, enabling remote monitor', 'ok')
+        # print_message('More data needed, enabling remote monitor', 'ok')
+        line = 'More data needed, enabling remote monitor'
+        event_list = push_event(event_list, line)
 
     # If all the data is local, dont start the monitor
     if not all_data:
@@ -711,15 +752,22 @@ if __name__ == "__main__":
         if config.get('monitor').get('compute_keyfile'):
             monitor_config['keyfile'] = config.get('monitor').get('compute_keyfile')
         else:
-            print_message('No password or keyfile path given for compute resource, please add to your config and try again')
+            logging.error('No password or keyfile path given for compute resource, please add to your config and try again')
             sys.exit(1)
 
         monitor = Monitor(monitor_config)
-        print_message('attempting connection to {}'.format(config.get('monitor').get('compute_host')), 'ok')
+        # print_message('attempting connection to {}'.format(config.get('monitor').get('compute_host')), 'ok')
+        line = 'Attempting connection to {}'.format(config.get('monitor').get('compute_host'))
+        event_list = push_event(event_list, line)
         if monitor.connect() == 0:
-            print_message('connected', 'ok')
+            # print_message('connected', 'ok')
+            line = 'Connected'
+            event_list = push_event(event_list, line)
         else:
-            print_message('unable to connect, exiting')
+            # print_message('unable to connect, exiting')
+            line = 'Unable to connect, exiting'
+            logging.error(line)
+            event_list = push_event(event_list, line)
             sys.exit(1)
     else:
         monitor = None
@@ -749,9 +797,14 @@ if __name__ == "__main__":
                 thread_list=thread_list,
                 debug=debug,
                 event=thread_kill_event,
-                upload_config=config.get('upload_diagnostic'))
+                upload_config=config.get('upload_diagnostic'),
+                event_list=event_list)
             if is_all_done():
                 # cleanup()
+                message = ' ---- All processing complete ----'
+                event_list = push_event(event_list, message)
+                sleep(5)
+                display_event.set()
                 print_message('All processing complete')
                 logging.info("## All processes complete")
                 sys.exit(0)
