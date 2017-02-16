@@ -399,12 +399,13 @@ def monitor_check(monitor):
     global job_sets
     global active_transfers
     global event_list
+    global transfer_list
     # if there are already three or more transfers in progress
     # hold off on starting any new ones until they complete
     if active_transfers > 1:
         return
     monitor.check()
-    new_files = monitor.get_new_files()
+    new_files = monitor.known_files
     checked_new_files = []
 
     output_pattern = config.get('global').get('output_pattern')
@@ -414,13 +415,14 @@ def monitor_check(monitor):
     for f in new_files:
         file_key = filename_to_file_list_key(f, output_pattern, date_pattern)
         status = file_list.get(file_key)
-        if status and status != SetStatus.DATA_READY:
+        if status and status != SetStatus.DATA_READY and status != SetStatus.IN_TRANSIT:
             checked_new_files.append(f)
 
     # if there are any new files
-    if  not checked_new_files:
+    if not checked_new_files:
         if debug:
             print_message('No new files found', 'ok')
+        event_list = push_event(event_list, 'no new files found')
         return
 
     if debug:
@@ -446,10 +448,6 @@ def monitor_check(monitor):
     g_config = config.get('global')
     m_config = config.get('monitor')
 
-    message = 'Found {} new remote files, creating transfer job'.format(
-        len(f_list))
-    event_list = push_event(event_list, message)
-
     transfer_config = {
         'file_list': f_list,
         'globus_username': t_config.get('globus_username'),
@@ -468,6 +466,29 @@ def monitor_check(monitor):
         'ncclimo_path': config.get('ncclimo').get('ncclimo_path')
     }
     transfer = Transfer(transfer_config, event_list)
+
+    for f in transfer.config.get('file_list'):
+        f = f.split('/').pop()
+        key = filename_to_file_list_key(f, output_pattern, date_pattern)
+        file_list[key] = SetStatus.IN_TRANSIT
+
+    start_file = transfer.config.get('file_list')[0]
+    end_file = transfer.config.get('file_list')[-1]
+    index = start_file.find('-')
+    start_readable = start_file[index - 4: index + 3]
+    index = end_file.find('-')
+    end_readable = end_file[index - 4: index + 3]
+    message = 'Found {0} new remote files, creating transfer job from {1} to {2}'.format(
+        len(f_list),
+        start_readable,
+        end_readable)
+    event_list = push_event(event_list, message)
+    # message = ''
+    # for i in transfer.config.get('file_list'):
+    #     index = i.find('-')
+    #     message += i[index - 2: index + 3] + ', '
+    # event_list = push_event(event_list, message)
+
     logging.info('## Starting transfer %s with config: %s', transfer.uuid, pformat(transfer_config))
     # print_message('Starting file transfer', 'ok')
     thread = threading.Thread(target=handle_transfer, args=(transfer, checked_new_files, thread_kill_event, event_list))
@@ -487,7 +508,7 @@ def handle_transfer(transfer_job, f_list, event, event_list):
             but it needs to be there for any threads handlers
     """
     # start the transfer job
-    transfer_job.execute()
+    transfer_job.execute(event, event_list)
     # the transfer is complete, so we can decrement the active_transfers counter
     active_transfers -= 1
 
@@ -495,10 +516,9 @@ def handle_transfer(transfer_job, f_list, event, event_list):
         print_message("File transfer failed")
         message = "## Transfer {uuid} has failed".format(uuid=transfer_job.uuid)
         logging.error(message)
+        event_list = push_event(event_list, 'Tranfer FAILED')
         return
     else:
-        message = 'Finished file transfer'
-        event_list = push_event(event_list, message)
         message = "## Transfer {uuid} has completed".format(uuid=transfer_job.uuid)
         logging.info(message)
 
@@ -537,6 +557,18 @@ def cleanup():
         print_message('Error archiving run_scripts directory')
 
 def display(stdscr, event):
+
+    def ycheck(y, x, hmax, wmax):
+        if y >= hmax:
+            y = 0
+            x = (wmax / 2) + 3
+        return y, x
+
+    initializing = True
+    height, width = stdscr.getmaxyx()
+    hmax = height - 3
+    wmax = width - 5
+
     try:
         curses.curs_set(0)
         curses.init_pair(1, curses.COLOR_BLACK, curses.COLOR_WHITE)
@@ -545,15 +577,16 @@ def display(stdscr, event):
         curses.init_pair(4, curses.COLOR_WHITE, curses.COLOR_BLACK)
         curses.init_pair(5, curses.COLOR_GREEN, curses.COLOR_BLACK)
         curses.init_pair(6, curses.COLOR_MAGENTA, curses.COLOR_BLACK)
+        curses.init_pair(7, curses.COLOR_YELLOW, curses.COLOR_BLACK)
         stdscr.bkgd(curses.color_pair(1))
 
-        pad = curses.newpad(100, 100)
+        pad = curses.newpad(hmax, wmax)
         y = 0
         x = 0
         while True:
-            height, width = stdscr.getmaxyx()
-            hmax = height - 3
-            wmax = width - 5
+            if len(job_sets) == 0:
+                sleep(1)
+                continue
             y = 0
             for year_set in job_sets:
                 line = 'Year_set {num}: {start} - {end}'.format(
@@ -563,6 +596,8 @@ def display(stdscr, event):
                 pad.addstr(y, 0, line, curses.color_pair(1))
                 pad.clrtoeol()
                 y += 1
+                y, x = ycheck(y, x, hmax, wmax)
+
                 color_pair = curses.color_pair(4)
                 if year_set.status == SetStatus.COMPLETED:
                     color_pair = curses.color_pair(2)
@@ -572,40 +607,69 @@ def display(stdscr, event):
                     color_pair = curses.color_pair(6)
                 line = 'status: {status}'.format(
                     status=year_set.status)
-                pad.addstr(y, 0, line, color_pair)
+                pad.addstr(y, x, line, color_pair)
+                if initializing:
+                    sleep(0.01)
+                    pad.refresh(0, 0, 3, 5, hmax, wmax)
                 pad.clrtoeol()
                 y += 1
+                y, x = ycheck(y, x, hmax, wmax)
                 if year_set.status == SetStatus.COMPLETED or year_set.status == SetStatus.FAILED:
                     continue
                 for job in year_set.jobs:
                     line = '        {type} is '.format(type=job.get_type())
-                    pad.addstr(y, 0, line, curses.color_pair(4))
+                    pad.addstr(y, x, line, curses.color_pair(4))
                     color_pair = curses.color_pair(4)
                     if job.status == JobStatus.COMPLETED:
-                        color_pair = curses.color_pair(2)
-                    elif job.status == JobStatus.FAILED:
+                        color_pair = curses.color_pair(5)
+                    elif job.status == JobStatus.FAILED or job.status == 'CANCELED':
                         color_pair = curses.color_pair(3)
                     elif job.status == JobStatus.RUNNING:
                         color_pair = curses.color_pair(6)
+                    elif job.status == JobStatus.SUBMITTED or job.status == JobStatus.PENDING:
+                        color_pair = curses.color_pair(7)
                     line = '{status}'.format(status=job.status)
                     pad.addstr(line, color_pair)
                     pad.clrtoeol()
+                    if initializing:
+                        sleep(0.01)
+                        pad.refresh(0, 0, 3, 5, hmax, wmax)
                     y += 1
-            pad.refresh(0, 0, 3, 5, hmax, wmax)
+                    y, x = ycheck(y, x, hmax, wmax)
+            # pad.refresh(0, 0, 3, 5, hmax, wmax)
+            pad.clrtobot()
             y += 5
-            for line in event_list[-5:]:
-                sleep(0.1)
-                prefix = '[+] '
-                pad.addstr(y, 0, prefix, curses.color_pair(5))
+            y, x = ycheck(y, x, hmax, wmax)
+            for line in event_list[-10:]:
+                prefix = '[+]  '
+                pad.addstr(y, x, prefix, curses.color_pair(5))
                 pad.addstr(line, curses.color_pair(4))
                 pad.clrtoeol()
-                pad.refresh(0, 0, 3, 5, hmax, wmax)
+                if initializing:
+                    sleep(0.01)
+                    pad.refresh(0, 0, 3, 5, hmax, wmax)
+                #pad.refresh(0, 0, 3, 5, hmax, wmax)
                 y += 1
+                y, x = ycheck(y, x, hmax, wmax)
+
+            for line in sorted(file_list, cmp=file_list_cmp):
+                msg = '{k}: {v}'.format(k=line, v=file_list[line])
+                pad.addstr(y, x, msg, curses.color_pair(4))
+                pad.clrtoeol()
+                y += 1
+
+            y += 1
+            msg = 'Active transfers: {}'.format(active_transfers)
+            pad.addstr(y, x, msg, curses.color_pair(4))
+            pad.clrtoeol()
 
             if event and event.is_set():
                 return
             pad.clrtobot()
             pad.refresh(0, 0, 3, 5, hmax, wmax)
+            initializing = False
+
+            
             sleep(1)
     except KeyboardInterrupt as e:
         return
@@ -641,6 +705,8 @@ if __name__ == "__main__":
     config = setup(parser)
     # A list of strings for holding display info
     event_list = []
+    # A list of files that have been transfered
+    transfer_list = []
 
     if config == -1:
         print "Error in setup, exiting"
@@ -776,9 +842,8 @@ if __name__ == "__main__":
     try:
         while True:
             # Setup remote monitoring system
-            if not all_data:
-                if monitor:
-                    monitor_check(monitor)
+            if not all_data and monitor:
+                monitor_check(monitor)
             # Check if a year_set is ready to run
             check_year_sets(
                 job_sets=job_sets,
@@ -805,7 +870,8 @@ if __name__ == "__main__":
                 event_list = push_event(event_list, message)
                 sleep(5)
                 display_event.set()
-                print_message('All processing complete')
+                sleep(2)
+                print_message(message)
                 logging.info("## All processes complete")
                 sys.exit(0)
             sleep(10)
