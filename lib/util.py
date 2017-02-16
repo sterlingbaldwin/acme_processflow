@@ -1,4 +1,5 @@
 from time import sleep
+from time import strftime
 import logging
 from subprocess import Popen, PIPE
 import sys
@@ -41,10 +42,11 @@ def check_year_sets(job_sets, file_list, sim_start_year, sim_end_year, debug, ad
                 file_key = '{0}-{1}'.format(i, j)
                 status = file_list[file_key]
 
-                if status == SetStatus.NO_DATA:
+                if status in [SetStatus.NO_DATA, SetStatus.IN_TRANSIT, SetStatus.PARTIAL_DATA]:
                     data_ready = False
                 elif status == SetStatus.DATA_READY:
                     non_zero_data = True
+
         if data_ready:
             job_set.status = SetStatus.DATA_READY
             job_set = add_jobs(job_set)
@@ -361,11 +363,26 @@ def check_for_inplace_data(file_list, file_name_list, job_sets, config):
         return
 
     for climo_file in os.listdir(cache_path):
+        climo_file_path = os.path.join(cache_path, climo_file)
         file_key = filename_to_file_list_key(
             filename=climo_file,
             output_pattern=output_pattern,
             date_pattern=date_pattern)
-        file_list[file_key] = SetStatus.DATA_READY
+
+        index = file_key.find('-')
+        year = int(file_key[:index])
+        in_range = False
+        for job_set in job_sets:
+            if year <= job_set.set_end_year:
+                in_range = True
+                break
+        if not in_range:
+            continue
+        # if the file is less the 1MB, its probably still in transit
+        if os.path.getsize(climo_file_path) / 100000000 < 1:
+            file_list[file_key] = SetStatus.IN_TRANSIT
+        else:
+            file_list[file_key] = SetStatus.DATA_READY
         file_name_list[file_key] = climo_file
 
     all_data = True
@@ -406,10 +423,11 @@ class colors:
     UNDERLINE = '\033[4m'
 
 def push_event(event_list, line):
+    line = strftime("%I:%M") + ' ' + line
     event_list.append(line)
-    diff = len(event_list) - 5
-    if diff > 0:
-        event_list = event_list[diff:]
+    # diff = len(event_list) - 5
+    # if diff > 0:
+    #     event_list = event_list[diff:]
     return event_list
 
 def print_message(message, status='error'):
