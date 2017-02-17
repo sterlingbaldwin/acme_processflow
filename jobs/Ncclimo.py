@@ -46,7 +46,7 @@ class Climo(object):
             'climo_output_directory': '',
             'regrid_output_directory': '',
             'regrid_map_path': '',
-            'yearset': '',
+            'year_set': '',
             'ncclimo_path': ''
         }
         self.proc = None
@@ -108,7 +108,11 @@ class Climo(object):
             return 0
         else:
             # Submitting the job to SLURM
-            expected_name = 'ncclimo_job_' + str(self.uuid)
+            expected_name = 'ncclimo_set_{year_set}_{start}_{end}_{uuid}'.format(
+                year_set=self.config.get('year_set'),
+                start=self.config.get('start_year'),
+                end=self.config.get('end_year'),
+                uuid=self.uuid[:5])
             run_scripts_path = os.path.join(os.getcwd(), 'run_scripts')
             run_script = os.path.join(run_scripts_path, expected_name)
 
@@ -133,7 +137,7 @@ class Climo(object):
                 output, err = self.proc.communicate()
                 started, job_id = check_slurm_job_submission(expected_name)
                 if started:
-                    self.status = JobStatus.RUNNING
+                    self.status = JobStatus.SUBMITTED
                     self.job_id = job_id
                     message = '## {type} id: {id} changed state to {state}'.format(
                         type=self.get_type(),

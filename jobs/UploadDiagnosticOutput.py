@@ -25,7 +25,10 @@ class UploadDiagnosticOutput(object):
             'username': '',
             'password': '',
             'server': '',
-            'depends_on': ''
+            'depends_on': '',
+            'year_set': '',
+            'start_year': '',
+            'end_year': ''
         }
         self.config = {}
         self.outputs = {}
@@ -145,7 +148,10 @@ class UploadDiagnosticOutput(object):
             self.status = JobStatus.COMPLETED
         # running in batch mode
         else:
-            expected_name = 'upload_diag_job_' + str(self.uuid)
+            expected_name = 'upload_diag_set_{set}_{start}_{end}'.format(
+                set=self.config.get('year_set'),
+                start=self.config.get('start_year'),
+                end=self.config.get('end_year'))
             run_script = os.path.join(os.getcwd(), 'run_scripts/' + expected_name + '.py')
 
             # write out a python script with the upload code

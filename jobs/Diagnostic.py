@@ -191,7 +191,11 @@ class Diagnostic(object):
                 print_message('Error running diagnostic')
         else:
             # Submitting to SLURM queue
-            expected_name = 'diagnostic_job_' + str(self.uuid)
+            expected_name = 'diagnostic_set_{set}_{start}_{end}_{uuid}'.format(
+                set=self.year_set,
+                start=self.config.get('start_year'),
+                end=self.config.get('end_year'),
+                uuid=self.uuid[:5])
             run_script = os.path.join(os.getcwd(), 'run_scripts', expected_name)
             self.slurm_args['error_file'] = '-e {error_file}'.format(error_file=run_script + '.err')
             self.slurm_args['output_file'] = '-o {output_file}'.format(output_file=run_script + '.out')

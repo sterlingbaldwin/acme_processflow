@@ -207,7 +207,11 @@ class CoupledDiagnostic(object):
                 cmd = 'csh {run_AIMS}'.format(
                     run_AIMS=self.config.get('rendered_output_path'))
 
-                expected_name = 'coupled_diag_' + str(self.uuid)
+                expected_name = 'coupled_diag_set_{set}_{start}_{end}_{uuid}'.format(
+                    set=self.config.get('year_set'),
+                    start=self.config.get('test_begin_yr_climo'),
+                    end=self.config.get('test_end_yr_climo'),
+                    uuid=self.uuid[:5])
                 run_script = os.path.join(os.getcwd(), 'run_scripts', expected_name)
                 self.slurm_args['error_file'] = '-e {err}'.format(err=run_script + '.err')
                 self.slurm_args['out_file'] = '-o {out}'.format(out=run_script + '.out')
