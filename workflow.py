@@ -38,6 +38,7 @@ parser.add_argument('-c', '--config', help='Path to configuration file')
 parser.add_argument('-d', '--debug', help='Run in debug mode', action='store_true')
 parser.add_argument('-s', '--state', help='Path to a json state file')
 parser.add_argument('-n', '--no-ui', help='Turn off the GUI', action='store_true')
+parser.add_argument('-r', '--dry-run', help='Do all setup, but dont submit jobs', action='store_true')
 
 logging.basicConfig(
     format='%(asctime)s:%(levelname)s: %(message)s',
@@ -203,6 +204,11 @@ def setup(parser):
         config['global']['ui'] = True
     else:
         config['global']['ui'] = False
+    if args.dry_run:
+        config['global']['dry_run'] = True
+    else:
+        config['global']['dry_run'] = False
+
     return config
 
 def add_jobs(year_set):
@@ -360,6 +366,9 @@ def add_jobs(year_set):
     if not required_jobs['upload_diagnostic_output']:
         # uvcmetrics diag upload
         upload_config = {
+            'year_set': year_set.set_number,
+            'start_year': year_set.set_start_year,
+            'end_year': year_set.set_end_year,
             'path_to_diagnostic': os.path.join(diag_output_path, 'amwg'),
             'username': config.get('upload_diagnostic').get('diag_viewer_username'),
             'password': config.get('upload_diagnostic').get('diag_viewer_password'),
@@ -558,6 +567,8 @@ def cleanup():
 
 def display(stdscr, event):
 
+
+    counter = 0
     def ycheck(y, x, hmax, wmax):
         if y >= hmax:
             y = 0
@@ -640,7 +651,7 @@ def display(stdscr, event):
             pad.clrtobot()
             y += 5
             y, x = ycheck(y, x, hmax, wmax)
-            for line in event_list[-10:]:
+            for line in event_list:
                 prefix = '[+]  '
                 pad.addstr(y, x, prefix, curses.color_pair(5))
                 pad.addstr(line, curses.color_pair(4))
@@ -652,25 +663,59 @@ def display(stdscr, event):
                 y += 1
                 y, x = ycheck(y, x, hmax, wmax)
 
+            y += 1
+            file_start_y = y
+
+            file_display_list = []
+            current_year = 1
+            year_ready = True
+            partial_data = False
             for line in sorted(file_list, cmp=file_list_cmp):
-                msg = '{k}: {v}'.format(k=line, v=file_list[line])
-                pad.addstr(y, x, msg, curses.color_pair(4))
+                index = line.find('-')
+                year = int(line[:index])
+                month = int(line[index + 1:])
+                if month == 1:
+                    year_ready = True
+                    partial_data = False
+                if file_list[line] != SetStatus.DATA_READY:
+                    year_ready = False
+                else:
+                    partial_data = True
+                if month == 12:
+                    if year_ready:
+                        status = SetStatus.DATA_READY
+                    else:
+                        if partial_data:
+                            status = SetStatus.PARTIAL_DATA
+                        else:
+                            status = SetStatus.NO_DATA
+                    file_display_list.append('Year {year} status: {status}'.format(
+                        year=year,
+                        status=status))
+
+            for line in file_display_list:
+                pad.addstr(y, x, line, curses.color_pair(4))
                 pad.clrtoeol()
                 y += 1
+                if y >= hmax:
+                    x += 30
+                    y = file_start_y
 
+            x = 0
             y += 1
             msg = 'Active transfers: {}'.format(active_transfers)
             pad.addstr(y, x, msg, curses.color_pair(4))
             pad.clrtoeol()
+            pad.addstr(y, x, 'count: {}'.format(counter), curses.color_pair(4))
+            counter += 1
 
             if event and event.is_set():
                 return
             pad.clrtobot()
             pad.refresh(0, 0, 3, 5, hmax, wmax)
             initializing = False
-
-            
             sleep(1)
+
     except KeyboardInterrupt as e:
         return
 
@@ -716,7 +761,7 @@ if __name__ == "__main__":
     # check that all netCDF files exist
     path_exists(config)
 
-    if config.get('global').get('ui'):
+    if config.get('global').get('ui', False):
         try:
             sys.stdout.write('Turning on the display')
             for i in range(8):
@@ -857,6 +902,14 @@ if __name__ == "__main__":
                 file_name_list=file_name_list,
                 job_sets=job_sets,
                 config=config)
+            if config.get('global').get('dry_run', False):
+                event_list = push_event(event_list, 'Running in dry run mode')
+                sleep(5)
+                display_event.set()
+                for t in thread_list:
+                    thread_kill_event.set()
+                    t.join()
+                sys.exit()
             start_ready_job_sets(
                 job_sets=job_sets,
                 thread_list=thread_list,
