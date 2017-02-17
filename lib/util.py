@@ -14,6 +14,9 @@ from YearSet import YearSet
 from jobs.JobStatus import JobStatus
 
 def path_exists(config_items):
+    """
+    Checks the config for any netCDF file paths and validates that they exist
+    """
     for k, v in config_items.items():
         if type(v) != dict:
             continue
@@ -29,7 +32,10 @@ def check_year_sets(job_sets, file_list, sim_start_year, sim_end_year, debug, ad
     Checks the file_list, and sets the year_set status to ready if all the files are in place,
     otherwise, checks if there is partial data, or zero data
     """
-    incomplete_job_sets = [s for s in job_sets if s.status != SetStatus.COMPLETED and s.status != SetStatus.RUNNING and s.status != SetStatus.FAILED]
+    incomplete_job_sets = [s for s in job_sets
+                           if s.status != SetStatus.COMPLETED
+                           and s.status != SetStatus.RUNNING
+                           and s.status != SetStatus.FAILED]
     for job_set in incomplete_job_sets:
 
         start_year = job_set.set_start_year
@@ -103,6 +109,7 @@ def start_ready_job_sets(job_sets, thread_list, debug, event, upload_config, eve
 
                     job_id = job.execute(batch=True)
                     job.set_status(JobStatus.SUBMITTED)
+                    print 'climo has job_id {}'.format(job_id)
 
                     message = 'Submitted Ncclimo for year_set {}'.format(job_set.set_number)
                     event_list = push_event(event_list, message)
@@ -113,9 +120,11 @@ def start_ready_job_sets(job_sets, thread_list, debug, event, upload_config, eve
                         status=job.status)
                     logging.info(message)
 
+
+                    print 'sending climo to monitor'
                     thread = threading.Thread(
                         target=monitor_job,
-                        args=(job_id, job, job_set, event, 'slurm', upload_config, event_list))
+                        args=(job_id, job, job_set, event, debug, 'slurm', upload_config, event_list))
                     thread_list.append(thread)
                     thread.start()
                     return
@@ -165,33 +174,16 @@ def monitor_job(job_id, job, job_set, event=None, debug=False, batch_type='slurm
     Monitor the slurm job, and update the status to 'complete' when it finishes
     This function should only be called from within a thread
     """
-    def handle_slurm():
-        """
-        handle interfacing with the SLURM controller
-        Checkes the SLURM queue status and changes the job status appropriately
-        """
-        count = 0
-        valid = False
-        while count < 10 and not valid:
-            cmd = ['scontrol', 'show', 'job', str(job_id)]
-            out = Popen(cmd, stdout=PIPE, stderr=PIPE).communicate()[0]
-            # sometimes there will be a communication error with the SLURM controller
-            # in which case the controller returns 'error: some message'
-            if 'error' in out or len(out) == 0:
-                # print_message('SLURM COMMUNICATION ERROR')
-                # print_message(out)
-                logging.info('Error communication with SLURM controller, attempt number %s', count)
-                valid = False
-                count += 1
-                if thread_sleep(5, event):
-                    return
-            else:
-                valid = True
 
-        if not valid:
-            # if the controller errors 5 times in a row, its probably an unrecoverable error
-            logging.error('SLURM controller not responding')
-            return None
+    status = None
+    while True:
+        # this check is here in case the loop is stuck and the thread needs to be canceled
+        if event and event.is_set():
+            return
+        cmd = ['scontrol', 'show', 'job', str(job_id)]
+        out = Popen(cmd, stdout=PIPE, stderr=PIPE).communicate()[0]
+        if not out or len(out) == 0:
+            status = None
 
         # loop through the scontrol output looking for the JobState field
         job_status = None
@@ -201,71 +193,21 @@ def monitor_job(job_id, job, job_set, event=None, debug=False, batch_type='slurm
                 if 'JobState' in word:
                     index = word.find('=')
                     job_status = word[index + 1:]
-                    continue
-                if 'RunTime' in word:
-                    index = word.find('=') + 1
-                    run_time = word[index:]
                     break
-            if job_status and run_time:
+            if job_status:
                 break
-
         if not job_status:
-            if debug:
-                print_message('Error parsing job output\n{0}'.format(out))
-            logging.warning('Unable to parse scontrol output: %s', out)
+            sleep(1)
+            continue
 
         if job_status == 'RUNNING':
-            return JobStatus.RUNNING
+            status = JobStatus.RUNNING
         elif job_status == 'PENDING':
-            return JobStatus.PENDING
+            status = JobStatus.PENDING
         elif job_status == 'FAILED':
-            return JobStatus.FAILED
+            status = JobStatus.FAILED
         elif job_status == 'COMPLETED':
-            return JobStatus.COMPLETED
-
-        return job_status
-
-    def handle_pbs():
-        print 'dealing with pbs'
-        cmd = ['qstat']
-        out = Popen(cmd, stdout=PIPE, stderr=PIPE).communicate()[0]
-        # do some work
-        job_status = 'DANGER WILL ROBENSON'
-        return job_status
-
-    def handle_none():
-        print 'you should really be running this with slurm'
-        return 'Zug zug'
-
-    error_count = 0
-    status = None
-    while True:
-        # this check is here in case the loop is stuck and the thread needs to be canceled
-        if event and event.is_set():
-            return
-        if batch_type == 'slurm':
-            status = handle_slurm()
-        elif batch_type == 'pbs':
-            status = handle_pbs()
-        elif batch_type == 'none':
-            cmd = ['']
-            status = handle_none()
-            # TODO: figure out how to get this working
-
-        if not status:
-            if error_count >= 10:
-                logging.error('Unable to communicate to controller after 10 attempts')
-                job.status = JobStatus.FAILED
-                message = "## {job}: {id} status changed to {status}".format(
-                    job=job.get_type(),
-                    id=job.job_id,
-                    status=job.status)
-                logging.error(message)
-                # print_message(message)
-            error_count += 1
-            if thread_sleep(10, event):
-                return
-            continue
+            status = JobStatus.COMPLETED
 
         if job.status != status:
             if debug:
@@ -297,13 +239,11 @@ def monitor_job(job_id, job, job_set, event=None, debug=False, batch_type='slurm
                 job_set.status = SetStatus.RUNNING
 
         if status == JobStatus.FAILED:
-            # print_message('Setting set to status FAILED')
             job_set.status = SetStatus.FAILED
             return
 
         # if the job is done, or there has been an error, exit
         if status == JobStatus.COMPLETED:
-            # print_message('{} JOB COMPLETED'.format(job.get_type()))
 
             if job.get_type() == 'coupled_diagnostic':
                 job.generateIndex()
@@ -314,11 +254,14 @@ def monitor_job(job_id, job, job_set, event=None, debug=False, batch_type='slurm
                 if not os.path.exists(index_path):
                     os.makedirs(index_path)
                 suffix = [s for s in os.listdir(index_path)
-                        if 'coupled' in s
-                        and not s.endswith('.logs')].pop()
+                          if 'coupled' in s
+                          and not s.endswith('.logs')].pop()
                 index_path = os.path.join(index_path, suffix)
 
                 upload_config = {
+                    'year_set': job_set.set_number,
+                    'start_year': job_set.set_start_year,
+                    'end_year': job_set.set_end_year,
                     'path_to_diagnostic': index_path,
                     'username': upload_config.get('diag_viewer_username'),
                     'password': upload_config.get('diag_viewer_password'),
@@ -351,7 +294,7 @@ def monitor_job(job_id, job, job_set, event=None, debug=False, batch_type='slurm
 
 def check_for_inplace_data(file_list, file_name_list, job_sets, config):
     """
-    Checks the data cache for any files that might already be in place,
+    Checks the data cache for any files that might alread   y be in place,
     updates the file_list and job_sets accordingly
     """
     cache_path = config.get('global').get('data_cache_path')
@@ -535,7 +478,7 @@ def filename_to_year_set(filename, pattern, freq):
     if not filename.endswith(file_format):
         print_message('unable to find year set, unexpected file format')
         return 0
-    file_date = filename[ -(len(pattern_format) + len(file_format)): - len(file_format)]
+    file_date = filename[-(len(pattern_format) + len(file_format)): - len(file_format)]
     year = int(file_date[:4])
     if year % freq == 0:
         return int(year / freq)
@@ -580,6 +523,10 @@ def file_list_cmp(a, b):
             return 0
 
 def thread_sleep(seconds, event):
+    """
+    Allows a thread to sleep for one second at at time, and cancel when if the 
+    thread event is set
+    """
     for i in range(seconds):
         if event and event.is_set():
             return 1
@@ -594,13 +541,13 @@ def check_slurm_job_submission(expected_name):
     error_count = 0
     job_id = 0
     found_job = False
-    while error_count <= 10:
+    while True:
         out = Popen(cmd, stdout=PIPE, stderr=PIPE).communicate()[0]
         out = out.split('\n')
         if 'error' in out[0]:
             sleep(1)
-            error_count += 1
-            logging.warning('Error checking job status for {0}'.format(expected_name))
+            msg = 'Error checking job status for {0}'.format(expected_name)
+            logging.warning(msg)
             continue
         for line in out:
             for word in line.split():
