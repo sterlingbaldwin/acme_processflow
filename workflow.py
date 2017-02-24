@@ -12,6 +12,7 @@ import logging
 import time
 import pickle
 import curses
+import select
 
 from shutil import rmtree
 from shutil import move
@@ -39,14 +40,8 @@ parser.add_argument('-d', '--debug', help='Run in debug mode', action='store_tru
 parser.add_argument('-s', '--state', help='Path to a json state file')
 parser.add_argument('-n', '--no-ui', help='Turn off the GUI', action='store_true')
 parser.add_argument('-r', '--dry-run', help='Do all setup, but dont submit jobs', action='store_true')
-
-logging.basicConfig(
-    format='%(asctime)s:%(levelname)s: %(message)s',
-    datefmt='%m/%d/%Y %I:%M:%S %p',
-    filename='workflow.log',
-    filemode='w',
-    level=logging.DEBUG)
-
+parser.add_argument('-l', '--log', help='Path to logging output file')
+parser.add_argument('-u', '--no-cleanup', help='Dont perform pre or post run cleanup. This will leave all run scripts in place', action='store_true')
 #@atexit.register
 def save_state(config, file_list, job_sets, file_name_list):
     state_path = config.get('state_path')
@@ -80,12 +75,21 @@ def setup(parser):
     global from_saved_state
 
     args = parser.parse_args()
-        
+
     if args.debug:
         debug = True
         print_message('Running in debug mode', 'ok')
 
     config = {}
+    log_path = 'workflow.log'
+    if args.log:
+        log_path = args.log
+    logging.basicConfig(
+        format='%(asctime)s:%(levelname)s: %(message)s',
+        datefmt='%m/%d/%Y %I:%M:%S %p',
+        filename=log_path,
+        filemode='w',
+        level=logging.DEBUG)
 
     # load from the state file given
     if args.state:
@@ -199,16 +203,21 @@ def setup(parser):
                 else:
                     config[field] = raw_input('{0}: '.format(field))
 
-    if not args.no_ui:
+    if args.no_ui:
+        config['global']['ui'] = False
+    else:
         debug = False
         config['global']['ui'] = True
-    else:
-        config['global']['ui'] = False
+
     if args.dry_run:
         config['global']['dry_run'] = True
     else:
         config['global']['dry_run'] = False
 
+    if args.no_cleanup:
+        config['global']['no_cleanup'] = True
+    else:
+        config['global']['no_cleanup'] = False
     return config
 
 def add_jobs(year_set):
@@ -500,10 +509,11 @@ def monitor_check(monitor):
 
     logging.info('## Starting transfer %s with config: %s', transfer.uuid, pformat(transfer_config))
     # print_message('Starting file transfer', 'ok')
-    thread = threading.Thread(target=handle_transfer, args=(transfer, checked_new_files, thread_kill_event, event_list))
-    thread_list.append(thread)
-    thread.start()
-    active_transfers += 1
+    if not config.get('global').get('dry_run', False):
+        thread = threading.Thread(target=handle_transfer, args=(transfer, checked_new_files, thread_kill_event, event_list))
+        thread_list.append(thread)
+        thread.start()
+        active_transfers += 1
 
 def handle_transfer(transfer_job, f_list, event, event_list):
     global active_transfers
@@ -544,74 +554,99 @@ def cleanup():
     """
     Clean up temp files created during the run
     """
+    if config.get('global').get('no_cleanup'):
+        return
     logging.info('Cleaning up temp directories')
     try:
         cwd = os.getcwd()
         tmp_path = os.path.join(cwd, 'tmp')
-        rmtree(tmp_path)
+        if os.path.exists(tmp_path):
+            rmtree(tmp_path)
     except Exception as e:
         logging.error(format_debug(e))
         print_message('Error removing temp directories')
 
     try:
-        archive_path = os.path.join(cwd, 'run_script_archive', time.strftime("%d-%m-%Y"))
+        archive_path = os.path.join(cwd, 'script_archive', time.strftime("%d-%m-%Y-%I:%M"))
         if not os.path.exists(archive_path):
             os.makedirs(archive_path)
         run_script_path = os.path.join(cwd, 'run_scripts')
         move(run_script_path, archive_path)
     except Exception as e:
         logging.error(format_debug(e))
-        message = "## year_set {set} status change to {status}".format(set=year_set.set_number, status=year_set.status)
-        logging.error(message)
-        print_message('Error archiving run_scripts directory')
+        logging.error('Error archiving run_scripts directory')
 
-def display(stdscr, event):
+def xy_check(x, y, hmax, wmax):
+    if y >= hmax or x >= wmax:
+        return -1
+    else:
+        return 0
 
-
-    counter = 0
-    def ycheck(y, x, hmax, wmax):
-        if y >= hmax:
-            y = 0
-            x = (wmax / 2) + 3
-        return y, x
+def display(stdscr, event, config):
+    """
+    Display current execution status via curses
+    """
 
     initializing = True
     height, width = stdscr.getmaxyx()
     hmax = height - 3
     wmax = width - 5
+    spinner = ['\\', '|', '/', '-']
+    spin_index = 0
+    spin_len = 4
 
     try:
+        stdscr.nodelay(True)
         curses.curs_set(0)
         curses.init_pair(1, curses.COLOR_BLACK, curses.COLOR_WHITE)
         curses.init_pair(2, curses.COLOR_GREEN, curses.COLOR_WHITE)
-        curses.init_pair(3, curses.COLOR_RED, curses.COLOR_WHITE)
+        curses.init_pair(3, curses.COLOR_RED, curses.COLOR_BLACK)
         curses.init_pair(4, curses.COLOR_WHITE, curses.COLOR_BLACK)
         curses.init_pair(5, curses.COLOR_GREEN, curses.COLOR_BLACK)
         curses.init_pair(6, curses.COLOR_MAGENTA, curses.COLOR_BLACK)
         curses.init_pair(7, curses.COLOR_YELLOW, curses.COLOR_BLACK)
-        stdscr.bkgd(curses.color_pair(1))
+        curses.init_pair(8, curses.COLOR_BLACK, curses.COLOR_BLACK)
+        stdscr.bkgd(curses.color_pair(8))
 
         pad = curses.newpad(hmax, wmax)
-        y = 0
-        x = 0
+        last_y = 0
         while True:
+            c = stdscr.getch()
+            if c == curses.KEY_RESIZE:
+                # pad.endwin()
+                # pad = curses.newpad(hmax, wmax)
+                #pad.clear()
+                #del pad
+                height, width = stdscr.getmaxyx()
+                hmax = height - 3
+                wmax = width - 5
+                pad.resize(hmax, wmax)
+                # pad.refresh(0, 0, 3, 5, hmax, wmax)
+            elif c == ord('w'):
+                config['global']['ui'] = False
+                pad.clear()
+                del pad
+                curses.endwin()
+                return
             if len(job_sets) == 0:
                 sleep(1)
                 continue
             y = 0
+            x = 0
             for year_set in job_sets:
                 line = 'Year_set {num}: {start} - {end}'.format(
                     num=year_set.set_number,
                     start=year_set.set_start_year,
                     end=year_set.set_end_year)
-                pad.addstr(y, 0, line, curses.color_pair(1))
+                pad.addstr(y, x, line, curses.color_pair(1))
                 pad.clrtoeol()
                 y += 1
-                y, x = ycheck(y, x, hmax, wmax)
-
+                if xy_check(x, y, hmax, wmax) == -1:
+                    sleep(1)
+                    break
                 color_pair = curses.color_pair(4)
                 if year_set.status == SetStatus.COMPLETED:
-                    color_pair = curses.color_pair(2)
+                    color_pair = curses.color_pair(5)
                 elif year_set.status == SetStatus.FAILED:
                     color_pair = curses.color_pair(3)
                 elif year_set.status == SetStatus.RUNNING:
@@ -624,11 +659,24 @@ def display(stdscr, event):
                     pad.refresh(0, 0, 3, 5, hmax, wmax)
                 pad.clrtoeol()
                 y += 1
-                y, x = ycheck(y, x, hmax, wmax)
-                if year_set.status == SetStatus.COMPLETED or year_set.status == SetStatus.FAILED:
+                if xy_check(x, y, hmax, wmax) == -1:
+                    sleep(1)
+                    break
+                if year_set.status == SetStatus.COMPLETED \
+                    or year_set.status == SetStatus.FAILED \
+                    or year_set.status == SetStatus.NO_DATA \
+                    or year_set.status == SetStatus.PARTIAL_DATA:
+                    if y >= (hmax/3):
+                        last_y = y
+                        y = 0
+                        x += (wmax/2)
+                        if x >= wmax:
+                            break
                     continue
                 for job in year_set.jobs:
-                    line = '        {type} is '.format(type=job.get_type())
+                    line = '  >   {type} -- {id} '.format(
+                        type=job.get_type(),
+                        id=job.job_id)
                     pad.addstr(y, x, line, curses.color_pair(4))
                     color_pair = curses.color_pair(4)
                     if job.status == JobStatus.COMPLETED:
@@ -646,12 +694,23 @@ def display(stdscr, event):
                         sleep(0.01)
                         pad.refresh(0, 0, 3, 5, hmax, wmax)
                     y += 1
-                    y, x = ycheck(y, x, hmax, wmax)
+                if y >= (hmax/3):
+                    last_y = y
+                    y = 0
+                    x += (wmax/2)
+                    if x >= wmax:
+                        break
+
+            x = 0
+            if last_y:
+                y = last_y
             # pad.refresh(0, 0, 3, 5, hmax, wmax)
             pad.clrtobot()
-            y += 5
-            y, x = ycheck(y, x, hmax, wmax)
-            for line in event_list:
+            y += 1
+            if xy_check(x, y, hmax, wmax) == -1:
+                sleep(1)
+                continue
+            for line in event_list[-10:]:
                 prefix = '[+]  '
                 pad.addstr(y, x, prefix, curses.color_pair(5))
                 pad.addstr(line, curses.color_pair(4))
@@ -661,11 +720,17 @@ def display(stdscr, event):
                     pad.refresh(0, 0, 3, 5, hmax, wmax)
                 #pad.refresh(0, 0, 3, 5, hmax, wmax)
                 y += 1
-                y, x = ycheck(y, x, hmax, wmax)
-
+                if xy_check(x, y, hmax, wmax) == -1:
+                    sleep(1)
+                    break
+            pad.clrtobot()
             y += 1
-            file_start_y = y
+            if xy_check(x, y, hmax, wmax) == -1:
+                sleep(1)
+                continue
 
+            file_start_y = y
+            file_end_y = y
             file_display_list = []
             current_year = 1
             year_ready = True
@@ -689,26 +754,39 @@ def display(stdscr, event):
                             status = SetStatus.PARTIAL_DATA
                         else:
                             status = SetStatus.NO_DATA
-                    file_display_list.append('Year {year} status: {status}'.format(
+                    file_display_list.append('Year {year} - {status}'.format(
                         year=year,
                         status=status))
 
+            line_length = len(file_display_list[0])
+            num_cols = wmax/line_length
             for line in file_display_list:
+                if x + len(line) >= wmax:
+                    diff = wmax - (x + len(line))
+                    line = line[:diff]
                 pad.addstr(y, x, line, curses.color_pair(4))
                 pad.clrtoeol()
                 y += 1
-                if y >= hmax:
-                    x += 30
+                if y >= (hmax-10):
                     y = file_start_y
+                    x += line_length + 5
+                    if x >= wmax:
+                        break
+                if y > file_end_y:
+                    file_end_y = y
 
+            y = file_end_y + 1
             x = 0
-            y += 1
             msg = 'Active transfers: {}'.format(active_transfers)
             pad.addstr(y, x, msg, curses.color_pair(4))
             pad.clrtoeol()
-            pad.addstr(y, x, 'count: {}'.format(counter), curses.color_pair(4))
-            counter += 1
-
+            spin_line = spinner[spin_index]
+            spin_index += 1
+            if spin_index == spin_len:
+                spin_index = 0
+            y += 1
+            pad.addstr(y, x, spin_line, curses.color_pair(4))
+            y += 1
             if event and event.is_set():
                 return
             pad.clrtobot()
@@ -717,11 +795,16 @@ def display(stdscr, event):
             sleep(1)
 
     except KeyboardInterrupt as e:
+        print_debug(e)
         return
+
+def sigwinch_handler(n, frame):
+    curses.endwin()
+    curses.initscr()
 
 def start_display(config, event):
     try:
-        curses.wrapper(display, event)
+        curses.wrapper(display, event, config)
     except KeyboardInterrupt as e:
         return
 
@@ -760,6 +843,16 @@ if __name__ == "__main__":
     atexit.register(save_state, config, file_list, job_sets, file_name_list)
     # check that all netCDF files exist
     path_exists(config)
+    # cleanup any temp directories from previous runs
+    rs = os.path.join(os.getcwd(), 'run_scripts')
+    if os.path.exists(rs):
+        if os.listdir(rs):
+            if not config.get('global').get('no_cleanup'):
+                cleanup()
+                if not os.path.exists(rs):
+                    os.mkdir(rs)
+    else:
+        os.mkdir(rs)
 
     if config.get('global').get('ui', False):
         try:
@@ -903,8 +996,8 @@ if __name__ == "__main__":
                 job_sets=job_sets,
                 config=config)
             if config.get('global').get('dry_run', False):
-                event_list = push_event(event_list, 'Running in dry run mode')
-                sleep(5)
+                event_list = push_event(event_list, 'Running in dry-run mode')
+                sleep(50)
                 display_event.set()
                 for t in thread_list:
                     thread_kill_event.set()
@@ -924,10 +1017,30 @@ if __name__ == "__main__":
                 sleep(5)
                 display_event.set()
                 sleep(2)
-                print_message(message)
+                print_message(message, 'ok')
                 logging.info("## All processes complete")
                 sys.exit(0)
-            sleep(10)
+            #sleep(10)
+            if not config.get('global').get('ui'):
+                i, o, e = select.select([sys.stdin], [], [], 10)
+                if i:
+                    key = sys.stdin.readline().strip()
+                    if 'q' in key:
+                        try:
+                            config['global']['ui'] = True
+                            sys.stdout.write('Turning on the display')
+                            for i in range(8):
+                                sys.stdout.write('.')
+                                sys.stdout.flush()
+                                sleep(0.1)
+                            print '\n'
+                            diaplay_thread = threading.Thread(target=start_display, args=(config, display_event))
+                            diaplay_thread.start()
+
+                        except KeyboardInterrupt as e:
+                            display_event.set()
+            else:
+                sleep(10)
     except KeyboardInterrupt as e:
         print_message('----- KEYBOARD INTERUPT -----')
         print_message('cleaning up threads', 'ok')
