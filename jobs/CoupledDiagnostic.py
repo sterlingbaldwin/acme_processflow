@@ -112,6 +112,7 @@ class CoupledDiagnostic(object):
         self.depends_on = config.get('depends_on')
         self.year_set = config.get('year_set')
         self.status = JobStatus.VALID
+        
 
     def postvalidate(self):
         """
@@ -120,10 +121,15 @@ class CoupledDiagnostic(object):
         print 'postvalidate'
 
     def generateIndex(self):
-        self.event_list = push_event(self.event_list, 'Starting index generataion')
+        self.event_list = push_event(self.event_list, 'Starting index generataion for coupled diagnostic')
         outpage = OutputPage('Coupled Diagnostic')
-        version = time.strftime("%d-%m-%Y-%I:%M") + '-year-set-' + str(self.year_set) + '-coupled-diagnostic'
-        index = OutputIndex('Coupled Diagnostic', version=version)
+        dataset_name = '{time}_coupled_diag_{set}_{start}_{end}_{uuid}'.format(
+            time=time.strftime("%d-%m-%Y"),
+            set=str(self.year_set),
+            start=self.config.get('start_year'),
+            end=self.config.get('end_year'),
+            uuid=self.uuid[:5])
+        index = OutputIndex('Coupled Diagnostic', version=dataset_name)
 
         images_path = os.path.join(
             self.config.get('coupled_project_dir'),
@@ -148,7 +154,6 @@ class CoupledDiagnostic(object):
             tmp_row_list = []
             for file in file_list:
                 if var in file.path:
-                    # print 'adding {} to {} row'.format(file.path, var)
                     tmp_row_list.append(file)
             row_list.append(OutputRow(var, tmp_row_list))
 

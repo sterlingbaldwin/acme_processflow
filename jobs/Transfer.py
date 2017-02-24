@@ -56,7 +56,7 @@ class Transfer(object):
             'final_destination_path': '',
             'pattern': '',
         }
-        self.maximum_transfers = 1
+        self.maximum_transfers = 10
         self.prevalidate(config)
         self.msg = None
         self.job_id = 0
