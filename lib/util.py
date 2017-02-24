@@ -109,7 +109,6 @@ def start_ready_job_sets(job_sets, thread_list, debug, event, upload_config, eve
 
                     job_id = job.execute(batch=True)
                     job.set_status(JobStatus.SUBMITTED)
-                    print 'climo has job_id {}'.format(job_id)
 
                     message = 'Submitted Ncclimo for year_set {}'.format(job_set.set_number)
                     event_list = push_event(event_list, message)
@@ -120,8 +119,6 @@ def start_ready_job_sets(job_sets, thread_list, debug, event, upload_config, eve
                         status=job.status)
                     logging.info(message)
 
-
-                    print 'sending climo to monitor'
                     thread = threading.Thread(
                         target=monitor_job,
                         args=(job_id, job, job_set, event, debug, 'slurm', upload_config, event_list))
@@ -197,7 +194,7 @@ def monitor_job(job_id, job, job_set, event=None, debug=False, batch_type='slurm
             if job_status:
                 break
         if not job_status:
-            sleep(1)
+            sleep(5)
             continue
 
         if job_status == 'RUNNING':
@@ -209,7 +206,7 @@ def monitor_job(job_id, job, job_set, event=None, debug=False, batch_type='slurm
         elif job_status == 'COMPLETED':
             status = JobStatus.COMPLETED
 
-        if job.status != status:
+        if status and status != job.status:
             if debug:
                 if status != JobStatus.FAILED:
                     message = "## {type}: {id} status changed to {status}".format(
@@ -240,6 +237,13 @@ def monitor_job(job_id, job, job_set, event=None, debug=False, batch_type='slurm
 
         if status == JobStatus.FAILED:
             job_set.status = SetStatus.FAILED
+            if getattr(job, 'resubmit', None):
+                if job.resubmit() == -1:
+                    return
+                else:
+                    event_list = push_event(event_list, 'Resubmitting {type} job'.format(
+                        type=job.get_type()))
+                    continue
             return
 
         # if the job is done, or there has been an error, exit
