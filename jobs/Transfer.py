@@ -24,13 +24,15 @@ from lib.util import print_debug
 from lib.util import print_message
 from lib.util import filename_to_year_set
 from lib.util import format_debug
+from lib.util import push_event
 from JobStatus import JobStatus
 
 class Transfer(object):
     """
     Uses Globus to transfer files between DTNs
     """
-    def __init__(self, config=None):
+    def __init__(self, config=None, event_list=None):
+        self.event_list = event_list
         self.config = {}
         self.status = JobStatus.INVALID
         self.type = 'transfer'
@@ -54,7 +56,7 @@ class Transfer(object):
             'final_destination_path': '',
             'pattern': '',
         }
-        self.maximum_transfers = 0
+        self.maximum_transfers = 10
         self.prevalidate(config)
         self.msg = None
         self.job_id = 0
@@ -99,7 +101,8 @@ class Transfer(object):
             return 0
         for i in config:
             if i not in self.inputs:
-                print_message("Unexpected arguement: {}, {}".format(i, config[i]))
+                # print_message("Unexpected arguement: {}, {}".format(i, config[i]))
+                pass
             else:
                 if i == 'recursive':
                     if config.get(i) == 'True':
@@ -120,9 +123,7 @@ class Transfer(object):
                     self.status = JobStatus.INVALID
                     return -1
         self.status = JobStatus.VALID
-        # the maximum number of files to transfer at one time, set to a single year_set assuming 12 files per year
-        # self.maximum_transfers = self.config.get('frequency') * 12
-        self.maximum_transfers = 10
+        self.config['file_list'] = self.config['file_list'][:self.maximum_transfers]
         return 0
 
     def postvalidate(self):
@@ -159,7 +160,25 @@ class Transfer(object):
                     return dstpath + basename
         return dstpath
 
-    def execute(self):
+    def display_status(self, event_list, percent_complete, task_id):
+        message = 'Transfer {id} in progress ['.format(id=task_id)
+        for i in range(1, 100, 5):
+            if i < percent_complete:
+                message += '*'
+            else:
+                message += '_'
+        message += '] {0}%'.format(percent_complete)
+        replaced = False
+        for i, e in enumerate(event_list):
+            if str(task_id) in e:
+                event_list[i] = '[+] ' + time.strftime("%I:%M") + message
+                replaced = True
+                break
+        if not replaced:
+            event_list = push_event(event_list, message)
+
+    def execute(self, event, event_list):
+
         if self.status != JobStatus.VALID:
             logging.error('Transfer job in invalid state')
             logging.error(str(self))
@@ -168,7 +187,11 @@ class Transfer(object):
         # Get source and destination UUIDs
         srcendpoint = self.config.get('source_endpoint')
         dstendpoint = self.config.get('destination_endpoint')
-        logging.info('Starting transfer job from %s to %s', srcendpoint, dstendpoint)
+        message = 'Starting transfer job from {src} to {dst}'.format(
+            src=srcendpoint,
+            dst=dstendpoint)
+        logging.info(message)
+        event_list = push_event(event_list, message)
         # Get access token (This method of getting an acces token is deprecated and should be replaced by OAuth2 calls).
         globus_username = self.config.get('globus_username')
         globus_password = self.config.get('globus_password')
@@ -249,6 +272,7 @@ class Transfer(object):
             code, reason, data = api_client.transfer(transfer_task)
             task_id = data["task_id"]
             logging.info('starting transfer with task id %s', task_id)
+            code, reason, data = api_client.task(task_id)
         except Exception as e:
             logging.error("Could not submit the transfer")
             logging.error(format_debug(e))
@@ -256,22 +280,37 @@ class Transfer(object):
             return
 
         # Check a status of the transfer every minute (60 secs)
-        number_transfered = 0
-        files_transferred = []
+        number_transfered = -1
         while True:
-            code, reason, data = api_client.task(task_id)
-            logging.info('transfer status: %s', data['status'])
-            # if the transfer is done, move any files that havent already been
-            # moved to their final destination
-            if data['status'] == 'SUCCEEDED':
-                logging.info('progress %d/%d', data['files_transferred'], data['files'])
-                self.status = JobStatus.COMPLETED
-                return ('success', '')
-            elif data['status'] == 'FAILED':
-                logging.error('Error transfering files %s', data.get('nice_status_details'))
-                self.status = JobStatus.FAILED
-                return ('error', data['nice_status_details'])
+            try:
+                code, reason, data = api_client.task(task_id)
+                logging.info('transfer status: %s', data['status'])
+                # if the transfer is done, move any files that havent already been
+                # moved to their final destination
+                if data['status'] == 'SUCCEEDED':
+                    logging.info('progress %d/%d', data['files_transferred'], data['files'])
+                    percent_complete = 100.0
+                    self.display_status(event_list, percent_complete, task_id)
 
-            elif data['status'] == 'ACTIVE':
-                logging.info('progress %d/%d', data['files_transferred'], data['files'])
-            time.sleep(10)
+                    message = 'Transfer job completed'
+                    self.status = JobStatus.COMPLETED
+                    return ('success', '')
+                elif data['status'] == 'FAILED':
+                    logging.error('Error transfering files %s', data.get('nice_status_details'))
+                    self.status = JobStatus.FAILED
+                    return ('error', data['nice_status_details'])
+                elif data['status'] == 'ACTIVE':
+                    if number_transfered < data['files_transferred']:
+                        number_transfered = data['files_transferred']
+                        logging.info('progress %d/%d', data['files_transferred'], data['files'])
+                        percent_complete = (float(data['files_transferred']) / float(data['files'])) * 100
+                        self.display_status(event_list, percent_complete, task_id)
+
+                    status = JobStatus.RUNNING
+                if event and event.is_set():
+                    api_client.task_cancel(task_id)
+                    return
+            except Exception as e:
+                logging.error(format_debug(e))
+                return
+            time.sleep(5)

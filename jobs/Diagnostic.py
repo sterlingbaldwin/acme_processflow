@@ -23,7 +23,8 @@ class Diagnostic(object):
     """
     Performs the ACME diagnostic job
     """
-    def __init__(self, config=None):
+    def __init__(self, config=None, event_list=None):
+        self.event_list = event_list
         self.raw_config = config
         self.config = {}
         self.proc = None
@@ -53,7 +54,7 @@ class Diagnostic(object):
         }
         self.slurm_args = {
             'num_cores': '-n 16', # 16 cores
-            'run_time': '-t 0-02:00', # 1 hour run time
+            'run_time': '-t 0-05:00', # 1 hour run time
             'num_machines': '-N 1', # run on one machine
         }
         self.prevalidate(config)
@@ -139,7 +140,12 @@ class Diagnostic(object):
         if self.setup_input_directory() == -1:
             return
 
-        dataset_name = time.strftime("%d-%m-%Y") + '-year-set-' + str(self.year_set) + '-' + self.uuid
+        dataset_name = '{time}_uvcmetrics_{set}_{start}_{end}_{uuid}'.format(
+            time=time.strftime("%d-%m-%Y"),
+            set=str(self.year_set),
+            start=self.config.get('start_year'),
+            end=self.config.get('end_year'),
+            uuid=self.uuid[:5])
         cmd = ['metadiags', '--dsname', dataset_name]
 
         cmd_config = {
@@ -190,7 +196,11 @@ class Diagnostic(object):
                 print_message('Error running diagnostic')
         else:
             # Submitting to SLURM queue
-            expected_name = 'diagnostic_job_' + str(self.uuid)
+            expected_name = 'uvcmetrics_set_{set}_{start}_{end}_{uuid}'.format(
+                set=self.year_set,
+                start=self.config.get('start_year'),
+                end=self.config.get('end_year'),
+                uuid=self.uuid[:5])
             run_script = os.path.join(os.getcwd(), 'run_scripts', expected_name)
             self.slurm_args['error_file'] = '-e {error_file}'.format(error_file=run_script + '.err')
             self.slurm_args['output_file'] = '-o {output_file}'.format(output_file=run_script + '.out')
@@ -232,9 +242,9 @@ class Diagnostic(object):
             archive_path = '{}/archive'.format(self.config['--outputdir'])
             if not os.path.exists(archive_path + '.tar.gz'):
                 try:
-                    print_message(
-                        'creating output archive {}'.format(archive_path + '.tar.gz'),
-                        'ok')
+                    # print_message(
+                    #     'creating output archive {}'.format(archive_path + '.tar.gz'),
+                    #     'ok')
                     shutil.make_archive(
                         archive_path,
                         'gztar',
@@ -244,7 +254,8 @@ class Diagnostic(object):
                     print_message('Error making archive {}'.format(archive_path + '.tar.gz'))
 
             else:
-                print_message('archive {} already exists'.format(archive_path + '.tar.gz'))
+                # print_message('archive {} already exists'.format(archive_path + '.tar.gz'))
+                pass
 
     def postvalidate(self):
         """
@@ -325,6 +336,8 @@ class Diagnostic(object):
         outputdir = os.path.join(self.config.get('--outputdir'), 'amwg')
         if os.path.exists(outputdir):
             output_contents = os.listdir(outputdir)
-            if 'index.json' in output_contents and len(output_contents) > 400:
-                self.status = JobStatus.COMPLETED
+            if 'index.json' in output_contents:
+                if len(output_contents) > 1000:
+                    self.status = JobStatus.COMPLETED
+
         return 0

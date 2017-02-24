@@ -19,14 +19,16 @@ from lib.util import print_debug
 from lib.util import check_slurm_job_submission
 from lib.util import cmd_exists
 from lib.util import create_symlink_dir
+from lib.util import push_event
 from JobStatus import JobStatus
 
 
 class CoupledDiagnostic(object):
-    def __init__(self, config):
+    def __init__(self, config, event_list):
         """
         Setup class attributes
         """
+        self.event_list = event_list
         self.inputs = {
             'year_set': '',
             'nco_path': '',
@@ -110,6 +112,7 @@ class CoupledDiagnostic(object):
         self.depends_on = config.get('depends_on')
         self.year_set = config.get('year_set')
         self.status = JobStatus.VALID
+        
 
     def postvalidate(self):
         """
@@ -118,10 +121,15 @@ class CoupledDiagnostic(object):
         print 'postvalidate'
 
     def generateIndex(self):
-        print_message('Starting index generataion', 'ok')
+        self.event_list = push_event(self.event_list, 'Starting index generataion for coupled diagnostic')
         outpage = OutputPage('Coupled Diagnostic')
-        version = time.strftime("%d-%m-%Y-%I:%M") + '-year-set-' + str(self.year_set) + '-coupled-diagnostic'
-        index = OutputIndex('Coupled Diagnostic', version=version)
+        dataset_name = '{time}_coupled_diag_{set}_{start}_{end}_{uuid}'.format(
+            time=time.strftime("%d-%m-%Y"),
+            set=str(self.year_set),
+            start=self.config.get('start_year'),
+            end=self.config.get('end_year'),
+            uuid=self.uuid[:5])
+        index = OutputIndex('Coupled Diagnostic', version=dataset_name)
 
         images_path = os.path.join(
             self.config.get('coupled_project_dir'),
@@ -146,7 +154,6 @@ class CoupledDiagnostic(object):
             tmp_row_list = []
             for file in file_list:
                 if var in file.path:
-                    # print 'adding {} to {} row'.format(file.path, var)
                     tmp_row_list.append(file)
             row_list.append(OutputRow(var, tmp_row_list))
 
@@ -157,7 +164,7 @@ class CoupledDiagnostic(object):
 
         index.addPage(outpage)
         outpath = os.path.join(images_path, 'index.json')
-        print_message('writing index file to {}'.format(outpath))
+        self.event_list = push_event(self.event_list, 'Index generataion complete')
         index.toJSON(outpath)
 
     def setup_input_directory(self):
@@ -205,7 +212,11 @@ class CoupledDiagnostic(object):
                 cmd = 'csh {run_AIMS}'.format(
                     run_AIMS=self.config.get('rendered_output_path'))
 
-                expected_name = 'coupled_diag_' + str(self.uuid)
+                expected_name = 'coupled_diag_set_{set}_{start}_{end}_{uuid}'.format(
+                    set=self.config.get('year_set'),
+                    start=self.config.get('test_begin_yr_climo'),
+                    end=self.config.get('test_end_yr_climo'),
+                    uuid=self.uuid[:5])
                 run_script = os.path.join(os.getcwd(), 'run_scripts', expected_name)
                 self.slurm_args['error_file'] = '-e {err}'.format(err=run_script + '.err')
                 self.slurm_args['out_file'] = '-o {out}'.format(out=run_script + '.out')

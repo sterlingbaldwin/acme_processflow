@@ -3,15 +3,9 @@ A workflow tool for the ACME project
 
 # Installation
 
-** Note ** 
-If you're going to be running this on a server, instead of uvcdat, use uvcdat-nox
-        conda create -n <SOME ENVIRONMENT NAME> -c conda-forge -c uvcdat uvcdat-nox
-
-
-
     git clone https://github.com/sterlingbaldwin/acme_workflow.git
-    conda create -n <SOME ENVIRONMENT NAME> -c conda-forge -c uvcdat/label/nightly uvcdat
-    source activate <SOME ENVIRONMENT NAME>
+    conda create -n acme -c conda-forge -c uvcdat/label/nightly -c uvcdat uvcdat-nox "cdms2>2017"
+    source activate acme
 
     conda uninstall openblas
 
@@ -25,13 +19,23 @@ If you're going to be running this on a server, instead of uvcdat, use uvcdat-no
 
 # Usage
 
-    usage: workflow.py [-h] [-c CONFIG] [-d]
+    usage: workflow.py [-h] [-c CONFIG] [-d] [-s STATE] [-n] [-r] [-l LOG] [-u]
 
     optional arguments:
-      -h, --help            show this help message and exit
-      -c CONFIG, --config CONFIG
-                        Path to configuration file
-      -d, --debug           Run in debug mode
+    -h, --help            show this help message and exit
+    -c CONFIG, --config CONFIG
+                            Path to configuration file
+    -d, --debug           Run in debug mode
+    -s STATE, --state STATE
+                            Path to a json state file
+    -n, --no-ui           Turn off the GUI
+    -r, --dry-run         Do all setup, but dont submit jobs
+    -l LOG, --log LOG     Path to logging output file
+    -u, --no-cleanup      Dont perform pre or post run cleanup. This will leave
+                            all run scripts in place
+
+*NOTE*
+When running in GUI mode, resizing the window is discouraged. Although there is some checking for window resizes, the likely outcome will be a hard crash.  
 
 # Configuration
 ## Global

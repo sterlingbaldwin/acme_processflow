@@ -25,7 +25,10 @@ class UploadDiagnosticOutput(object):
             'username': '',
             'password': '',
             'server': '',
-            'depends_on': ''
+            'depends_on': '',
+            'year_set': '',
+            'start_year': '',
+            'end_year': ''
         }
         self.config = {}
         self.outputs = {}
@@ -35,9 +38,13 @@ class UploadDiagnosticOutput(object):
         self.type = 'upload_diagnostic_output'
         self.job_id = 0
         self.proc = None
+        self.resubmit_max = 5
+        self.batch_script_name = None
+        self.expected_name = None
+        self.run_script = None
         self.slurm_args = {
-            'num_cores': '-n 1', # 16 cores
-            'run_time': '-t 0-02:00', # 1 hour run time
+            'num_cores': '-n 1', # 1 core
+            'run_time': '-t 0-00:10', # 1 hour run time
             'num_machines': '-N 1', # run on one machine
         }
         self.prevalidate(config)
@@ -145,11 +152,15 @@ class UploadDiagnosticOutput(object):
             self.status = JobStatus.COMPLETED
         # running in batch mode
         else:
-            expected_name = 'upload_diag_job_' + str(self.uuid)
-            run_script = os.path.join(os.getcwd(), 'run_scripts/' + expected_name + '.py')
+            self.expected_name = 'upload_diag_set_{set}_{start}_{end}_{uuid}'.format(
+                set=self.config.get('year_set'),
+                start=self.config.get('start_year'),
+                end=self.config.get('end_year'),
+                uuid=self.uuid[:5])
+            self.run_script = os.path.join(os.getcwd(), 'run_scripts/' + self.expected_name + '.py')
 
             # write out a python script with the upload code
-            with open(run_script, 'w') as batchfile:
+            with open(self.run_script, 'w') as batchfile:
                 batchfile.write("from output_viewer.diagsviewer import DiagnosticsViewerClient\n\
 import sys\n\
 import traceback\n\
@@ -182,43 +193,18 @@ except Exception as e:\n\
         d=self.config.get('path_to_diagnostic')))
 
             # write out a script to call the upload code
-            batch_script_name = os.path.join(os.getcwd(), 'run_scripts', expected_name)
-            with open(batch_script_name, 'w') as batchfile:
-                batchfile.write('#!/bin/bash\npython {0}'.format(run_script))
-
-            # tell slurm to submit a job for that script
-            output_path = os.path.join(os.getcwd(), 'run_scripts', expected_name + '.out')
-            slurm_cmd = ['sbatch', '-o', output_path, batch_script_name]
-            started = False
-            retry_count = 0
-            while not started and retry_count < 5:
-                self.proc = Popen(slurm_cmd, stdout=PIPE, stderr=PIPE)
-                output, err = self.proc.communicate()
-                # print_message('upload job output:\n {0}\nerr: {1}'.format(output, err))
-                started, job_id = check_slurm_job_submission(expected_name)
-                if started:
-                    self.status = JobStatus.RUNNING
-                    message = "## {type} id: {id} status change to {status}".format(
-                        type=self.type,
-                        id=self.job_id,
-                        status=self.status)
-                    logging.info(message)
-                    self.job_id = job_id
-                elif retry_count >= 5:
-                    logging.error(output)
-
-                    self.status = JobStatus.FAILED
-                    message = "## {type} id: {id} status change to {status}".format(
-                        type=self.type,
-                        id=self.job_id,
-                        status=self.status)
-                    logging.error(message)
-                    return 0
+            self.batch_script_name = os.path.join(os.getcwd(), 'run_scripts', self.expected_name)
+            with open(self.batch_script_name, 'w') as batchfile:
+                batchfile.write('#!/bin/bash\npython {0}'.format(self.run_script))
+            submitted = False
+            while not submitted:
+                try:
+                    self.submit()
+                except Exception as e:
+                    sleep(10)
+                    self.resubmit()
                 else:
-                    logging.warning('Error starting job trying again, attempt %s', str(retry_count))
-                    retry_count += 1
-                    sleep(5)
-                    continue
+                    submitted = True
             return self.job_id
 
     def set_status(self, status):
@@ -226,3 +212,38 @@ except Exception as e:\n\
         Set the jobs statys
         """
         self.status = status
+
+    def submit(self):
+        """
+        Submit the actual slurm job to the queue
+        """
+        # tell slurm to submit a job for that script
+        output_path = os.path.join(os.getcwd(), 'run_scripts', self.expected_name + '.out')
+        slurm_cmd = ['sbatch', '-o', output_path, self.batch_script_name]
+        started = False
+        while not started:
+            self.proc = Popen(slurm_cmd, stdout=PIPE, stderr=PIPE)
+            output, err = self.proc.communicate()
+            # print_message('upload job output:\n {0}\nerr: {1}'.format(output, err))
+            started, job_id = check_slurm_job_submission(self.expected_name)
+            if started:
+                self.status = JobStatus.RUNNING
+                message = "## {type} id: {id} status change to {status}".format(
+                    type=self.type,
+                    id=self.job_id,
+                    status=self.status)
+                logging.info(message)
+                self.job_id = job_id
+            else:
+                logging.warning('Error starting job trying again')
+                sleep(10)
+                continue
+        return self.job_id
+
+    def resubmit(self):
+        if self.resubmit_max > 0:
+            self.resubmit_max -= 1
+            self.submit()
+            return 0
+        else:
+            return -1

@@ -8,6 +8,7 @@ class SetStatus(Enum):
     RUNNING = 3
     COMPLETED = 4
     FAILED = 5
+    IN_TRANSIT = 6
 
 
 class YearSet(object):
