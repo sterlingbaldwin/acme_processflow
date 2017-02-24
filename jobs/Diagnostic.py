@@ -242,9 +242,6 @@ class Diagnostic(object):
             archive_path = '{}/archive'.format(self.config['--outputdir'])
             if not os.path.exists(archive_path + '.tar.gz'):
                 try:
-                    # print_message(
-                    #     'creating output archive {}'.format(archive_path + '.tar.gz'),
-                    #     'ok')
                     shutil.make_archive(
                         archive_path,
                         'gztar',
@@ -252,10 +249,6 @@ class Diagnostic(object):
                 except Exception as e:
                     print_debug(e)
                     print_message('Error making archive {}'.format(archive_path + '.tar.gz'))
-
-            else:
-                # print_message('archive {} already exists'.format(archive_path + '.tar.gz'))
-                pass
 
     def postvalidate(self):
         """
