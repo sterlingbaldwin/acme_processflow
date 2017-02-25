@@ -26,6 +26,7 @@ from jobs.Transfer import Transfer
 from jobs.Ncclimo import Climo
 from jobs.UploadDiagnosticOutput import UploadDiagnosticOutput
 # from jobs.Publication import Publication
+from jobs.AMWGDiagnostic import AMWGDiagnostic
 from jobs.CoupledDiagnostic import CoupledDiagnostic
 from jobs.JobStatus import JobStatus
 from lib.Monitor import Monitor
@@ -42,7 +43,7 @@ parser.add_argument('-n', '--no-ui', help='Turn off the GUI', action='store_true
 parser.add_argument('-r', '--dry-run', help='Do all setup, but dont submit jobs', action='store_true')
 parser.add_argument('-l', '--log', help='Path to logging output file')
 parser.add_argument('-u', '--no-cleanup', help='Dont perform pre or post run cleanup. This will leave all run scripts in place', action='store_true')
-#@atexit.register
+
 def save_state(config, file_list, job_sets, file_name_list):
     state_path = config.get('state_path')
     if not state_path:
@@ -230,7 +231,8 @@ def add_jobs(year_set):
         'climo': False,
         'diagnostic': False,
         'upload_diagnostic_output': False,
-        'coupled_diagnostic': False
+        'coupled_diagnostic': False,
+        'amwg_diagnostic': False
     }
     for job in year_set.jobs:
         if not required_jobs[job.get_type()]:
@@ -370,6 +372,36 @@ def add_jobs(year_set):
         msg = 'Adding CoupledDiagnostic job to the job list: {}'.format(str(coupled_diag))
         logging.info(msg)
         year_set.add_job(coupled_diag)
+
+        amwg_project_dir = os.path.join(
+            config.get('global').get('output_path'),
+            'amwg_diags',
+            'year_set_{}'.format(year_set.set_number))
+        if not os.path.exists(amwg_project_dir):
+            os.makedirs(amwg_project_dir)
+
+        amwg_temp_dir = os.path.join(os.getcwd(), 'tmp', 'amwg', year_set_str)
+        if not os.path.exists(diag_temp_dir):
+            os.makedirs(diag_temp_dir)
+        template_path = os.path.join(os.getcwd(), 'resources', 'amwg_template.csh')
+        amwg_config = {
+            'test_path': amwg_project_dir + os.sep,
+            'test_casename': g_config.get('experiment'),
+            'test_path_history': climo_temp_dir + os.sep,
+            'regrided_climo_path': regrid_output_dir,
+            'test_path_climo': amwg_temp_dir + os.sep,
+            'test_path_diag': amwg_project_dir + os.sep,
+            'start_year': year_set.set_start_year,
+            'end_year': year_set.set_end_year,
+            'set_number': year_set.set_number,
+            'run_directory': amwg_project_dir,
+            'template_path': template_path,
+            'depends_on': [len(year_set.jobs) - 3]
+        }
+        amwg_diag = AMWGDiagnostic(amwg_config, event_list)
+        msg = 'Adding AMWGDiagnostic job to the job list: {}'.format(amwg_config)
+        logging.info(msg)
+        year_set.add_job(amwg_diag)
 
     # init the upload job
     if not required_jobs['upload_diagnostic_output']:
@@ -786,10 +818,11 @@ def display(stdscr, event, config):
                 spin_index = 0
             y += 1
             pad.addstr(y, x, spin_line, curses.color_pair(4))
+            pad.clrtoeol()
+            pad.clrtobot()
             y += 1
             if event and event.is_set():
                 return
-            pad.clrtobot()
             pad.refresh(0, 0, 3, 5, hmax, wmax)
             initializing = False
             sleep(1)
