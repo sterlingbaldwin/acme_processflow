@@ -13,6 +13,27 @@ from YearSet import SetStatus
 from YearSet import YearSet
 from jobs.JobStatus import JobStatus
 
+def get_climo_output_files(input_path, set_start_year, set_end_year):
+    contents = os.listdir(input_path)
+    file_list_tmp = [s for s in contents if not os.path.isdir(s)]
+    file_list = []
+    for file in file_list_tmp:
+        start_search = re.search(r'\_\d\d\d\d', file)
+        if not start_search:
+            continue
+        start_index = start_search.start() + 1
+        start_year = int(file[start_index: start_index + 4])
+
+        end_search = re.search(r'\_\d\d\d\d', file[start_index:])
+        if not end_search:
+            continue
+        end_index = end_search.start() + start_index + 1
+        end_year = int(file[end_index: end_index + 4])
+
+        if start_year == set_start_year and end_year == set_end_year:
+            file_list.append(file)
+    return file_list
+
 def path_exists(config_items):
     """
     Checks the config for any netCDF file paths and validates that they exist
@@ -383,7 +404,7 @@ def print_message(message, status='error'):
     elif status == 'ok':
         print colors.OKGREEN + '[+] ' + colors.ENDC + str(message)
 
-def render(variables, input_path, output_path, delimiter):
+def render(variables, input_path, output_path, delimiter='%%'):
     """
     Takes an input file path, an output file path, a set of variables, and a delimiter.
     For each instance of that delimiter wrapped around a substring, replaces the
@@ -405,13 +426,15 @@ def render(variables, input_path, output_path, delimiter):
 
     try:
         infile = open(input_path, 'r')
-    except IOError:
-        print 'unable to open file: {}'.format(input_path)
+    except IOError as e:
+        print 'unable to open input file: {}'.format(input_path)
+        print_debug(e)
         return
     try:
         outfile = open(output_path, 'w')
-    except IOError:
-        print 'unable to open file: {}'.format(input_path)
+    except IOError as e:
+        print 'unable to open output file: {}'.format(output_path)
+        print_debug(e)
         return
 
     for line in infile.readlines():
