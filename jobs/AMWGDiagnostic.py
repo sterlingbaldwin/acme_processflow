@@ -1,9 +1,11 @@
 # system level modules
 import logging
 import os
+import re
 # system module functions
 from uuid import uuid4
 from subprocess import Popen, PIPE
+from pprint import pformat
 # job modules
 from JobStatus import JobStatus
 # output_viewer modules
@@ -45,17 +47,17 @@ class AMWGDiagnostic(object):
         """
         self.event_list = event_list
         self.inputs = {
+            'diag_home': '',
             'test_casename': '',
             'test_path': '',
             'test_filetype': 'monthly_history',
             'test_path_history': '',
             'test_path_climo': '',
             'test_path_diag': '',
-            'DIAG_HOME': '/p/cscratch/acme/amwg/amwg_diag',
             'regrided_climo_path': '',
             'start_year': '',
             'end_year': '',
-            'year_set': '',
+            'set_number': '',
             'run_directory': '',
             'template_path': ''
         }
@@ -95,6 +97,37 @@ class AMWGDiagnostic(object):
         # TODO: Check for precomputed output
         self.status = JobStatus.VALID
 
+    # def generateIndex(self):
+    #     self.event_list = push_event(self.event_list, 'Starting index generataion for AMWG diagnostic')
+    #     outpage = OutputPage('AMWG Diagnostic')
+    #     dataset_name = '{time}_AMWG_diag_{set}_{start}_{end}_{uuid}'.format(
+    #         time=time.strftime("%d-%m-%Y"),
+    #         set=str(self.year_set),
+    #         start=self.config.get('start_year'),
+    #         end=self.config.get('end_year'),
+    #         uuid=self.uuid[:5])
+
+    #     index = OutputIndex('AMWG Diagnostic', version=dataset_name)
+    #     image_path = self.config.get('test_path_diag')
+    #     images_list = os.listdir(image_path)
+    #     file_list = []
+    #     row_list = []
+    #     group_list = []
+    #     for image in image_list:
+    #         title = image[ len(self.config.get('test_casename')) + 1: -4]
+    #         outfile = OutputFile(
+    #             path=image,
+    #             title=title)
+    #         file_list.append(outfile)
+
+    #     for var in self.var_list:
+    #         tmp_row_list = []
+    #         for file in file_list:
+    #             if var in file.path:
+    #                 tmp_row_list.append(file)
+    #         row_list.append(OutputRow(var, tmp_row_list))
+    
+        
     def postvalidate(self):
         """
             Check that what the job was supposed to do actually happened
@@ -125,9 +158,15 @@ class AMWGDiagnostic(object):
             src_list=file_list,
             dst=self.config.get('test_path_climo'))
 
+        for item in os.listdir(self.config.get('test_path_climo')):
+            start_search = re.search(r'\_\d\d\d\d', item)
+            s_index = start_search.start()
+            os.rename(
+                os.path.join(self.config.get('test_path_climo'), item),
+                os.path.join(self.config.get('test_path_climo'), item[:s_index] + '_climo.nc'))
         # setup sbatch script
-        expected_name = 'amwg_set_{year_set}_{start}_{end}_{uuid}'.format(
-            year_set=self.config.get('year_set'),
+        expected_name = 'amwg_set_{set_number}_{start}_{end}_{uuid}'.format(
+            set_number=self.config.get('set_number'),
             start=self.config.get('start_year'),
             end=self.config.get('end_year'),
             uuid=self.uuid[:5])
@@ -154,7 +193,7 @@ class AMWGDiagnostic(object):
         slurm_cmd = ['sbatch', run_script]
         started = False
         while not started:
-            self.proc = Popen(slurm_cmd, stdout=PIPE)
+            self.proc = Popen(slurm_cmd, stdout=PIPE, stderr=PIPE)
             output, err = self.proc.communicate()
             started, job_id = check_slurm_job_submission(expected_name)
             if started:
