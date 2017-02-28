@@ -219,6 +219,7 @@ def setup(parser):
         config['global']['no_cleanup'] = True
     else:
         config['global']['no_cleanup'] = False
+
     return config
 
 def add_jobs(year_set):
@@ -289,6 +290,11 @@ def add_jobs(year_set):
 
     # init the diagnostic job
     if not required_jobs['diagnostic']:
+        dataset_name = '{time}_{set}_{start}_{end}'.format(
+            time=time.strftime("%d-%m-%Y"),
+            set=year_set.set_number,
+            start=year_set.set_start_year,
+            end=year_set.set_end_year)
         # create the output directory
         output_path = config.get('global').get('output_path')
 
@@ -302,6 +308,7 @@ def add_jobs(year_set):
             os.makedirs(diag_temp_dir)
 
         diag_config = {
+            'dataset_name': dataset_name,
             '--model': diag_temp_dir,
             '--obs': config.get('meta_diags').get('obs_for_diagnostics_path'),
             '--outputdir': diag_output_path,
@@ -330,6 +337,7 @@ def add_jobs(year_set):
         g_config = config.get('global')
         c_config = config.get('coupled_diags')
         coupled_diag_config = {
+            'dataset_name': dataset_name,
             'year_set': year_set.set_number,
             'climo_tmp_dir': climo_temp_dir,
             'regrid_path': regrid_output_dir,
@@ -385,12 +393,14 @@ def add_jobs(year_set):
             os.makedirs(diag_temp_dir)
         template_path = os.path.join(os.getcwd(), 'resources', 'amwg_template.csh')
         amwg_config = {
+            'dataset_name': dataset_name,
+            'diag_home': config.get('amwg').get('diag_home'),
             'test_path': amwg_project_dir + os.sep,
             'test_casename': g_config.get('experiment'),
             'test_path_history': climo_temp_dir + os.sep,
             'regrided_climo_path': regrid_output_dir,
-            'test_path_climo': amwg_temp_dir + os.sep,
-            'test_path_diag': amwg_project_dir + os.sep,
+            'test_path_climo': amwg_temp_dir,
+            'test_path_diag': amwg_project_dir,
             'start_year': year_set.set_start_year,
             'end_year': year_set.set_end_year,
             'set_number': year_set.set_number,
@@ -399,7 +409,7 @@ def add_jobs(year_set):
             'depends_on': [len(year_set.jobs) - 3]
         }
         amwg_diag = AMWGDiagnostic(amwg_config, event_list)
-        msg = 'Adding AMWGDiagnostic job to the job list: {}'.format(amwg_config)
+        msg = 'Adding AMWGDiagnostic job to the job list: {}'.format(str(amwg_config))
         logging.info(msg)
         year_set.add_job(amwg_diag)
 
@@ -695,7 +705,6 @@ def display(stdscr, event, config):
                     sleep(1)
                     break
                 if year_set.status == SetStatus.COMPLETED \
-                    or year_set.status == SetStatus.FAILED \
                     or year_set.status == SetStatus.NO_DATA \
                     or year_set.status == SetStatus.PARTIAL_DATA:
                     if y >= (hmax/3):
@@ -1061,6 +1070,7 @@ if __name__ == "__main__":
                     if 'q' in key:
                         try:
                             config['global']['ui'] = True
+                            config['global']['debug'] = False
                             sys.stdout.write('Turning on the display')
                             for i in range(8):
                                 sys.stdout.write('.')
