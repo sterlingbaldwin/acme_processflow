@@ -13,6 +13,7 @@ import time
 import pickle
 import curses
 import select
+import ConfigParser
 
 from shutil import rmtree
 from shutil import move
@@ -37,7 +38,8 @@ from lib.util import *
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-c', '--config', help='Path to configuration file')
-parser.add_argument('-d', '--debug', help='Run in debug mode', action='store_true')
+parser.add_argument('-v', '--debug', help='Run in debug mode', action='store_true')
+parser.add_argument('-d', '--daemon', help='Run in daemon mode', action='store_true')
 parser.add_argument('-s', '--state', help='Path to a json state file')
 parser.add_argument('-n', '--no-ui', help='Turn off the GUI', action='store_true')
 parser.add_argument('-r', '--dry-run', help='Do all setup, but dont submit jobs', action='store_true')
@@ -132,48 +134,29 @@ def setup(parser):
 
     # no state file, load from config
     if not from_saved_state:
-        required_fields = [
-            "output_path",
-            "output_pattern",
-            "data_cache_path",
-            "compute_host",
-            "compute_username",
-            "compute_password",
-            "compute_keyfile",
-            "processing_host",
-            "processing_username",
-            "processing_password",
-            "globus_username",
-            "globus_password",
-            "source_endpoint",
-            "destination_endpoint",
-            "source_path",
-            "batch_system_type",
-            "experiment",
-        ]
-        if args.config:
+        if not args.config:
+            parser.print_help()
+            sys.exit()
+        else:
             try:
-                with open(args.config, 'r') as conf:
-                    config.update(json.load(conf))
+                confParse = ConfigParser.ConfigParser()
+                confParse.read(args.config)
+                for section in confParse.sections():
+                    config[section] = {}
+                    for option in confParse.options(section):
+                        opt = confParse.get(section, option)
+                        if opt.startswith('['):
+                            opt = json.loads(opt)
+                        config[section][option] = opt
             except Exception as e:
                 msg = 'Unable to read config file, is it properly formatted json?'
                 print_message(msg)
                 logging.error(msg)
-                logging.error(format_debug(e))
+                print_debug(e)
                 return -1
 
+            required_fields = ['output_pattern']
             for field in required_fields:
-                """
-                if field not in config or len(config[field]) == 0:
-                    if field == 'compute_password' and config.get('monitor').get('compute_keyfile'):
-                        continue
-                    if field == 'compute_keyfile' and config.get('monitor').get('compute_password'):
-                        continue
-                    if 'password' in field:
-                        config[field] = getpass("{0} not specified in config, please enter: ".format(field))
-                    else:
-                        config[field] = raw_input("{0} not specified in config, please enter: ".format(field))
-                """
                 if field == 'output_pattern':
                     patterns = ['YYYY-MM', 'YYYY-MM-DD']
                     output_pattern = config.get('global').get(field)
@@ -194,16 +177,6 @@ def setup(parser):
                             status=year_set.status)
                         logging.error(message)
                         sys.exit(1)
-        else:
-            parser.print_help()
-            print 'No configuration file given, initiating manual setup'
-            config = {}
-            for field in required_fields:
-                if 'password' in field:
-                    config[field] = getpass('{0}: '.format(field))
-                else:
-                    config[field] = raw_input('{0}: '.format(field))
-
     if args.no_ui:
         config['global']['ui'] = False
     else:
