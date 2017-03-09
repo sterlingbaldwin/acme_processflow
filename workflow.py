@@ -155,28 +155,28 @@ def setup(parser):
                 print_debug(e)
                 return -1
 
-            required_fields = ['output_pattern']
-            for field in required_fields:
-                if field == 'output_pattern':
-                    patterns = ['YYYY-MM', 'YYYY-MM-DD']
-                    output_pattern = config.get('global').get(field)
-                    for p in patterns:
-                        index = re.search(p, output_pattern)
-                        if index:
-                            start = index.start()
-                            end = start + len(p)
-                            date_pattern = output_pattern[start:end]
-                            config['global']['output_pattern'] = config['global']['output_pattern'][:start] + p + '.nc'
-                            config['global']['date_pattern'] = date_pattern
-                    if not config.get('global').get('date_pattern'):
-                        msg = 'Unable to parse output_pattern {}, exiting'.format(output_pattern)
-                        print_message(msg)
-                        logging.error(msg)
-                        message = "## year_set {set} status change to {status}".format(
-                            set=year_set.set_number,
-                            status=year_set.status)
-                        logging.error(message)
-                        sys.exit(1)
+            # required_fields = ['output_pattern']
+            # for field in required_fields:
+            #     if field == 'output_pattern':
+            #         patterns = ['YYYY-MM', 'YYYY-MM-DD']
+            #         output_pattern = config.get('global').get(field)
+            #         for p in patterns:
+            #             index = re.search(p, output_pattern)
+            #             if index:
+            #                 start = index.start()
+            #                 end = start + len(p)
+            #                 date_pattern = output_pattern[start:end]
+            #                 config['global']['output_pattern'] = config['global']['output_pattern'][:start] + p + '.nc'
+            #                 config['global']['date_pattern'] = date_pattern
+            #         if not config.get('global').get('date_pattern'):
+            #             msg = 'Unable to parse output_pattern {}, exiting'.format(output_pattern)
+            #             print_message(msg)
+            #             logging.error(msg)
+            #             message = "## year_set {set} status change to {status}".format(
+            #                 set=year_set.set_number,
+            #                 status=year_set.status)
+            #             logging.error(message)
+            #             sys.exit(1)
     if args.no_ui:
         config['global']['ui'] = False
     else:
@@ -283,7 +283,7 @@ def add_jobs(year_set):
         diag_config = {
             'dataset_name': dataset_name,
             '--model': diag_temp_dir,
-            '--obs': config.get('meta_diags').get('obs_for_diagnostics_path'),
+            '--obs': config.get('uvcmetrics').get('obs_for_diagnostics_path'),
             '--outputdir': diag_output_path,
             '--package': 'amwg',
             '--set': '5',
@@ -446,7 +446,7 @@ def monitor_check(monitor):
     frequencies = config.get('global').get('set_frequency')
 
     for f in new_files:
-        file_key = filename_to_file_list_key(f, output_pattern, date_pattern)
+        file_key = filename_to_file_list_key(f)
         status = file_list.get(file_key)
         if status and status != SetStatus.DATA_READY and status != SetStatus.IN_TRANSIT:
             checked_new_files.append(f)
@@ -465,7 +465,7 @@ def monitor_check(monitor):
     # find which year set the data belongs to
     for file in checked_new_files:
         for freq in frequencies:
-            year_set = filename_to_year_set(file, output_pattern, freq)
+            year_set = filename_to_year_set(file, freq)
             for job_set in job_sets:
                 if job_set.set_number == year_set and job_set.status == SetStatus.NO_DATA:
 
@@ -502,7 +502,7 @@ def monitor_check(monitor):
 
     for f in transfer.config.get('file_list'):
         f = f.split('/').pop()
-        key = filename_to_file_list_key(f, output_pattern, date_pattern)
+        key = filename_to_file_list_key(f)
         file_list[key] = SetStatus.IN_TRANSIT
 
     start_file = transfer.config.get('file_list')[0]
@@ -958,8 +958,7 @@ if __name__ == "__main__":
 
     # If all the data is local, dont start the monitor
     if not all_data:
-        pattern = config.get('global').get('output_pattern').replace('YYYY', '[0-9][0-9][0-9][0-9]')
-        pattern = pattern.replace('MM', '[0-9][0-9]')
+        pattern = config.get('global').get('output_pattern')
         monitor_config = {
             'remote_host': config.get('monitor').get('compute_host'),
             'remote_dir': config.get('transfer').get('source_path'),
@@ -979,6 +978,11 @@ if __name__ == "__main__":
         line = 'Attempting connection to {}'.format(config.get('monitor').get('compute_host'))
         event_list = push_event(event_list, line)
         if monitor.connect() == 0:
+            monitor.check()
+            for f in monitor.get_new_files():
+                print f, year_from_filename(f)
+            print len(monitor.get_new_files())
+            sys.exit()
             # print_message('connected', 'ok')
             line = 'Connected'
             event_list = push_event(event_list, line)

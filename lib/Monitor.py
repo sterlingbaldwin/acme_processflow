@@ -56,8 +56,7 @@ class Monitor(object):
                     port=22,
                     hostname=self.remote_host,
                     username=self.username,
-                    password=self.password
-                )
+                    password=self.password)
             except Exception as e:
                 print "Unable to connect to host with given username/password"
                 print_debug(e)
@@ -69,10 +68,8 @@ class Monitor(object):
                     port=22,
                     hostname=self.remote_host,
                     username=self.username,
-                    pkey=key
-                )
+                    pkey=key)
             except PasswordRequiredException as pwe:
-
                 for attempt in range(3):
                     success = False
                     try:
@@ -88,8 +85,7 @@ class Monitor(object):
                     port=22,
                     hostname=self.remote_host,
                     username=self.username,
-                    pkey=key
-                )
+                    pkey=key)
             except Exception as e:
                 print "Unable to connect to remote host with given private key"
                 print_debug(e)
@@ -100,8 +96,7 @@ class Monitor(object):
                     port=22,
                     hostname=self.remote_host,
                     username=self.username,
-                    password=self.password
-                )
+                    password=self.password)
             except Exception as e:
                 print "Unable to connect to host with given username/password"
                 print_debug(e)
@@ -127,10 +122,17 @@ class Monitor(object):
         """
             Checks to remote_dir for any files that arent in the known files list
         """
-        cmd = 'ls {path} | grep {pattern}'.format(
-            path=self.remote_dir,
-            pattern=self.pattern
-        )
+        # cmd = 'ls {path} | grep {pattern}'.format(
+        #     path=self.remote_dir,
+        #     pattern=self.pattern)
+        if type(self.pattern) == str:
+            name = '-name *{}*'.format(self.pattern)
+        else:
+            name = '-name *' + '* -or -name *'.join(self.pattern) + '*'
+        cmd = 'find {dir} {name}'.format(
+            name=name,
+            dir=self.remote_dir)
+        print cmd
         stdin, stdout, stderr = self.client.exec_command(cmd)
         files = stdout.read()
         files.strip()
