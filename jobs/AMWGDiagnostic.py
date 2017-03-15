@@ -6,6 +6,7 @@ import re
 from uuid import uuid4
 from subprocess import Popen, PIPE
 from pprint import pformat
+from time import sleep
 # job modules
 from JobStatus import JobStatus
 # output_viewer modules
@@ -126,8 +127,7 @@ class AMWGDiagnostic(object):
     #             if var in file.path:
     #                 tmp_row_list.append(file)
     #         row_list.append(OutputRow(var, tmp_row_list))
-    
-        
+
     def postvalidate(self):
         """
             Check that what the job was supposed to do actually happened
@@ -193,7 +193,12 @@ class AMWGDiagnostic(object):
         slurm_cmd = ['sbatch', run_script]
         started = False
         while not started:
-            self.proc = Popen(slurm_cmd, stdout=PIPE, stderr=PIPE)
+            while True:
+                try:
+                    self.proc = Popen(slurm_cmd, stdout=PIPE, stderr=PIPE)
+                    break
+                except:
+                    sleep(1)
             output, err = self.proc.communicate()
             started, job_id = check_slurm_job_submission(expected_name)
             if started:

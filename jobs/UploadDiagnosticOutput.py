@@ -222,8 +222,13 @@ except Exception as e:\n\
         slurm_cmd = ['sbatch', '-o', output_path, self.batch_script_name]
         started = False
         while not started:
-            self.proc = Popen(slurm_cmd, stdout=PIPE, stderr=PIPE)
-            output, err = self.proc.communicate()
+            while True:
+                try:
+                    self.proc = Popen(slurm_cmd, stdout=PIPE, stderr=PIPE)
+                    break
+                except:
+                    sleep(1)
+            _, _ = self.proc.communicate()
             # print_message('upload job output:\n {0}\nerr: {1}'.format(output, err))
             started, job_id = check_slurm_job_submission(self.expected_name)
             if started:

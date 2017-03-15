@@ -4,6 +4,7 @@
 import os
 import re
 import json
+import sys
 import logging
 
 from uuid import uuid4
@@ -15,6 +16,8 @@ from lib.util import print_debug
 from lib.util import print_message
 from lib.util import check_slurm_job_submission
 from lib.util import push_event
+from lib.util import cmd_exists
+from lib.util import get_climo_output_files
 from JobStatus import JobStatus
 
 
@@ -52,7 +55,7 @@ class Climo(object):
         self.proc = None
         self.slurm_args = {
             'num_cores': '-n 16', # 16 cores
-            'run_time': '-t 0-02:00', # 1 hour run time
+            'run_time': '-t 0-02:00', # 2 hours run time
             'num_machines': '-N 1', # run on one machine
         }
         self.prevalidate(config)
@@ -81,11 +84,16 @@ class Climo(object):
         ]
         if not batch:
             # Not running in batch mode
-            self.proc = Popen(
-                cmd,
-                stdout=PIPE,
-                stderr=PIPE,
-                shell=False)
+            while True:
+                try:
+                    self.proc = Popen(
+                        cmd,
+                        stdout=PIPE,
+                        stderr=PIPE,
+                        shell=False)
+                    break
+                except:
+                    sleep(1)
             self.status = JobStatus.RUNNING
             done = 2
             console_output = ''
@@ -133,8 +141,13 @@ class Climo(object):
             started = False
             retry_count = 0
             while not started and retry_count < 5:
-                self.proc = Popen(slurm_cmd, stdout=PIPE)
-                output, err = self.proc.communicate()
+                while True:
+                    try:
+                        self.proc = Popen(slurm_cmd, stdout=PIPE, stderr=PIPE)
+                        break
+                    except:
+                        sleep(1)
+                _, _ = self.proc.communicate()
                 started, job_id = check_slurm_job_submission(expected_name)
                 if started:
                     self.status = JobStatus.SUBMITTED
@@ -220,23 +233,10 @@ class Climo(object):
             set_end_year = self.config.get('end_year')
             contents = os.listdir(self.config.get('climo_output_directory'))
 
-            file_list_tmp = [s for s in contents if not os.path.isdir(s)]
-            file_list = []
-            for file in file_list_tmp:
-                start_search = re.search(r'\_\d\d\d\d', file)
-                if not start_search:
-                    continue
-                start_index = start_search.start() + 1
-                start_year = int(file[start_index: start_index + 4])
-
-                end_search = re.search(r'\_\d\d\d\d', file[start_index:])
-                if not end_search:
-                    continue
-                end_index = end_search.start() + start_index + 1
-                end_year = int(file[end_index: end_index + 4])
-
-                if start_year == set_start_year and end_year == set_end_year:
-                    file_list.append(file)
+            file_list = get_climo_output_files(
+                input_path=self.config.get('climo_output_directory'),
+                set_start_year=self.config.get('start_year'),
+                set_end_year=self.config.get('end_year'))
 
             if len(file_list) >= 17:
                 self.status = JobStatus.COMPLETED
