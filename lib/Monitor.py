@@ -125,24 +125,29 @@ class Monitor(object):
         # cmd = 'ls {path} | grep {pattern}'.format(
         #     path=self.remote_dir,
         #     pattern=self.pattern)
-        if type(self.pattern) == str:
+        if isinstance(self.pattern, str):
             name = '-name *{}*'.format(self.pattern)
         else:
             name = '-name *' + '* -or -name *'.join(self.pattern) + '*'
         cmd = 'find {dir} {name}'.format(
             name=name,
             dir=self.remote_dir)
-        print cmd
-        stdin, stdout, stderr = self.client.exec_command(cmd)
+        _, stdout, _ = self.client.exec_command(cmd)
         files = stdout.read()
         files.strip()
         files = files.split()
         self.new_files = []
-        count = 0
-        for f in files:
-            if f not in self.known_files:
-                self.known_files.append(f)
-                self.new_files.append(f)
+        for file in files:
+            if file not in self.known_files:
+                self.known_files.append(file)
+                self.new_files.append(file)
+
+    def remove_new_file(self, file):
+        """
+        Removes a files from the new_files list
+        """
+        if file in self.new_files:
+            self.new_files.remove(file)
 
     def get_new_files(self):
         """
