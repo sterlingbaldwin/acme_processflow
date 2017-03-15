@@ -13,6 +13,15 @@ from YearSet import SetStatus
 from YearSet import YearSet
 from jobs.JobStatus import JobStatus
 
+def year_from_filename(filename):
+    pattern = r'\.\d\d\d\d-'
+    index = re.search(pattern, filename)
+    if index:
+        year = int(filename[index.start() + 1: index.start() + 5])
+        return year
+    else:
+        return 0
+
 def get_climo_output_files(input_path, set_start_year, set_end_year):
     contents = os.listdir(input_path)
     file_list_tmp = [s for s in contents if not os.path.isdir(s)]
@@ -199,7 +208,12 @@ def monitor_job(job_id, job, job_set, event=None, debug=False, batch_type='slurm
         if event and event.is_set():
             return
         cmd = ['scontrol', 'show', 'job', str(job_id)]
-        out = Popen(cmd, stdout=PIPE, stderr=PIPE).communicate()[0]
+        while True:
+            try:
+                out = Popen(cmd, stdout=PIPE, stderr=PIPE).communicate()[0]
+                break
+            except:
+                sleep(1)
         if not out or len(out) == 0:
             status = None
 
@@ -332,10 +346,7 @@ def check_for_inplace_data(file_list, file_name_list, job_sets, config):
 
     for climo_file in os.listdir(cache_path):
         climo_file_path = os.path.join(cache_path, climo_file)
-        file_key = filename_to_file_list_key(
-            filename=climo_file,
-            output_pattern=output_pattern,
-            date_pattern=date_pattern)
+        file_key = filename_to_file_list_key(filename=climo_file)
 
         index = file_key.find('-')
         year = int(file_key[:index])
@@ -458,55 +469,29 @@ def render(variables, input_path, output_path, delimiter='%%'):
             rendered_string = line
         outfile.write(rendered_string)
 
-def filename_to_file_list_key(filename, output_pattern, date_pattern):
+def filename_to_file_list_key(filename):
     """
     Takes a filename and returns the key for the file_list
     """
-    date_pattern = date_pattern.replace('YYYY', '[0-9][0-9][0-9][0-9]')
-    date_pattern = date_pattern.replace('MM', '[0-9][0-9]')
-    date_pattern = date_pattern.replace('DD', '[0-9][0-9]')
-    output_pattern = output_pattern.replace('YYYY', '0000')
-    output_pattern = output_pattern.replace('MM', '00')
-    output_pattern = output_pattern.replace('DD', '00')
-
-    index = re.search(date_pattern, filename)
+    pattern = r'\.\d\d\d\d-'
+    index = re.search(pattern, filename)
     if index:
-        index = index.start()
+        year = int(filename[index.start() + 1: index.start() + 5])
     else:
-        msg = 'Unable to find pattern {0} in {1}'.format(date_pattern, filename)
-        print_message(msg)
-        logging.error(msg)
-        return ''
+        return '0-0'
     # the YYYY field is 4 characters long, the month is two
-    year_offset = index + 4
+    year_offset = index.start() + 5
     # two characters for the month, and one for the - between year and month
     month_offset = year_offset + 3
-    try:
-        year = int(filename[index: year_offset])
-    except:
-        print 'filename ' + filename
-        print 'index ' + str(index)
-        print 'year ' + filename[index: year_offset]
-    try:
-        month = int(filename[year_offset + 1: month_offset])
-    except:
-        print 'filename ' + filename
-        print 'index ' + str(index)
-        print 'month ' + filename[year_offset + 1: month_offset]
+    month = int(filename[year_offset + 1: month_offset])
     key = "{year}-{month}".format(year=year, month=month)
     return key
 
-def filename_to_year_set(filename, pattern, freq):
+def filename_to_year_set(filename, freq):
     """
     Takes a filename and returns the year_set that the file belongs to
     """
-    pattern_format = 'YYYY-MM'
-    file_format = '.nc'
-    if not filename.endswith(file_format):
-        print_message('unable to find year set, unexpected file format')
-        return 0
-    file_date = filename[-(len(pattern_format) + len(file_format)): - len(file_format)]
-    year = int(file_date[:4])
+    year = year_from_filename(filename)
     if year % freq == 0:
         return int(year / freq)
     else:
@@ -569,7 +554,12 @@ def check_slurm_job_submission(expected_name):
     job_id = 0
     found_job = False
     while True:
-        out = Popen(cmd, stdout=PIPE, stderr=PIPE).communicate()[0]
+        while True:
+            try:
+                out = Popen(cmd, stdout=PIPE, stderr=PIPE).communicate()[0]
+                break
+            except:
+                sleep(1)
         out = out.split('\n')
         if 'error' in out[0]:
             sleep(1)
