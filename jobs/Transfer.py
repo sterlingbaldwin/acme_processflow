@@ -8,9 +8,7 @@ import time
 import logging
 
 from pprint import pformat
-from subprocess import Popen, PIPE
 from datetime import datetime, timedelta
-from shutil import copy, rmtree
 from uuid import uuid4
 
 from globusonline.transfer import api_client
@@ -208,6 +206,7 @@ class Transfer(object):
             except Exception as e:
                 logging.error('Error activating source endpoing, attempt %s', int(i) + 1)
                 logging.error(format_debug(e))
+                print_debug(e)
             else:
                 successful_activation = True
                 break
