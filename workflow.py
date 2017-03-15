@@ -22,7 +22,7 @@ from time import sleep
 from pprint import pformat
 from subprocess import Popen
 
-from jobs.Diagnostic import Diagnostic
+from jobs.Uvcmetrics import Uvcmetrics
 from jobs.Transfer import Transfer
 from jobs.Ncclimo import Climo
 from jobs.UploadDiagnosticOutput import UploadDiagnosticOutput
@@ -203,7 +203,7 @@ def add_jobs(year_set):
     # this is here in case the jobs have already been added
     required_jobs = {
         'climo': False,
-        'diagnostic': False,
+        'uvcmetrics': False,
         'upload_diagnostic_output': False,
         'coupled_diagnostic': False,
         'amwg_diagnostic': False
@@ -262,7 +262,7 @@ def add_jobs(year_set):
         year_set.add_job(climo)
 
     # init the diagnostic job
-    if not required_jobs['diagnostic']:
+    if not required_jobs['uvcmetrics']:
         dataset_name = '{time}_{set}_{start}_{end}'.format(
             time=time.strftime("%d-%m-%Y"),
             set=year_set.set_number,
@@ -295,7 +295,7 @@ def add_jobs(year_set):
             'regrid_path': regrid_output_dir,
             'diag_temp_dir': diag_temp_dir
         }
-        diag = Diagnostic(diag_config, event_list=event_list)
+        diag = Uvcmetrics(diag_config, event_list=event_list)
         msg = 'Adding Diagnostic to the job list: {}'.format(str(diag))
         logging.info(msg)
         year_set.add_job(diag)
@@ -474,15 +474,15 @@ def monitor_check(monitor):
                     job_set = add_jobs(job_set)
 
     # construct list of files to transfer
-    f_path = config.get('transfer').get('source_path')
-    f_list = ['{path}/{file}'.format(path=f_path, file=f)  for f in checked_new_files]
+    # f_path = config.get('transfer').get('source_path')
+    # f_list = ['{path}/{file}'.format(path=f_path, file=f)  for f in checked_new_files]
 
     t_config = config.get('transfer')
     g_config = config.get('global')
     m_config = config.get('monitor')
 
     transfer_config = {
-        'file_list': f_list,
+        'file_list': checked_new_files,
         'globus_username': t_config.get('globus_username'),
         'globus_password': t_config.get('globus_password'),
         'source_username': m_config.get('compute_username'),
@@ -512,7 +512,7 @@ def monitor_check(monitor):
     index = end_file.find('-')
     end_readable = end_file[index - 4: index + 3]
     message = 'Found {0} new remote files, creating transfer job from {1} to {2}'.format(
-        len(f_list),
+        len(checked_new_files),
         start_readable,
         end_readable)
     event_list = push_event(event_list, message)
@@ -794,6 +794,16 @@ def display(stdscr, event, config):
             msg = 'Active transfers: {}'.format(active_transfers)
             pad.addstr(y, x, msg, curses.color_pair(4))
             pad.clrtoeol()
+            if active_transfers:
+                for line in event_list:
+                    if 'Transfer' in line:
+                        index = line.find('%')
+                        if index:
+                            percent = int(line[index-2: index])
+                            if percent < 100:
+                                y += 1
+                                pad.addstr(y, x, line, curses.color_pair(4))
+                                pad.clrtoeol()
             spin_line = spinner[spin_index]
             spin_index += 1
             if spin_index == spin_len:
@@ -967,7 +977,7 @@ if __name__ == "__main__":
         }
         if config.get('monitor').get('compute_password'):
             monitor_config['password'] = config.get('monitor').get('compute_password')
-        if config.get('monitor').get('compute_keyfile'):
+        elif config.get('monitor').get('compute_keyfile'):
             monitor_config['keyfile'] = config.get('monitor').get('compute_keyfile')
         else:
             logging.error('No password or keyfile path given for compute resource, please add to your config and try again')
@@ -979,15 +989,9 @@ if __name__ == "__main__":
         event_list = push_event(event_list, line)
         if monitor.connect() == 0:
             monitor.check()
-            for f in monitor.get_new_files():
-                print f, year_from_filename(f)
-            print len(monitor.get_new_files())
-            sys.exit()
-            # print_message('connected', 'ok')
             line = 'Connected'
             event_list = push_event(event_list, line)
         else:
-            # print_message('unable to connect, exiting')
             line = 'Unable to connect, exiting'
             logging.error(line)
             event_list = push_event(event_list, line)
@@ -1001,6 +1005,7 @@ if __name__ == "__main__":
             # Setup remote monitoring system
             if not all_data and monitor:
                 monitor_check(monitor)
+                sys.exit()
             # Check if a year_set is ready to run
             check_year_sets(
                 job_sets=job_sets,
