@@ -66,6 +66,7 @@ class CoupledDiagnostic(object):
             'num_cores': '-n 16', # 16 cores
             'run_time': '-t 0-02:00', # 1 hour run time
             'num_machines': '-N 1', # run on one machine
+            'oversubscribe': '--oversubscribe'
         }
         self.var_list = [
             'PRECT',
