@@ -7,6 +7,7 @@ from uuid import uuid4
 from subprocess import Popen, PIPE
 from pprint import pformat
 from time import sleep
+import time
 # job modules
 from JobStatus import JobStatus
 # output_viewer modules
@@ -60,7 +61,8 @@ class AMWGDiagnostic(object):
             'end_year': '',
             'set_number': '',
             'run_directory': '',
-            'template_path': ''
+            'template_path': '',
+            'dataset_name': '',
         }
         self.type = 'amwg_diagnostic'
         self.outputs = {}
@@ -72,6 +74,7 @@ class AMWGDiagnostic(object):
             'num_cores': '-n 16', # 16 cores
             'run_time': '-t 0-02:00', # 2 hours run time
             'num_machines': '-N 1', # run on one machine
+            'oversubscribe': '--oversubscribe'
         }
         self.prevalidate(config)
 
@@ -95,38 +98,69 @@ class AMWGDiagnostic(object):
 
         for d in config.get('depends_on'):
             self.depends_on.append(d)
-        # TODO: Check for precomputed output
         self.status = JobStatus.VALID
 
-    # def generateIndex(self):
-    #     self.event_list = push_event(self.event_list, 'Starting index generataion for AMWG diagnostic')
-    #     outpage = OutputPage('AMWG Diagnostic')
-    #     dataset_name = '{time}_AMWG_diag_{set}_{start}_{end}_{uuid}'.format(
-    #         time=time.strftime("%d-%m-%Y"),
-    #         set=str(self.year_set),
-    #         start=self.config.get('start_year'),
-    #         end=self.config.get('end_year'),
-    #         uuid=self.uuid[:5])
+        if os.path.exists(self.config.get('run_directory')):
+            contents = os.listdir(self.config.get('run_directory'))
+            if len(contents) > 2300:
+                self.status = JobStatus.COMPLETED
 
-    #     index = OutputIndex('AMWG Diagnostic', version=dataset_name)
-    #     image_path = self.config.get('test_path_diag')
-    #     images_list = os.listdir(image_path)
-    #     file_list = []
-    #     row_list = []
-    #     group_list = []
-    #     for image in image_list:
-    #         title = image[ len(self.config.get('test_casename')) + 1: -4]
-    #         outfile = OutputFile(
-    #             path=image,
-    #             title=title)
-    #         file_list.append(outfile)
+    def get_set(self, filename):
+        for i in range(len(filename)):
+            if filename[i].isdigit():
+                s_index = i
+                break
+        set_number = filename[i:]
+        return set_number
 
-    #     for var in self.var_list:
-    #         tmp_row_list = []
-    #         for file in file_list:
-    #             if var in file.path:
-    #                 tmp_row_list.append(file)
-    #         row_list.append(OutputRow(var, tmp_row_list))
+    def get_attrs(self, filename):
+        filesplit = filename.split('_')
+        set_id = self.get_set(filesplit[0])
+        seasons = ['DJF', 'MAM', 'JJA', 'SON', 'ANN']
+        if filesplit[1] in seasons:
+            col = filesplit[1]
+            row = filesplit[2]
+            group = '_'.join(filesplit[3:])[:-4]
+        else:
+            s_index = 2
+            for i in range(s_index, len(filesplit)):
+                if filesplit[i] in seasons:
+                    s_index = i
+                    break
+            col = filesplit[s_index]
+            row = '_'.join(filesplit[1: s_index])
+            group = '_'.join(filesplit[s_index:])[:-4]
+        return set_id, group, row, col
+
+    def generateIndex(self):
+        self.event_list = push_event(self.event_list, 'Starting index generataion for AMWG diagnostic')
+        contents = [s for s in os.listdir(self.config.get('run_directory')) if s.endswith('png')]
+        dataset_name = self.config.get('dataset_name')
+        index = OutputIndex('AMWG Diagnostic', version=dataset_name)
+
+        pages = {}
+        for item in contents:
+            page, group, row, col = self.get_attrs(item)
+            if not pages.get(page):
+                pages[page] = {}
+            if not pages.get(page).get(group):
+                pages[page][group] = {}
+            if not pages.get(page).get(group).get(row):
+                pages[page][group][row] = {}
+            if not pages.get(page).get(group).get(row).get(col):
+                pages[page][group][row][col] = OutputFile(item)
+
+        for pi, page in pages.items():
+            outpage = OutputPage(pi)
+            for gi, group in page.items():
+                outgroup = OutputGroup(gi)
+                for ri, row in group.items():
+                    outrow = OutputRow(ri, row)
+                    outgroup.addRow(outrow)
+                outpage.addGroup(outgroup)
+            index.addPage(outpage)
+        index.toJSON(os.path.join(self.config.get('run_directory'), 'index.json'))
+        self.event_list = push_event(self.event_list, 'Index generataion complete')
 
     def postvalidate(self):
         """

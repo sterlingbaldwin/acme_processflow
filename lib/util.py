@@ -257,7 +257,10 @@ def monitor_job(job_id, job, job_set, event=None, debug=False, batch_type='slurm
                     print_message(message)
 
             if status == JobStatus.FAILED:
-                print_message('Job {0} has failed'.format(job_id))
+                msg = 'Job {0} has failed'.format(job_id)
+                event_list = push_event(event_list, message)
+                if debug:
+                    print_message(msg)
 
             job.status = status
             message = "{type}: {id} status changed to {status}".format(
@@ -305,12 +308,30 @@ def monitor_job(job_id, job, job_set, event=None, debug=False, batch_type='slurm
                     'username': upload_config.get('diag_viewer_username'),
                     'password': upload_config.get('diag_viewer_password'),
                     'server': upload_config.get('diag_viewer_server'),
-                    'depends_on': [len(job_set.jobs) - 2] # set the upload job to wait for the coupled_diag job to finish
+                    'depends_on': [len(job_set.jobs) - 3] # set the upload job to wait for the coupled_diag job to finish
                 }
                 upload_2 = UploadDiagnosticOutput(upload_config)
                 msg = 'Adding Upload job to the job list: {}'.format(str(upload_2))
                 logging.info(msg)
                 job_set.add_job(upload_2)
+
+            if job.get_type() == 'amwg_diagnostic':
+                index_path = os.path.join(job.config.get('run_directory'), 'index.json')
+                job.generateIndex()
+                upload_config = {
+                    'year_set': job_set.set_number,
+                    'start_year': job_set.set_start_year,
+                    'end_year': job_set.set_end_year,
+                    'path_to_diagnostic': index_path,
+                    'username': upload_config.get('diag_viewer_username'),
+                    'password': upload_config.get('diag_viewer_password'),
+                    'server': upload_config.get('diag_viewer_server'),
+                    'depends_on': [len(job_set.jobs) - 4] # set the upload job to wait for the coupled_diag job to finish
+                }
+                upload_3 = UploadDiagnosticOutput(upload_config)
+                msg = 'Adding Upload job to the job list: {}'.format(str(upload_3))
+                logging.info(msg)
+                job_set.add_job(upload_3)
 
             job_set_done = True
             for job in job_set.jobs:
