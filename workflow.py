@@ -725,8 +725,12 @@ def display(stdscr, event, config):
                 sleep(1)
                 continue
             for line in event_list[-10:]:
-                prefix = '[+]  '
-                pad.addstr(y, x, prefix, curses.color_pair(5))
+                if 'failed' in line or 'FAILED' in line:
+                    prefix = '[-] '
+                    pad.addstr(y, x, prefix, curses.color_pair(3))
+                else:
+                    prefix = '[+]  '
+                    pad.addstr(y, x, prefix, curses.color_pair(5))
                 pad.addstr(line, curses.color_pair(4))
                 pad.clrtoeol()
                 if initializing:
