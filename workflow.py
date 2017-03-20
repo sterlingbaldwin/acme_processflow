@@ -435,7 +435,7 @@ def monitor_check(monitor):
     global transfer_list
     # if there are already three or more transfers in progress
     # hold off on starting any new ones until they complete
-    if active_transfers > 1:
+    if active_transfers >= 2:
         return
     monitor.check()
     new_files = monitor.known_files
@@ -516,11 +516,6 @@ def monitor_check(monitor):
         start_readable,
         end_readable)
     event_list = push_event(event_list, message)
-    # message = ''
-    # for i in transfer.config.get('file_list'):
-    #     index = i.find('-')
-    #     message += i[index - 2: index + 3] + ', '
-    # event_list = push_event(event_list, message)
 
     logging.info('## Starting transfer %s with config: %s', transfer.uuid, pformat(transfer_config))
     # print_message('Starting file transfer', 'ok')
@@ -725,6 +720,8 @@ def display(stdscr, event, config):
                 sleep(1)
                 continue
             for line in event_list[-10:]:
+                if 'Transfer' in line:
+                    continue
                 if 'failed' in line or 'FAILED' in line:
                     prefix = '[-] '
                     pad.addstr(y, x, prefix, curses.color_pair(3))
@@ -803,7 +800,7 @@ def display(stdscr, event, config):
                     if 'Transfer' in line:
                         index = line.find('%')
                         if index:
-                            percent = int(line[index-2: index])
+                            percent = float(line[index-3: index])
                             if percent < 100:
                                 y += 1
                                 pad.addstr(y, x, line, curses.color_pair(4))
@@ -1009,7 +1006,6 @@ if __name__ == "__main__":
             # Setup remote monitoring system
             if not all_data and monitor:
                 monitor_check(monitor)
-                sys.exit()
             # Check if a year_set is ready to run
             check_year_sets(
                 job_sets=job_sets,

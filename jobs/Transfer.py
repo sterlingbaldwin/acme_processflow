@@ -23,6 +23,7 @@ from lib.util import print_message
 from lib.util import filename_to_year_set
 from lib.util import format_debug
 from lib.util import push_event
+from lib.util import raw_file_cmp
 from JobStatus import JobStatus
 
 class Transfer(object):
@@ -121,7 +122,9 @@ class Transfer(object):
                     self.status = JobStatus.INVALID
                     return -1
         self.status = JobStatus.VALID
-        self.config['file_list'] = self.config['file_list'][:self.maximum_transfers]
+        # only add the first n transfers up to the max
+        file_list = sorted(self.config.get('file_list'), raw_file_cmp)
+        self.config['file_list'] = file_list[:self.maximum_transfers]
         return 0
 
     def postvalidate(self):
@@ -169,7 +172,7 @@ class Transfer(object):
         replaced = False
         for i, e in enumerate(event_list):
             if str(task_id) in e:
-                event_list[i] = '[+] ' + time.strftime("%I:%M") + message
+                event_list[i] = time.strftime("%I:%M") + ' ' + message
                 replaced = True
                 break
         if not replaced:
@@ -243,14 +246,12 @@ class Transfer(object):
             self.status = JobStatus.FAILED
             return
 
-        # only add the first n transfers up to the max
-        source_list = self.config.get('file_list')[:self.maximum_transfers]
-        if not source_list:
+        if not self.config['file_list']:
             logging.error('Unable to transfer files without a source list')
             self.status = JobStatus.FAILED
             return
         try:
-            for path in source_list:
+            for path in self.config['file_list']:
                 dst_path = self.get_destination_path(
                     path,
                     self.config.get('destination_path'),
