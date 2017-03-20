@@ -555,6 +555,25 @@ def file_list_cmp(a, b):
         else:
             return 0
 
+def raw_file_cmp(a, b):
+    a_index = a.find('-')
+    b_index = b.find('-')
+    a_year = int(a[a_index - 4: a_index])
+    b_year = int(b[b_index - 4: b_index])
+    if a_year > b_year:
+        return 1
+    elif a_year < b_year:
+        return -1
+    else:
+        a_month = int(a[a_index + 1: a_index + 3])
+        b_month = int(b[b_index + 1: b_index + 3])
+        if a_month > b_month:
+            return 1
+        elif a_month < b_month:
+            return -1
+        else:
+            return 0
+
 def thread_sleep(seconds, event):
     """
     Allows a thread to sleep for one second at at time, and cancel when if the 
