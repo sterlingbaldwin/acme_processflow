@@ -2,6 +2,7 @@
 import logging
 import os
 import re
+import json
 # system module functions
 from uuid import uuid4
 from subprocess import Popen, PIPE
@@ -100,11 +101,6 @@ class AMWGDiagnostic(object):
             self.depends_on.append(d)
         self.status = JobStatus.VALID
 
-        if os.path.exists(self.config.get('run_directory')):
-            contents = os.listdir(self.config.get('run_directory'))
-            if len(contents) > 2300:
-                self.status = JobStatus.COMPLETED
-
     def get_set(self, filename):
         for i in range(len(filename)):
             if filename[i].isdigit():
@@ -148,19 +144,32 @@ class AMWGDiagnostic(object):
             if not pages.get(page).get(group).get(row):
                 pages[page][group][row] = {}
             if not pages.get(page).get(group).get(row).get(col):
-                pages[page][group][row][col] = OutputFile(item)
+                pages[page][group][row][col] = []
+            pages[page][group][row][col].append(OutputFile(path=item, title=item))
+            # pages[page][group][row][col].append(item)
+
+        # with open('amwg_index.json', 'w') as f:
+        #     json.dump(pages, f)
 
         for pi, page in pages.items():
             outpage = OutputPage(pi)
             for gi, group in page.items():
                 outgroup = OutputGroup(gi)
-                for ri, row in group.items():
-                    outrow = OutputRow(ri, row)
-                    outgroup.addRow(outrow)
+                group_ind = len(outpage.groups)
                 outpage.addGroup(outgroup)
+                for ri, row in group.items():
+                    tmp_row_list = []
+                    for key, val in row.items():
+                        tmp_row_list.append(val)
+                    outrow = OutputRow(ri, tmp_row_list)
+                    outpage.addRow(outrow, group_ind)
             index.addPage(outpage)
-        index.toJSON(os.path.join(self.config.get('run_directory'), 'index.json'))
-        self.event_list = push_event(self.event_list, 'Index generataion complete')
+        try:
+            index.toJSON(os.path.join(self.config.get('run_directory'), 'index.json'))
+        except:
+            self.event_list = push_event(self.event_list, 'Index generation failed')
+        else:
+            self.event_list = push_event(self.event_list, 'Index generataion complete')
 
     def postvalidate(self):
         """
@@ -172,6 +181,15 @@ class AMWGDiagnostic(object):
         """
             Perform the actual work
         """
+
+        # First check if the job has already been completed
+        if os.path.exists(self.config.get('run_directory')):
+            contents = os.listdir(self.config.get('run_directory'))
+        if len(contents) > 2300:
+            self.event_list = push_event(self.event_list, 'AMWG already computed, skipping job')
+            self.status = JobStatus.COMPLETED
+            return 
+
         run_dir = self.config.get('run_directory')
         if not os.path.exists(run_dir):
             os.makedirs(run_dir)
