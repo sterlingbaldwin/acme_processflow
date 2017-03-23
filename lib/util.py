@@ -149,20 +149,36 @@ def start_ready_job_sets(job_sets, thread_list, debug, event, upload_config, eve
                         status=job.status)
                     logging.info(message)
 
-                    thread = threading.Thread(
-                        target=monitor_job,
-                        args=(job_id, job, job_set, event, debug, 'slurm', upload_config, event_list))
-                    thread_list.append(thread)
-                    thread.start()
+                    while True:
+                        try:
+                            args = (
+                                job_id, job,
+                                job_set, event,
+                                debug, 'slurm',
+                                upload_config, event_list)
+                            thread = threading.Thread(
+                                target=monitor_job,
+                                args=args)
+                            thread_list.append(thread)
+                            thread.start()
+                        except:
+                            sleep(1)
+                        else:
+                            break
                     return
 
                 # if the job isnt a climo, and the job that it depends on is done, start it
                 elif job.get_type() != 'climo' and job.status == JobStatus.VALID:
-                    ready = True
-                    for dependancy in job.depends_on:
-                        if job_set.jobs[dependancy].status != JobStatus.COMPLETED:
-                            ready = False
-                            break
+                    if job.depends_on:
+                        ready = False
+                        for dependancy in job.depends_on:
+                            for djob in job_set.jobs:
+                                if djob.get_type() == dependancy \
+                                   and djob.status == JobStatus.COMPLETED:
+                                    ready = True
+                                    break
+                    else:
+                        ready = True
 
                     if ready:
                         job_id = job.execute(batch='slurm')
@@ -179,11 +195,22 @@ def start_ready_job_sets(job_sets, thread_list, debug, event, upload_config, eve
                             status=job.status)
                         logging.info(message)
 
-                        thread = threading.Thread(
-                            target=monitor_job,
-                            args=(job_id, job, job_set, event, debug, 'slurm', upload_config, event_list))
-                        thread_list.append(thread)
-                        thread.start()
+                        while True:
+                            try:
+                                args = (
+                                    job_id, job,
+                                    job_set, event,
+                                    debug, 'slurm',
+                                    upload_config, event_list)
+                                thread = threading.Thread(
+                                    target=monitor_job,
+                                    args=args)
+                                thread_list.append(thread)
+                                thread.start()
+                            except:
+                                sleep(1)
+                            else:
+                                break
                         return
                 elif job.status == 'invalid':
                     message = "{type} id: {id} status changed to {status}".format(
@@ -258,7 +285,7 @@ def monitor_job(job_id, job, job_set, event=None, debug=False, batch_type='slurm
 
             if status == JobStatus.FAILED:
                 msg = 'Job {0} has failed'.format(job_id)
-                event_list = push_event(event_list, message)
+                event_list = push_event(event_list, msg)
                 if debug:
                     print_message(msg)
 
@@ -316,13 +343,13 @@ def monitor_job(job_id, job, job_set, event=None, debug=False, batch_type='slurm
                 job_set.add_job(upload_2)
 
             if job.get_type() == 'amwg_diagnostic':
-                index_path = os.path.join(job.config.get('run_directory'), 'index.json')
+                # index_path = os.path.join(job.config.get('run_directory'), 'index.json')
                 job.generateIndex()
                 upload_config = {
                     'year_set': job_set.set_number,
                     'start_year': job_set.set_start_year,
                     'end_year': job_set.set_end_year,
-                    'path_to_diagnostic': index_path,
+                    'path_to_diagnostic': job.config.get('run_directory'),
                     'username': upload_config.get('diag_viewer_username'),
                     'password': upload_config.get('diag_viewer_password'),
                     'server': upload_config.get('diag_viewer_server'),
