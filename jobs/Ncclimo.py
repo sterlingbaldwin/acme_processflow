@@ -55,7 +55,7 @@ class Climo(object):
         self.proc = None
         self.slurm_args = {
             'num_cores': '-n 16', # 16 cores
-            'run_time': '-t 0-02:00', # 2 hours run time
+            'run_time': '-t 0-05:00', # 2 hours run time
             'num_machines': '-N 1', # run on one machine
             'oversubscribe': '--oversubscribe'
         }
@@ -72,6 +72,7 @@ class Climo(object):
         Calls ncclimo in a subprocess
         """
         ncclimo = os.path.join(self.config['ncclimo_path'], 'ncclimo')
+        # ncclimo = 'ncclimo'
         cmd = [
             ncclimo,
             '-c', self.config['caseId'],
