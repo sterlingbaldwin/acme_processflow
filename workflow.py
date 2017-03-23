@@ -26,6 +26,7 @@ from jobs.Uvcmetrics import Uvcmetrics
 from jobs.Transfer import Transfer
 from jobs.Ncclimo import Climo
 from jobs.UploadDiagnosticOutput import UploadDiagnosticOutput
+from jobs.Timeseries import Timeseries
 # from jobs.Publication import Publication
 from jobs.AMWGDiagnostic import AMWGDiagnostic
 from jobs.CoupledDiagnostic import CoupledDiagnostic
@@ -44,7 +45,8 @@ parser.add_argument('-s', '--state', help='Path to a json state file')
 parser.add_argument('-n', '--no-ui', help='Turn off the GUI', action='store_true')
 parser.add_argument('-r', '--dry-run', help='Do all setup, but dont submit jobs', action='store_true')
 parser.add_argument('-l', '--log', help='Path to logging output file')
-parser.add_argument('-u', '--no-cleanup', help='Dont perform pre or post run cleanup. This will leave all run scripts in place', action='store_true')
+parser.add_argument('-u', '--no-cleanup', help='Don\'t perform pre or post run cleanup. This will leave all run scripts in place', action='store_true')
+parser.add_argument('-m', '--no-monitor', help='Don\'t run the remote monitor or move any files over globus', action='store_true')
 
 def save_state(config, file_list, job_sets, file_name_list):
     state_path = config.get('state_path')
@@ -193,6 +195,17 @@ def setup(parser):
     else:
         config['global']['no_cleanup'] = False
 
+    if args.no_monitor:
+        config['global']['no_monitor'] = True
+        print "Turning off remote monitoring"
+    else:
+        config['global']['no_monitor'] = False
+
+    if not os.path.exists(config['global']['output_path']):
+        os.makedirs(config['global']['output_path'])
+    if not os.path.exists(config['global']['data_cache_path']):
+        os.makedirs(config['global']['data_cache_path'])
+
     return config
 
 def add_jobs(year_set):
@@ -203,6 +216,7 @@ def add_jobs(year_set):
     # this is here in case the jobs have already been added
     required_jobs = {
         'climo': False,
+        'timeseries': False,
         'uvcmetrics': False,
         'upload_diagnostic_output': False,
         'coupled_diagnostic': False,
@@ -215,11 +229,11 @@ def add_jobs(year_set):
     year_set_str = 'year_set_' + str(year_set.set_number)
     # first initialize the climo job
     if not required_jobs['climo']:
+        required_jobs['climo'] = True
         climo_output_dir = config.get('global').get('output_path')
         if not os.path.exists(climo_output_dir):
-            if debug:
-                msg = "Creating climotology output directory {}".format(climo_output_dir)
-                logging.info(msg)
+            msg = "Creating climotology output directory {}".format(climo_output_dir)
+            logging.info(msg)
             os.makedirs(climo_output_dir)
 
         regrid_output_dir = os.path.join(climo_output_dir, 'regrid')
@@ -261,8 +275,38 @@ def add_jobs(year_set):
         logging.info(msg)
         year_set.add_job(climo)
 
+    if not required_jobs['timeseries']:
+        required_jobs['timeseries'] = True
+        timeseries_output_dir = os.path.join(
+            config.get('global').get('output_path'),
+            'timeseries',
+            'year_set_{}'.format(year_set.set_number))
+        if not os.path.exists(timeseries_output_dir):
+            msg = 'Creating timeseries output directory'
+            logging.info(msg)
+            os.makedirs(timeseries_output_dir)
+
+        # create temp directory of symlinks to history files
+        # we can reuse the input directory for the climo generation
+        timeseries_config = {
+            'annual_mode': 'sdd',
+            'caseId': config.get('global').get('experiment'),
+            'year_set': year_set.set_number,
+            'var_list': config.get('ncclimo').get('var_list'),
+            'start_year': year_set.set_start_year,
+            'end_year': year_set.set_end_year,
+            'input_directory': climo_temp_dir,
+            'output_directory': timeseries_output_dir,
+        }
+        timeseries = Timeseries(timeseries_config, event_list=event_list)
+        timeseries.depends_on = []
+        msg = 'Adding Timeseries job to the job list: {}'.format(str(timeseries))
+        logging.info(msg)
+        year_set.add_job(timeseries)
+
     # init the diagnostic job
     if not required_jobs['uvcmetrics']:
+        required_jobs['uvcmetrics'] = True
         dataset_name = '{time}_{set}_{start}_{end}'.format(
             time=time.strftime("%d-%m-%Y"),
             set=year_set.set_number,
@@ -291,7 +335,7 @@ def add_jobs(year_set):
             'year_set': year_set.set_number,
             'start_year': year_set.set_start_year,
             'end_year': year_set.set_end_year,
-            'depends_on': [len(year_set.jobs) - 1], # set the diag job to wait for the climo job to finish befor running
+            'depends_on': ['climo'], # set the diag job to wait for the climo job to finish befor running
             'regrid_path': regrid_output_dir,
             'diag_temp_dir': diag_temp_dir
         }
@@ -300,6 +344,8 @@ def add_jobs(year_set):
         logging.info(msg)
         year_set.add_job(diag)
 
+    if not required_jobs['coupled_diagnostic']:
+        required_jobs['coupled_diagnostic'] = True
         coupled_project_dir = os.path.join(
             config.get('global').get('output_path'),
             'coupled_diags',
@@ -346,7 +392,7 @@ def add_jobs(year_set):
             'obs_iceareaSH': c_config.get('obs_iceareaSH'),
             'obs_icevolNH': c_config.get('obs_icevolNH'),
             'obs_icevolSH': 'None',
-            'depends_on': [len(year_set.jobs) - 2],
+            'depends_on': ['climo'],
             'yr_offset': c_config.get('yr_offset')
         }
         coupled_diag = CoupledDiagnostic(coupled_diag_config, event_list)
@@ -354,6 +400,8 @@ def add_jobs(year_set):
         logging.info(msg)
         year_set.add_job(coupled_diag)
 
+    if not required_jobs['amwg_diagnostic']:
+        required_jobs['amwg_diagnostic'] = True
         amwg_project_dir = os.path.join(
             config.get('global').get('output_path'),
             'amwg_diags',
@@ -379,7 +427,7 @@ def add_jobs(year_set):
             'set_number': year_set.set_number,
             'run_directory': amwg_project_dir,
             'template_path': template_path,
-            'depends_on': [len(year_set.jobs) - 3]
+            'depends_on': ['climo']
         }
         amwg_diag = AMWGDiagnostic(amwg_config, event_list)
         msg = 'Adding AMWGDiagnostic job to the job list: {}'.format(str(amwg_config))
@@ -397,28 +445,14 @@ def add_jobs(year_set):
             'username': config.get('upload_diagnostic').get('diag_viewer_username'),
             'password': config.get('upload_diagnostic').get('diag_viewer_password'),
             'server': config.get('upload_diagnostic').get('diag_viewer_server'),
-            'depends_on': [len(year_set.jobs) - 2] # set the upload job to wait for the diag job to finish
+            'depends_on': ['uvcmetrics'] # set the upload job to wait for the diag job to finish
         }
         upload_1 = UploadDiagnosticOutput(upload_config)
         msg = 'Adding Upload job to the job list: {}'.format(str(upload_1))
         logging.info(msg)
         year_set.add_job(upload_1)
 
-    """
-    # finally init the publication job
-    if not required_jobs['publication']:
-        publication_config = {
-            'place': 'holder',
-            'yearset': year_set,
-            'depends_on': [len(job_set['jobs']) - 2] # wait for the diagnostic job to finish, but not the upload job
-        }
-        publish = Publication(publication_config)
-        job_set['jobs'].append(publish)
-        print_message('adding publication job')
-    """
     return year_set
-
-
 
 def monitor_check(monitor):
     """
@@ -455,7 +489,7 @@ def monitor_check(monitor):
     if not checked_new_files:
         if debug:
             print_message('No new files found', 'ok')
-        event_list = push_event(event_list, 'no new files found')
+        # event_list = push_event(event_list, 'no new files found')
         return
 
     if debug:
@@ -623,15 +657,10 @@ def display(stdscr, event, config):
         while True:
             c = stdscr.getch()
             if c == curses.KEY_RESIZE:
-                # pad.endwin()
-                # pad = curses.newpad(hmax, wmax)
-                #pad.clear()
-                #del pad
                 height, width = stdscr.getmaxyx()
                 hmax = height - 3
                 wmax = width - 5
                 pad.resize(hmax, wmax)
-                # pad.refresh(0, 0, 3, 5, hmax, wmax)
             elif c == ord('w'):
                 config['global']['ui'] = False
                 pad.clear()
@@ -651,9 +680,9 @@ def display(stdscr, event, config):
                 pad.addstr(y, x, line, curses.color_pair(1))
                 pad.clrtoeol()
                 y += 1
-                if xy_check(x, y, hmax, wmax) == -1:
-                    sleep(1)
-                    break
+                # if xy_check(x, y, hmax, wmax) == -1:
+                #     sleep(1)
+                #     break
                 color_pair = curses.color_pair(4)
                 if year_set.status == SetStatus.COMPLETED:
                     color_pair = curses.color_pair(5)
@@ -669,18 +698,18 @@ def display(stdscr, event, config):
                     pad.refresh(0, 0, 3, 5, hmax, wmax)
                 pad.clrtoeol()
                 y += 1
-                if xy_check(x, y, hmax, wmax) == -1:
-                    sleep(1)
-                    break
+                # if xy_check(x, y, hmax, wmax) == -1:
+                #     sleep(1)
+                #     break
+                # if y >= (hmax/3):
+                #     last_y = y
+                #     y = 0
+                #     x += (wmax/2)
+                #     if x >= wmax:
+                #         break
                 if year_set.status == SetStatus.COMPLETED \
                     or year_set.status == SetStatus.NO_DATA \
                     or year_set.status == SetStatus.PARTIAL_DATA:
-                    if y >= (hmax/3):
-                        last_y = y
-                        y = 0
-                        x += (wmax/2)
-                        if x >= wmax:
-                            break
                     continue
                 for job in year_set.jobs:
                     line = '  >   {type} -- {id} '.format(
@@ -703,12 +732,12 @@ def display(stdscr, event, config):
                         sleep(0.01)
                         pad.refresh(0, 0, 3, 5, hmax, wmax)
                     y += 1
-                if y >= (hmax/3):
-                    last_y = y
-                    y = 0
-                    x += (wmax/2)
-                    if x >= wmax:
-                        break
+                # if y >= (hmax/3):
+                #     last_y = y
+                #     y = 0
+                #     x += (wmax/2)
+                #     if x >= wmax:
+                #         break
 
             x = 0
             if last_y:
@@ -716,14 +745,14 @@ def display(stdscr, event, config):
             # pad.refresh(0, 0, 3, 5, hmax, wmax)
             pad.clrtobot()
             y += 1
-            if xy_check(x, y, hmax, wmax) == -1:
-                sleep(1)
-                continue
+            # if xy_check(x, y, hmax, wmax) == -1:
+            #     sleep(1)
+            #     continue
             for line in event_list[-10:]:
                 if 'Transfer' in line:
                     continue
                 if 'failed' in line or 'FAILED' in line:
-                    prefix = '[-] '
+                    prefix = '[-]  '
                     pad.addstr(y, x, prefix, curses.color_pair(3))
                 else:
                     prefix = '[+]  '
@@ -750,45 +779,45 @@ def display(stdscr, event, config):
             current_year = 1
             year_ready = True
             partial_data = False
-            for line in sorted(file_list, cmp=file_list_cmp):
-                index = line.find('-')
-                year = int(line[:index])
-                month = int(line[index + 1:])
-                if month == 1:
-                    year_ready = True
-                    partial_data = False
-                if file_list[line] != SetStatus.DATA_READY:
-                    year_ready = False
-                else:
-                    partial_data = True
-                if month == 12:
-                    if year_ready:
-                        status = SetStatus.DATA_READY
-                    else:
-                        if partial_data:
-                            status = SetStatus.PARTIAL_DATA
-                        else:
-                            status = SetStatus.NO_DATA
-                    file_display_list.append('Year {year} - {status}'.format(
-                        year=year,
-                        status=status))
+            # for line in sorted(file_list, cmp=file_list_cmp):
+            #     index = line.find('-')
+            #     year = int(line[:index])
+            #     month = int(line[index + 1:])
+            #     if month == 1:
+            #         year_ready = True
+            #         partial_data = False
+            #     if file_list[line] != SetStatus.DATA_READY:
+            #         year_ready = False
+            #     else:
+            #         partial_data = True
+            #     if month == 12:
+            #         if year_ready:
+            #             status = SetStatus.DATA_READY
+            #         else:
+            #             if partial_data:
+            #                 status = SetStatus.PARTIAL_DATA
+            #             else:
+            #                 status = SetStatus.NO_DATA
+            #         file_display_list.append('Year {year} - {status}'.format(
+            #             year=year,
+            #             status=status))
 
-            line_length = len(file_display_list[0])
-            num_cols = wmax/line_length
-            for line in file_display_list:
-                if x + len(line) >= wmax:
-                    diff = wmax - (x + len(line))
-                    line = line[:diff]
-                pad.addstr(y, x, line, curses.color_pair(4))
-                pad.clrtoeol()
-                y += 1
-                if y >= (hmax-10):
-                    y = file_start_y
-                    x += line_length + 5
-                    if x >= wmax:
-                        break
-                if y > file_end_y:
-                    file_end_y = y
+            # line_length = len(file_display_list[0])
+            # num_cols = wmax/line_length
+            # for line in file_display_list:
+            #     if x + len(line) >= wmax:
+            #         diff = wmax - (x + len(line))
+            #         line = line[:diff]
+            #     pad.addstr(y, x, line, curses.color_pair(4))
+            #     pad.clrtoeol()
+            #     y += 1
+            #     if y >= (hmax-10):
+            #         y = file_start_y
+            #         x += line_length + 5
+            #         if x >= wmax:
+            #             break
+            #     if y > file_end_y:
+            #         file_end_y = y
 
             y = file_end_y + 1
             x = 0
@@ -800,7 +829,8 @@ def display(stdscr, event, config):
                     if 'Transfer' in line:
                         index = line.find('%')
                         if index:
-                            percent = float(line[index-3: index])
+                            s_index = line.rfind(' ', 0, index)
+                            percent = float(line[s_index: index])
                             if percent < 100:
                                 y += 1
                                 pad.addstr(y, x, line, curses.color_pair(4))
@@ -968,7 +998,7 @@ if __name__ == "__main__":
         event_list = push_event(event_list, line)
 
     # If all the data is local, dont start the monitor
-    if not all_data:
+    if not all_data and not config.get('global').get('no_monitor', False):
         pattern = config.get('global').get('output_pattern')
         monitor_config = {
             'remote_host': config.get('monitor').get('compute_host'),
@@ -1004,8 +1034,12 @@ if __name__ == "__main__":
     try:
         while True:
             # Setup remote monitoring system
-            if not all_data and monitor:
+            if monitor and \
+               not all_data and \
+               not config.get('global').get('no_monitor', False):
+                # event_list = push_event(event_list, 'Running monitor check')
                 monitor_check(monitor)
+
             # Check if a year_set is ready to run
             check_year_sets(
                 job_sets=job_sets,
