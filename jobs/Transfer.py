@@ -55,7 +55,7 @@ class Transfer(object):
             'final_destination_path': '',
             'pattern': '',
         }
-        self.maximum_transfers = 10
+        self.maximum_transfers = 12
         self.prevalidate(config)
         self.msg = None
         self.job_id = 0
@@ -201,7 +201,10 @@ class Transfer(object):
         # Create a transfer submission
         successful_activation = False
         for i in range(5):
-            api_client = TransferAPIClient(globus_username, goauth=auth_result.token)
+            try:
+                api_client = TransferAPIClient(globus_username, goauth=auth_result.token)
+            except:
+                continue
             source_user = self.config.get('source_username')
             source_pass = self.config.get('source_password')
             try:
@@ -209,7 +212,6 @@ class Transfer(object):
             except Exception as e:
                 logging.error('Error activating source endpoing, attempt %s', int(i) + 1)
                 logging.error(format_debug(e))
-                print_debug(e)
             else:
                 successful_activation = True
                 break
@@ -283,7 +285,14 @@ class Transfer(object):
         number_transfered = -1
         while True:
             try:
-                code, reason, data = api_client.task(task_id)
+                while True:
+                    try:
+                        code, reason, data = api_client.task(task_id)
+                    except:
+                        time.sleep(1)
+                    else:
+                        break
+                # code, reason, data = api_client.task(task_id)
                 logging.info('transfer status: %s', data['status'])
                 # if the transfer is done, move any files that havent already been
                 # moved to their final destination
@@ -311,6 +320,9 @@ class Transfer(object):
                     api_client.task_cancel(task_id)
                     return
             except Exception as e:
+                if code:
+                    print code, reason
                 logging.error(format_debug(e))
+                api_client.task_cancel(task_id)
                 return
             time.sleep(5)
