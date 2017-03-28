@@ -56,8 +56,7 @@ class Monitor(object):
                     port=22,
                     hostname=self.remote_host,
                     username=self.username,
-                    password=self.password
-                )
+                    password=self.password)
             except Exception as e:
                 print "Unable to connect to host with given username/password"
                 print_debug(e)
@@ -69,10 +68,8 @@ class Monitor(object):
                     port=22,
                     hostname=self.remote_host,
                     username=self.username,
-                    pkey=key
-                )
+                    pkey=key)
             except PasswordRequiredException as pwe:
-
                 for attempt in range(3):
                     success = False
                     try:
@@ -88,8 +85,7 @@ class Monitor(object):
                     port=22,
                     hostname=self.remote_host,
                     username=self.username,
-                    pkey=key
-                )
+                    pkey=key)
             except Exception as e:
                 print "Unable to connect to remote host with given private key"
                 print_debug(e)
@@ -100,8 +96,7 @@ class Monitor(object):
                     port=22,
                     hostname=self.remote_host,
                     username=self.username,
-                    password=self.password
-                )
+                    password=self.password)
             except Exception as e:
                 print "Unable to connect to host with given username/password"
                 print_debug(e)
@@ -127,20 +122,32 @@ class Monitor(object):
         """
             Checks to remote_dir for any files that arent in the known files list
         """
-        cmd = 'ls {path} | grep {pattern}'.format(
-            path=self.remote_dir,
-            pattern=self.pattern
-        )
-        stdin, stdout, stderr = self.client.exec_command(cmd)
+        # cmd = 'ls {path} | grep {pattern}'.format(
+        #     path=self.remote_dir,
+        #     pattern=self.pattern)
+        if isinstance(self.pattern, str):
+            name = '-name *{}*'.format(self.pattern)
+        else:
+            name = '-name *' + '* -or -name *'.join(self.pattern) + '*'
+        cmd = 'find {dir} {name}'.format(
+            name=name,
+            dir=self.remote_dir)
+        _, stdout, _ = self.client.exec_command(cmd)
         files = stdout.read()
         files.strip()
         files = files.split()
         self.new_files = []
-        count = 0
-        for f in files:
-            if f not in self.known_files:
-                self.known_files.append(f)
-                self.new_files.append(f)
+        for file in files:
+            if file not in self.known_files:
+                self.known_files.append(file)
+                self.new_files.append(file)
+
+    def remove_new_file(self, file):
+        """
+        Removes a files from the new_files list
+        """
+        if file in self.new_files:
+            self.new_files.remove(file)
 
     def get_new_files(self):
         """

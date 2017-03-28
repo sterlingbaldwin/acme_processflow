@@ -21,7 +21,7 @@ from lib.util import get_climo_output_files
 from JobStatus import JobStatus
 
 
-class Climo(object):
+class Timeseries(object):
     """
     A wrapper around ncclimo, used to compute the climotologies from raw output data
     """
@@ -29,9 +29,9 @@ class Climo(object):
         self.event_list = event_list
         self.config = {}
         self.status = JobStatus.INVALID
-        self.type = 'climo'
+        self.type = 'timeseries'
         self.uuid = uuid4().hex
-        self.yearset = config.get('yearset', 0)
+        self.year_set = config.get('year_set', 0)
         self.job_id = 0
         self.depends_on = []
         self.outputs = {
@@ -41,16 +41,13 @@ class Climo(object):
             'console_output': ''
         }
         self.inputs = {
+            'annual_mode': '',
             'start_year': '',
             'end_year': '',
-            'caseId': '',
-            'annual_mode': 'sdd',
             'input_directory': '',
-            'climo_output_directory': '',
-            'regrid_output_directory': '',
-            'regrid_map_path': '',
-            'year_set': '',
-            'ncclimo_path': ''
+            'output_directory': '',
+            'var_list': '',
+            'caseId': ''
         }
         self.proc = None
         self.slurm_args = {
@@ -71,18 +68,22 @@ class Climo(object):
         """
         Calls ncclimo in a subprocess
         """
-        ncclimo = os.path.join(self.config['ncclimo_path'], 'ncclimo')
-        # ncclimo = 'ncclimo'
+        output_dir = os.listdir(self.config['output_directory'])
+        if len(output_dir) == len(self.config['var_list'].split(',')):
+            self.status = JobStatus.COMPLETED
+            return
+
+        input_dir = self.config['input_directory']
+        file_list = [os.path.join(input_dir, file) for file in os.listdir(input_dir)]
         cmd = [
-            ncclimo,
-            '-c', self.config['caseId'],
+            'ncclimo',
             '-a', self.config['annual_mode'],
+            '-c', self.config['caseId'],
+            '-v', self.config['var_list'],
             '-s', str(self.config['start_year']),
             '-e', str(self.config['end_year']),
-            '-i', self.config['input_directory'],
-            '-r', self.config['regrid_map_path'],
-            '-o', self.config['climo_output_directory'],
-            '-O', self.config['regrid_output_directory'],
+            '-o', self.config['output_directory'],
+            ' '.join(file_list)
         ]
         if not batch:
             # Not running in batch mode
@@ -118,8 +119,8 @@ class Climo(object):
             return 0
         else:
             # Submitting the job to SLURM
-            expected_name = 'ncclimo_set_{year_set}_{start}_{end}_{uuid}'.format(
-                year_set=self.config.get('year_set'),
+            expected_name = 'timeseries_set_{year_set}_{start}_{end}_{uuid}'.format(
+                year_set=self.year_set,
                 start=self.config.get('start_year'),
                 end=self.config.get('end_year'),
                 uuid=self.uuid[:5])
@@ -154,15 +155,11 @@ class Climo(object):
                 if started:
                     self.status = JobStatus.SUBMITTED
                     self.job_id = job_id
-                    message = '## {type} id: {id} changed state to {state}'.format(
-                        type=self.get_type(),
-                        id=self.job_id,
-                        state=self.status)
-                    logging.info(message)
                     message = '{type} id: {id} changed state to {state}'.format(
                         type=self.get_type(),
                         id=self.job_id,
                         state=self.status)
+                    logging.info('## ' + message)
                     self.event_list = push_event(self.event_list, message)
 
                 else:
@@ -171,15 +168,11 @@ class Climo(object):
 
             if retry_count >= 5:
                 self.status = JobStatus.FAILED
-                message = '## {type} id: {id} changed state to {state}'.format(
-                    type=self.get_type(),
-                    id=self.job_id,
-                    state=self.status)
-                logging.info(message)
                 message = '{type} id: {id} changed state to {state}'.format(
                     type=self.get_type(),
                     id=self.job_id,
                     state=self.status)
+                logging.info('## ' + message)
                 self.event_list = push_event(self.event_list, message)
                 self.job_id = 0
             return self.job_id
@@ -230,22 +223,22 @@ class Climo(object):
 
         # after checking that the job is valid to run,
         # check if the output already exists and the job actually needs to run
-        if os.path.exists(self.config.get('climo_output_directory')):
-            set_start_year = self.config.get('start_year')
-            set_end_year = self.config.get('end_year')
-            contents = os.listdir(self.config.get('climo_output_directory'))
+        # if os.path.exists(self.config.get('climo_output_directory')):
+        #     set_start_year = self.config.get('start_year')
+        #     set_end_year = self.config.get('end_year')
+        #     contents = os.listdir(self.config.get('climo_output_directory'))
 
-            file_list = get_climo_output_files(
-                input_path=self.config.get('climo_output_directory'),
-                set_start_year=self.config.get('start_year'),
-                set_end_year=self.config.get('end_year'))
+        #     file_list = get_climo_output_files(
+        #         input_path=self.config.get('climo_output_directory'),
+        #         set_start_year=self.config.get('start_year'),
+        #         set_end_year=self.config.get('end_year'))
 
-            if len(file_list) >= 17:
-                self.status = JobStatus.COMPLETED
-                # print_message('Ncclimo job already computed, skipping', 'ok')
-                message = 'Ncclimo job already computed, skipping'
-                self.event_list = push_event(self.event_list, message)
-            return 0
+        #     if len(file_list) >= 17:
+        #         self.status = JobStatus.COMPLETED
+        #         # print_message('Ncclimo job already computed, skipping', 'ok')
+        #         message = 'Ncclimo job already computed, skipping'
+        #         self.event_list = push_event(self.event_list, message)
+        #     return 0
 
     def postvalidate(self):
         """

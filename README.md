@@ -7,6 +7,7 @@ A workflow tool for the ACME project
     conda create -n acme -c conda-forge -c uvcdat/label/nightly -c uvcdat uvcdat-nox "cdms2>2017"
     source activate acme
 
+    conda install -c conda-forge nco=4.6.5
     conda uninstall openblas
 
     git clone https://github.com/globusonline/transfer-api-client-python.git

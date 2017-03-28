@@ -13,6 +13,36 @@ from YearSet import SetStatus
 from YearSet import YearSet
 from jobs.JobStatus import JobStatus
 
+def year_from_filename(filename):
+    pattern = r'\.\d\d\d\d-'
+    index = re.search(pattern, filename)
+    if index:
+        year = int(filename[index.start() + 1: index.start() + 5])
+        return year
+    else:
+        return 0
+
+def get_climo_output_files(input_path, set_start_year, set_end_year):
+    contents = os.listdir(input_path)
+    file_list_tmp = [s for s in contents if not os.path.isdir(s)]
+    file_list = []
+    for file in file_list_tmp:
+        start_search = re.search(r'\_\d\d\d\d', file)
+        if not start_search:
+            continue
+        start_index = start_search.start() + 1
+        start_year = int(file[start_index: start_index + 4])
+
+        end_search = re.search(r'\_\d\d\d\d', file[start_index:])
+        if not end_search:
+            continue
+        end_index = end_search.start() + start_index + 1
+        end_year = int(file[end_index: end_index + 4])
+
+        if start_year == set_start_year and end_year == set_end_year:
+            file_list.append(file)
+    return file_list
+
 def path_exists(config_items):
     """
     Checks the config for any netCDF file paths and validates that they exist
@@ -119,20 +149,36 @@ def start_ready_job_sets(job_sets, thread_list, debug, event, upload_config, eve
                         status=job.status)
                     logging.info(message)
 
-                    thread = threading.Thread(
-                        target=monitor_job,
-                        args=(job_id, job, job_set, event, debug, 'slurm', upload_config, event_list))
-                    thread_list.append(thread)
-                    thread.start()
+                    while True:
+                        try:
+                            args = (
+                                job_id, job,
+                                job_set, event,
+                                debug, 'slurm',
+                                upload_config, event_list)
+                            thread = threading.Thread(
+                                target=monitor_job,
+                                args=args)
+                            thread_list.append(thread)
+                            thread.start()
+                        except:
+                            sleep(1)
+                        else:
+                            break
                     return
 
                 # if the job isnt a climo, and the job that it depends on is done, start it
                 elif job.get_type() != 'climo' and job.status == JobStatus.VALID:
-                    ready = True
-                    for dependancy in job.depends_on:
-                        if job_set.jobs[dependancy].status != JobStatus.COMPLETED:
-                            ready = False
-                            break
+                    if job.depends_on:
+                        ready = False
+                        for dependancy in job.depends_on:
+                            for djob in job_set.jobs:
+                                if djob.get_type() == dependancy \
+                                   and djob.status == JobStatus.COMPLETED:
+                                    ready = True
+                                    break
+                    else:
+                        ready = True
 
                     if ready:
                         job_id = job.execute(batch='slurm')
@@ -149,11 +195,22 @@ def start_ready_job_sets(job_sets, thread_list, debug, event, upload_config, eve
                             status=job.status)
                         logging.info(message)
 
-                        thread = threading.Thread(
-                            target=monitor_job,
-                            args=(job_id, job, job_set, event, debug, 'slurm', upload_config, event_list))
-                        thread_list.append(thread)
-                        thread.start()
+                        while True:
+                            try:
+                                args = (
+                                    job_id, job,
+                                    job_set, event,
+                                    debug, 'slurm',
+                                    upload_config, event_list)
+                                thread = threading.Thread(
+                                    target=monitor_job,
+                                    args=args)
+                                thread_list.append(thread)
+                                thread.start()
+                            except:
+                                sleep(1)
+                            else:
+                                break
                         return
                 elif job.status == 'invalid':
                     message = "{type} id: {id} status changed to {status}".format(
@@ -178,7 +235,12 @@ def monitor_job(job_id, job, job_set, event=None, debug=False, batch_type='slurm
         if event and event.is_set():
             return
         cmd = ['scontrol', 'show', 'job', str(job_id)]
-        out = Popen(cmd, stdout=PIPE, stderr=PIPE).communicate()[0]
+        while True:
+            try:
+                out = Popen(cmd, stdout=PIPE, stderr=PIPE).communicate()[0]
+                break
+            except:
+                sleep(1)
         if not out or len(out) == 0:
             status = None
 
@@ -222,7 +284,10 @@ def monitor_job(job_id, job, job_set, event=None, debug=False, batch_type='slurm
                     print_message(message)
 
             if status == JobStatus.FAILED:
-                print_message('Job {0} has failed'.format(job_id))
+                msg = 'Job {0} has failed'.format(job_id)
+                event_list = push_event(event_list, msg)
+                if debug:
+                    print_message(msg)
 
             job.status = status
             message = "{type}: {id} status changed to {status}".format(
@@ -270,12 +335,30 @@ def monitor_job(job_id, job, job_set, event=None, debug=False, batch_type='slurm
                     'username': upload_config.get('diag_viewer_username'),
                     'password': upload_config.get('diag_viewer_password'),
                     'server': upload_config.get('diag_viewer_server'),
-                    'depends_on': [len(job_set.jobs) - 2] # set the upload job to wait for the coupled_diag job to finish
+                    'depends_on': [len(job_set.jobs) - 3] # set the upload job to wait for the coupled_diag job to finish
                 }
                 upload_2 = UploadDiagnosticOutput(upload_config)
                 msg = 'Adding Upload job to the job list: {}'.format(str(upload_2))
                 logging.info(msg)
                 job_set.add_job(upload_2)
+
+            if job.get_type() == 'amwg_diagnostic':
+                # index_path = os.path.join(job.config.get('run_directory'), 'index.json')
+                job.generateIndex()
+                upload_config = {
+                    'year_set': job_set.set_number,
+                    'start_year': job_set.set_start_year,
+                    'end_year': job_set.set_end_year,
+                    'path_to_diagnostic': job.config.get('run_directory'),
+                    'username': upload_config.get('diag_viewer_username'),
+                    'password': upload_config.get('diag_viewer_password'),
+                    'server': upload_config.get('diag_viewer_server'),
+                    'depends_on': [len(job_set.jobs) - 4] # set the upload job to wait for the coupled_diag job to finish
+                }
+                upload_3 = UploadDiagnosticOutput(upload_config)
+                msg = 'Adding Upload job to the job list: {}'.format(str(upload_3))
+                logging.info(msg)
+                job_set.add_job(upload_3)
 
             job_set_done = True
             for job in job_set.jobs:
@@ -311,10 +394,7 @@ def check_for_inplace_data(file_list, file_name_list, job_sets, config):
 
     for climo_file in os.listdir(cache_path):
         climo_file_path = os.path.join(cache_path, climo_file)
-        file_key = filename_to_file_list_key(
-            filename=climo_file,
-            output_pattern=output_pattern,
-            date_pattern=date_pattern)
+        file_key = filename_to_file_list_key(filename=climo_file)
 
         index = file_key.find('-')
         year = int(file_key[:index])
@@ -383,7 +463,7 @@ def print_message(message, status='error'):
     elif status == 'ok':
         print colors.OKGREEN + '[+] ' + colors.ENDC + str(message)
 
-def render(variables, input_path, output_path, delimiter):
+def render(variables, input_path, output_path, delimiter='%%'):
     """
     Takes an input file path, an output file path, a set of variables, and a delimiter.
     For each instance of that delimiter wrapped around a substring, replaces the
@@ -405,13 +485,15 @@ def render(variables, input_path, output_path, delimiter):
 
     try:
         infile = open(input_path, 'r')
-    except IOError:
-        print 'unable to open file: {}'.format(input_path)
+    except IOError as e:
+        print 'unable to open input file: {}'.format(input_path)
+        print_debug(e)
         return
     try:
         outfile = open(output_path, 'w')
-    except IOError:
-        print 'unable to open file: {}'.format(input_path)
+    except IOError as e:
+        print 'unable to open output file: {}'.format(output_path)
+        print_debug(e)
         return
 
     for line in infile.readlines():
@@ -435,55 +517,29 @@ def render(variables, input_path, output_path, delimiter):
             rendered_string = line
         outfile.write(rendered_string)
 
-def filename_to_file_list_key(filename, output_pattern, date_pattern):
+def filename_to_file_list_key(filename):
     """
     Takes a filename and returns the key for the file_list
     """
-    date_pattern = date_pattern.replace('YYYY', '[0-9][0-9][0-9][0-9]')
-    date_pattern = date_pattern.replace('MM', '[0-9][0-9]')
-    date_pattern = date_pattern.replace('DD', '[0-9][0-9]')
-    output_pattern = output_pattern.replace('YYYY', '0000')
-    output_pattern = output_pattern.replace('MM', '00')
-    output_pattern = output_pattern.replace('DD', '00')
-
-    index = re.search(date_pattern, filename)
+    pattern = r'\.\d\d\d\d-'
+    index = re.search(pattern, filename)
     if index:
-        index = index.start()
+        year = int(filename[index.start() + 1: index.start() + 5])
     else:
-        msg = 'Unable to find pattern {0} in {1}'.format(date_pattern, filename)
-        print_message(msg)
-        logging.error(msg)
-        return ''
+        return '0-0'
     # the YYYY field is 4 characters long, the month is two
-    year_offset = index + 4
+    year_offset = index.start() + 5
     # two characters for the month, and one for the - between year and month
     month_offset = year_offset + 3
-    try:
-        year = int(filename[index: year_offset])
-    except:
-        print 'filename ' + filename
-        print 'index ' + str(index)
-        print 'year ' + filename[index: year_offset]
-    try:
-        month = int(filename[year_offset + 1: month_offset])
-    except:
-        print 'filename ' + filename
-        print 'index ' + str(index)
-        print 'month ' + filename[year_offset + 1: month_offset]
+    month = int(filename[year_offset + 1: month_offset])
     key = "{year}-{month}".format(year=year, month=month)
     return key
 
-def filename_to_year_set(filename, pattern, freq):
+def filename_to_year_set(filename, freq):
     """
     Takes a filename and returns the year_set that the file belongs to
     """
-    pattern_format = 'YYYY-MM'
-    file_format = '.nc'
-    if not filename.endswith(file_format):
-        print_message('unable to find year set, unexpected file format')
-        return 0
-    file_date = filename[-(len(pattern_format) + len(file_format)): - len(file_format)]
-    year = int(file_date[:4])
+    year = year_from_filename(filename)
     if year % freq == 0:
         return int(year / freq)
     else:
@@ -526,6 +582,25 @@ def file_list_cmp(a, b):
         else:
             return 0
 
+def raw_file_cmp(a, b):
+    a_index = a.find('-')
+    b_index = b.find('-')
+    a_year = int(a[a_index - 4: a_index])
+    b_year = int(b[b_index - 4: b_index])
+    if a_year > b_year:
+        return 1
+    elif a_year < b_year:
+        return -1
+    else:
+        a_month = int(a[a_index + 1: a_index + 3])
+        b_month = int(b[b_index + 1: b_index + 3])
+        if a_month > b_month:
+            return 1
+        elif a_month < b_month:
+            return -1
+        else:
+            return 0
+
 def thread_sleep(seconds, event):
     """
     Allows a thread to sleep for one second at at time, and cancel when if the 
@@ -546,7 +621,12 @@ def check_slurm_job_submission(expected_name):
     job_id = 0
     found_job = False
     while True:
-        out = Popen(cmd, stdout=PIPE, stderr=PIPE).communicate()[0]
+        while True:
+            try:
+                out = Popen(cmd, stdout=PIPE, stderr=PIPE).communicate()[0]
+                break
+            except:
+                sleep(1)
         out = out.split('\n')
         if 'error' in out[0]:
             sleep(1)

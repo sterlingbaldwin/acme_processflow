@@ -8,9 +8,7 @@ import time
 import logging
 
 from pprint import pformat
-from subprocess import Popen, PIPE
 from datetime import datetime, timedelta
-from shutil import copy, rmtree
 from uuid import uuid4
 
 from globusonline.transfer import api_client
@@ -25,6 +23,7 @@ from lib.util import print_message
 from lib.util import filename_to_year_set
 from lib.util import format_debug
 from lib.util import push_event
+from lib.util import raw_file_cmp
 from JobStatus import JobStatus
 
 class Transfer(object):
@@ -56,7 +55,7 @@ class Transfer(object):
             'final_destination_path': '',
             'pattern': '',
         }
-        self.maximum_transfers = 10
+        self.maximum_transfers = 12
         self.prevalidate(config)
         self.msg = None
         self.job_id = 0
@@ -123,7 +122,9 @@ class Transfer(object):
                     self.status = JobStatus.INVALID
                     return -1
         self.status = JobStatus.VALID
-        self.config['file_list'] = self.config['file_list'][:self.maximum_transfers]
+        # only add the first n transfers up to the max
+        file_list = sorted(self.config.get('file_list'), raw_file_cmp)
+        self.config['file_list'] = file_list[:self.maximum_transfers]
         return 0
 
     def postvalidate(self):
@@ -171,7 +172,7 @@ class Transfer(object):
         replaced = False
         for i, e in enumerate(event_list):
             if str(task_id) in e:
-                event_list[i] = '[+] ' + time.strftime("%I:%M") + message
+                event_list[i] = time.strftime("%I:%M") + ' ' + message
                 replaced = True
                 break
         if not replaced:
@@ -200,7 +201,10 @@ class Transfer(object):
         # Create a transfer submission
         successful_activation = False
         for i in range(5):
-            api_client = TransferAPIClient(globus_username, goauth=auth_result.token)
+            try:
+                api_client = TransferAPIClient(globus_username, goauth=auth_result.token)
+            except:
+                continue
             source_user = self.config.get('source_username')
             source_pass = self.config.get('source_password')
             try:
@@ -244,14 +248,12 @@ class Transfer(object):
             self.status = JobStatus.FAILED
             return
 
-        # only add the first n transfers up to the max
-        source_list = self.config.get('file_list')[:self.maximum_transfers]
-        if not source_list:
+        if not self.config['file_list']:
             logging.error('Unable to transfer files without a source list')
             self.status = JobStatus.FAILED
             return
         try:
-            for path in source_list:
+            for path in self.config['file_list']:
                 dst_path = self.get_destination_path(
                     path,
                     self.config.get('destination_path'),
@@ -283,7 +285,14 @@ class Transfer(object):
         number_transfered = -1
         while True:
             try:
-                code, reason, data = api_client.task(task_id)
+                while True:
+                    try:
+                        code, reason, data = api_client.task(task_id)
+                    except:
+                        time.sleep(1)
+                    else:
+                        break
+                # code, reason, data = api_client.task(task_id)
                 logging.info('transfer status: %s', data['status'])
                 # if the transfer is done, move any files that havent already been
                 # moved to their final destination
@@ -311,6 +320,9 @@ class Transfer(object):
                     api_client.task_cancel(task_id)
                     return
             except Exception as e:
+                if code:
+                    print code, reason
                 logging.error(format_debug(e))
+                api_client.task_cancel(task_id)
                 return
             time.sleep(5)

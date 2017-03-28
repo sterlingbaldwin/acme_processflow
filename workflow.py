@@ -13,6 +13,7 @@ import time
 import pickle
 import curses
 import select
+import ConfigParser
 
 from shutil import rmtree
 from shutil import move
@@ -21,11 +22,13 @@ from time import sleep
 from pprint import pformat
 from subprocess import Popen
 
-from jobs.Diagnostic import Diagnostic
+from jobs.Uvcmetrics import Uvcmetrics
 from jobs.Transfer import Transfer
 from jobs.Ncclimo import Climo
 from jobs.UploadDiagnosticOutput import UploadDiagnosticOutput
+from jobs.Timeseries import Timeseries
 # from jobs.Publication import Publication
+from jobs.AMWGDiagnostic import AMWGDiagnostic
 from jobs.CoupledDiagnostic import CoupledDiagnostic
 from jobs.JobStatus import JobStatus
 from lib.Monitor import Monitor
@@ -36,13 +39,15 @@ from lib.util import *
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-c', '--config', help='Path to configuration file')
-parser.add_argument('-d', '--debug', help='Run in debug mode', action='store_true')
+parser.add_argument('-v', '--debug', help='Run in debug mode', action='store_true')
+parser.add_argument('-d', '--daemon', help='Run in daemon mode', action='store_true')
 parser.add_argument('-s', '--state', help='Path to a json state file')
 parser.add_argument('-n', '--no-ui', help='Turn off the GUI', action='store_true')
 parser.add_argument('-r', '--dry-run', help='Do all setup, but dont submit jobs', action='store_true')
 parser.add_argument('-l', '--log', help='Path to logging output file')
-parser.add_argument('-u', '--no-cleanup', help='Dont perform pre or post run cleanup. This will leave all run scripts in place', action='store_true')
-#@atexit.register
+parser.add_argument('-u', '--no-cleanup', help='Don\'t perform pre or post run cleanup. This will leave all run scripts in place', action='store_true')
+parser.add_argument('-m', '--no-monitor', help='Don\'t run the remote monitor or move any files over globus', action='store_true')
+
 def save_state(config, file_list, job_sets, file_name_list):
     state_path = config.get('state_path')
     if not state_path:
@@ -131,78 +136,49 @@ def setup(parser):
 
     # no state file, load from config
     if not from_saved_state:
-        required_fields = [
-            "output_path",
-            "output_pattern",
-            "data_cache_path",
-            "compute_host",
-            "compute_username",
-            "compute_password",
-            "compute_keyfile",
-            "processing_host",
-            "processing_username",
-            "processing_password",
-            "globus_username",
-            "globus_password",
-            "source_endpoint",
-            "destination_endpoint",
-            "source_path",
-            "batch_system_type",
-            "experiment",
-        ]
-        if args.config:
+        if not args.config:
+            parser.print_help()
+            sys.exit()
+        else:
             try:
-                with open(args.config, 'r') as conf:
-                    config.update(json.load(conf))
+                confParse = ConfigParser.ConfigParser()
+                confParse.read(args.config)
+                for section in confParse.sections():
+                    config[section] = {}
+                    for option in confParse.options(section):
+                        opt = confParse.get(section, option)
+                        if opt.startswith('['):
+                            opt = json.loads(opt)
+                        config[section][option] = opt
             except Exception as e:
                 msg = 'Unable to read config file, is it properly formatted json?'
                 print_message(msg)
                 logging.error(msg)
-                logging.error(format_debug(e))
+                print_debug(e)
                 return -1
 
-            for field in required_fields:
-                """
-                if field not in config or len(config[field]) == 0:
-                    if field == 'compute_password' and config.get('monitor').get('compute_keyfile'):
-                        continue
-                    if field == 'compute_keyfile' and config.get('monitor').get('compute_password'):
-                        continue
-                    if 'password' in field:
-                        config[field] = getpass("{0} not specified in config, please enter: ".format(field))
-                    else:
-                        config[field] = raw_input("{0} not specified in config, please enter: ".format(field))
-                """
-                if field == 'output_pattern':
-                    patterns = ['YYYY-MM', 'YYYY-MM-DD']
-                    output_pattern = config.get('global').get(field)
-                    for p in patterns:
-                        index = re.search(p, output_pattern)
-                        if index:
-                            start = index.start()
-                            end = start + len(p)
-                            date_pattern = output_pattern[start:end]
-                            config['global']['output_pattern'] = config['global']['output_pattern'][:start] + p + '.nc'
-                            config['global']['date_pattern'] = date_pattern
-                    if not config.get('global').get('date_pattern'):
-                        msg = 'Unable to parse output_pattern {}, exiting'.format(output_pattern)
-                        print_message(msg)
-                        logging.error(msg)
-                        message = "## year_set {set} status change to {status}".format(
-                            set=year_set.set_number,
-                            status=year_set.status)
-                        logging.error(message)
-                        sys.exit(1)
-        else:
-            parser.print_help()
-            print 'No configuration file given, initiating manual setup'
-            config = {}
-            for field in required_fields:
-                if 'password' in field:
-                    config[field] = getpass('{0}: '.format(field))
-                else:
-                    config[field] = raw_input('{0}: '.format(field))
-
+            # required_fields = ['output_pattern']
+            # for field in required_fields:
+            #     if field == 'output_pattern':
+            #         patterns = ['YYYY-MM', 'YYYY-MM-DD']
+            #         output_pattern = config.get('global').get(field)
+            #         for p in patterns:
+            #             index = re.search(p, output_pattern)
+            #             if index:
+            #                 start = index.start()
+            #                 end = start + len(p)
+            #                 date_pattern = output_pattern[start:end]
+            #                 config['global']['output_pattern'] = config['global']['output_pattern'][:start] + p + '.nc'
+            #                 config['global']['date_pattern'] = date_pattern
+            #         if not config.get('global').get('date_pattern'):
+            #             msg = 'Unable to parse output_pattern {}, exiting'.format(output_pattern)
+            #             print_message(msg)
+            #             logging.error(msg)
+            #             message = "## year_set {set} status change to {status}".format(
+            #                 set=year_set.set_number,
+            #                 status=year_set.status)
+            #             logging.error(message)
+            #             sys.exit(1)
     if args.no_ui:
         config['global']['ui'] = False
     else:
@@ -218,6 +194,18 @@ def setup(parser):
         config['global']['no_cleanup'] = True
     else:
         config['global']['no_cleanup'] = False
+
+    if args.no_monitor:
+        config['global']['no_monitor'] = True
+        print "Turning off remote monitoring"
+    else:
+        config['global']['no_monitor'] = False
+
+    if not os.path.exists(config['global']['output_path']):
+        os.makedirs(config['global']['output_path'])
+    if not os.path.exists(config['global']['data_cache_path']):
+        os.makedirs(config['global']['data_cache_path'])
+
     return config
 
 def add_jobs(year_set):
@@ -228,9 +216,11 @@ def add_jobs(year_set):
     # this is here in case the jobs have already been added
     required_jobs = {
         'climo': False,
-        'diagnostic': False,
+        'timeseries': False,
+        'uvcmetrics': False,
         'upload_diagnostic_output': False,
-        'coupled_diagnostic': False
+        'coupled_diagnostic': False,
+        'amwg_diagnostic': False
     }
     for job in year_set.jobs:
         if not required_jobs[job.get_type()]:
@@ -239,11 +229,11 @@ def add_jobs(year_set):
     year_set_str = 'year_set_' + str(year_set.set_number)
     # first initialize the climo job
     if not required_jobs['climo']:
+        required_jobs['climo'] = True
         climo_output_dir = config.get('global').get('output_path')
         if not os.path.exists(climo_output_dir):
-            if debug:
-                msg = "Creating climotology output directory {}".format(climo_output_dir)
-                logging.info(msg)
+            msg = "Creating climotology output directory {}".format(climo_output_dir)
+            logging.info(msg)
             os.makedirs(climo_output_dir)
 
         regrid_output_dir = os.path.join(climo_output_dir, 'regrid')
@@ -285,8 +275,43 @@ def add_jobs(year_set):
         logging.info(msg)
         year_set.add_job(climo)
 
+    if not required_jobs['timeseries']:
+        required_jobs['timeseries'] = True
+        timeseries_output_dir = os.path.join(
+            config.get('global').get('output_path'),
+            'timeseries',
+            'year_set_{}'.format(year_set.set_number))
+        if not os.path.exists(timeseries_output_dir):
+            msg = 'Creating timeseries output directory'
+            logging.info(msg)
+            os.makedirs(timeseries_output_dir)
+
+        # create temp directory of symlinks to history files
+        # we can reuse the input directory for the climo generation
+        timeseries_config = {
+            'annual_mode': 'sdd',
+            'caseId': config.get('global').get('experiment'),
+            'year_set': year_set.set_number,
+            'var_list': config.get('ncclimo').get('var_list'),
+            'start_year': year_set.set_start_year,
+            'end_year': year_set.set_end_year,
+            'input_directory': climo_temp_dir,
+            'output_directory': timeseries_output_dir,
+        }
+        timeseries = Timeseries(timeseries_config, event_list=event_list)
+        timeseries.depends_on = []
+        msg = 'Adding Timeseries job to the job list: {}'.format(str(timeseries))
+        logging.info(msg)
+        year_set.add_job(timeseries)
+
     # init the diagnostic job
-    if not required_jobs['diagnostic']:
+    if not required_jobs['uvcmetrics']:
+        required_jobs['uvcmetrics'] = True
+        dataset_name = '{time}_{set}_{start}_{end}'.format(
+            time=time.strftime("%d-%m-%Y"),
+            set=year_set.set_number,
+            start=year_set.set_start_year,
+            end=year_set.set_end_year)
         # create the output directory
         output_path = config.get('global').get('output_path')
 
@@ -300,8 +325,9 @@ def add_jobs(year_set):
             os.makedirs(diag_temp_dir)
 
         diag_config = {
+            'dataset_name': dataset_name,
             '--model': diag_temp_dir,
-            '--obs': config.get('meta_diags').get('obs_for_diagnostics_path'),
+            '--obs': config.get('uvcmetrics').get('obs_for_diagnostics_path'),
             '--outputdir': diag_output_path,
             '--package': 'amwg',
             '--set': '5',
@@ -309,15 +335,17 @@ def add_jobs(year_set):
             'year_set': year_set.set_number,
             'start_year': year_set.set_start_year,
             'end_year': year_set.set_end_year,
-            'depends_on': [len(year_set.jobs) - 1], # set the diag job to wait for the climo job to finish befor running
+            'depends_on': ['climo'], # set the diag job to wait for the climo job to finish befor running
             'regrid_path': regrid_output_dir,
             'diag_temp_dir': diag_temp_dir
         }
-        diag = Diagnostic(diag_config, event_list=event_list)
+        diag = Uvcmetrics(diag_config, event_list=event_list)
         msg = 'Adding Diagnostic to the job list: {}'.format(str(diag))
         logging.info(msg)
         year_set.add_job(diag)
 
+    if not required_jobs['coupled_diagnostic']:
+        required_jobs['coupled_diagnostic'] = True
         coupled_project_dir = os.path.join(
             config.get('global').get('output_path'),
             'coupled_diags',
@@ -328,6 +356,7 @@ def add_jobs(year_set):
         g_config = config.get('global')
         c_config = config.get('coupled_diags')
         coupled_diag_config = {
+            'dataset_name': dataset_name,
             'year_set': year_set.set_number,
             'climo_tmp_dir': climo_temp_dir,
             'regrid_path': regrid_output_dir,
@@ -363,13 +392,47 @@ def add_jobs(year_set):
             'obs_iceareaSH': c_config.get('obs_iceareaSH'),
             'obs_icevolNH': c_config.get('obs_icevolNH'),
             'obs_icevolSH': 'None',
-            'depends_on': [len(year_set.jobs) - 2],
+            'depends_on': ['climo'],
             'yr_offset': c_config.get('yr_offset')
         }
         coupled_diag = CoupledDiagnostic(coupled_diag_config, event_list)
         msg = 'Adding CoupledDiagnostic job to the job list: {}'.format(str(coupled_diag))
         logging.info(msg)
         year_set.add_job(coupled_diag)
+
+    if not required_jobs['amwg_diagnostic']:
+        required_jobs['amwg_diagnostic'] = True
+        amwg_project_dir = os.path.join(
+            config.get('global').get('output_path'),
+            'amwg_diags',
+            'year_set_{}'.format(year_set.set_number))
+        if not os.path.exists(amwg_project_dir):
+            os.makedirs(amwg_project_dir)
+
+        amwg_temp_dir = os.path.join(os.getcwd(), 'tmp', 'amwg', year_set_str)
+        if not os.path.exists(diag_temp_dir):
+            os.makedirs(diag_temp_dir)
+        template_path = os.path.join(os.getcwd(), 'resources', 'amwg_template.csh')
+        amwg_config = {
+            'dataset_name': dataset_name,
+            'diag_home': config.get('amwg').get('diag_home'),
+            'test_path': amwg_project_dir + os.sep,
+            'test_casename': g_config.get('experiment'),
+            'test_path_history': climo_temp_dir + os.sep,
+            'regrided_climo_path': regrid_output_dir,
+            'test_path_climo': amwg_temp_dir,
+            'test_path_diag': amwg_project_dir,
+            'start_year': year_set.set_start_year,
+            'end_year': year_set.set_end_year,
+            'set_number': year_set.set_number,
+            'run_directory': amwg_project_dir,
+            'template_path': template_path,
+            'depends_on': ['climo']
+        }
+        amwg_diag = AMWGDiagnostic(amwg_config, event_list)
+        msg = 'Adding AMWGDiagnostic job to the job list: {}'.format(str(amwg_config))
+        logging.info(msg)
+        year_set.add_job(amwg_diag)
 
     # init the upload job
     if not required_jobs['upload_diagnostic_output']:
@@ -382,28 +445,14 @@ def add_jobs(year_set):
             'username': config.get('upload_diagnostic').get('diag_viewer_username'),
             'password': config.get('upload_diagnostic').get('diag_viewer_password'),
             'server': config.get('upload_diagnostic').get('diag_viewer_server'),
-            'depends_on': [len(year_set.jobs) - 2] # set the upload job to wait for the diag job to finish
+            'depends_on': ['uvcmetrics'] # set the upload job to wait for the diag job to finish
         }
         upload_1 = UploadDiagnosticOutput(upload_config)
         msg = 'Adding Upload job to the job list: {}'.format(str(upload_1))
         logging.info(msg)
         year_set.add_job(upload_1)
 
-    """
-    # finally init the publication job
-    if not required_jobs['publication']:
-        publication_config = {
-            'place': 'holder',
-            'yearset': year_set,
-            'depends_on': [len(job_set['jobs']) - 2] # wait for the diagnostic job to finish, but not the upload job
-        }
-        publish = Publication(publication_config)
-        job_set['jobs'].append(publish)
-        print_message('adding publication job')
-    """
     return year_set
-
-
 
 def monitor_check(monitor):
     """
@@ -420,7 +469,7 @@ def monitor_check(monitor):
     global transfer_list
     # if there are already three or more transfers in progress
     # hold off on starting any new ones until they complete
-    if active_transfers > 1:
+    if active_transfers >= 2:
         return
     monitor.check()
     new_files = monitor.known_files
@@ -431,7 +480,7 @@ def monitor_check(monitor):
     frequencies = config.get('global').get('set_frequency')
 
     for f in new_files:
-        file_key = filename_to_file_list_key(f, output_pattern, date_pattern)
+        file_key = filename_to_file_list_key(f)
         status = file_list.get(file_key)
         if status and status != SetStatus.DATA_READY and status != SetStatus.IN_TRANSIT:
             checked_new_files.append(f)
@@ -440,7 +489,7 @@ def monitor_check(monitor):
     if not checked_new_files:
         if debug:
             print_message('No new files found', 'ok')
-        event_list = push_event(event_list, 'no new files found')
+        # event_list = push_event(event_list, 'no new files found')
         return
 
     if debug:
@@ -450,7 +499,7 @@ def monitor_check(monitor):
     # find which year set the data belongs to
     for file in checked_new_files:
         for freq in frequencies:
-            year_set = filename_to_year_set(file, output_pattern, freq)
+            year_set = filename_to_year_set(file, freq)
             for job_set in job_sets:
                 if job_set.set_number == year_set and job_set.status == SetStatus.NO_DATA:
 
@@ -459,15 +508,15 @@ def monitor_check(monitor):
                     job_set = add_jobs(job_set)
 
     # construct list of files to transfer
-    f_path = config.get('transfer').get('source_path')
-    f_list = ['{path}/{file}'.format(path=f_path, file=f)  for f in checked_new_files]
+    # f_path = config.get('transfer').get('source_path')
+    # f_list = ['{path}/{file}'.format(path=f_path, file=f)  for f in checked_new_files]
 
     t_config = config.get('transfer')
     g_config = config.get('global')
     m_config = config.get('monitor')
 
     transfer_config = {
-        'file_list': f_list,
+        'file_list': checked_new_files,
         'globus_username': t_config.get('globus_username'),
         'globus_password': t_config.get('globus_password'),
         'source_username': m_config.get('compute_username'),
@@ -487,7 +536,7 @@ def monitor_check(monitor):
 
     for f in transfer.config.get('file_list'):
         f = f.split('/').pop()
-        key = filename_to_file_list_key(f, output_pattern, date_pattern)
+        key = filename_to_file_list_key(f)
         file_list[key] = SetStatus.IN_TRANSIT
 
     start_file = transfer.config.get('file_list')[0]
@@ -497,15 +546,10 @@ def monitor_check(monitor):
     index = end_file.find('-')
     end_readable = end_file[index - 4: index + 3]
     message = 'Found {0} new remote files, creating transfer job from {1} to {2}'.format(
-        len(f_list),
+        len(checked_new_files),
         start_readable,
         end_readable)
     event_list = push_event(event_list, message)
-    # message = ''
-    # for i in transfer.config.get('file_list'):
-    #     index = i.find('-')
-    #     message += i[index - 2: index + 3] + ', '
-    # event_list = push_event(event_list, message)
 
     logging.info('## Starting transfer %s with config: %s', transfer.uuid, pformat(transfer_config))
     # print_message('Starting file transfer', 'ok')
@@ -613,15 +657,10 @@ def display(stdscr, event, config):
         while True:
             c = stdscr.getch()
             if c == curses.KEY_RESIZE:
-                # pad.endwin()
-                # pad = curses.newpad(hmax, wmax)
-                #pad.clear()
-                #del pad
                 height, width = stdscr.getmaxyx()
                 hmax = height - 3
                 wmax = width - 5
                 pad.resize(hmax, wmax)
-                # pad.refresh(0, 0, 3, 5, hmax, wmax)
             elif c == ord('w'):
                 config['global']['ui'] = False
                 pad.clear()
@@ -641,9 +680,9 @@ def display(stdscr, event, config):
                 pad.addstr(y, x, line, curses.color_pair(1))
                 pad.clrtoeol()
                 y += 1
-                if xy_check(x, y, hmax, wmax) == -1:
-                    sleep(1)
-                    break
+                # if xy_check(x, y, hmax, wmax) == -1:
+                #     sleep(1)
+                #     break
                 color_pair = curses.color_pair(4)
                 if year_set.status == SetStatus.COMPLETED:
                     color_pair = curses.color_pair(5)
@@ -659,19 +698,18 @@ def display(stdscr, event, config):
                     pad.refresh(0, 0, 3, 5, hmax, wmax)
                 pad.clrtoeol()
                 y += 1
-                if xy_check(x, y, hmax, wmax) == -1:
-                    sleep(1)
-                    break
+                # if xy_check(x, y, hmax, wmax) == -1:
+                #     sleep(1)
+                #     break
+                # if y >= (hmax/3):
+                #     last_y = y
+                #     y = 0
+                #     x += (wmax/2)
+                #     if x >= wmax:
+                #         break
                 if year_set.status == SetStatus.COMPLETED \
-                    or year_set.status == SetStatus.FAILED \
                     or year_set.status == SetStatus.NO_DATA \
                     or year_set.status == SetStatus.PARTIAL_DATA:
-                    if y >= (hmax/3):
-                        last_y = y
-                        y = 0
-                        x += (wmax/2)
-                        if x >= wmax:
-                            break
                     continue
                 for job in year_set.jobs:
                     line = '  >   {type} -- {id} '.format(
@@ -694,12 +732,12 @@ def display(stdscr, event, config):
                         sleep(0.01)
                         pad.refresh(0, 0, 3, 5, hmax, wmax)
                     y += 1
-                if y >= (hmax/3):
-                    last_y = y
-                    y = 0
-                    x += (wmax/2)
-                    if x >= wmax:
-                        break
+                # if y >= (hmax/3):
+                #     last_y = y
+                #     y = 0
+                #     x += (wmax/2)
+                #     if x >= wmax:
+                #         break
 
             x = 0
             if last_y:
@@ -707,12 +745,18 @@ def display(stdscr, event, config):
             # pad.refresh(0, 0, 3, 5, hmax, wmax)
             pad.clrtobot()
             y += 1
-            if xy_check(x, y, hmax, wmax) == -1:
-                sleep(1)
-                continue
+            # if xy_check(x, y, hmax, wmax) == -1:
+            #     sleep(1)
+            #     continue
             for line in event_list[-10:]:
-                prefix = '[+]  '
-                pad.addstr(y, x, prefix, curses.color_pair(5))
+                if 'Transfer' in line:
+                    continue
+                if 'failed' in line or 'FAILED' in line:
+                    prefix = '[-]  '
+                    pad.addstr(y, x, prefix, curses.color_pair(3))
+                else:
+                    prefix = '[+]  '
+                    pad.addstr(y, x, prefix, curses.color_pair(5))
                 pad.addstr(line, curses.color_pair(4))
                 pad.clrtoeol()
                 if initializing:
@@ -735,61 +779,73 @@ def display(stdscr, event, config):
             current_year = 1
             year_ready = True
             partial_data = False
-            for line in sorted(file_list, cmp=file_list_cmp):
-                index = line.find('-')
-                year = int(line[:index])
-                month = int(line[index + 1:])
-                if month == 1:
-                    year_ready = True
-                    partial_data = False
-                if file_list[line] != SetStatus.DATA_READY:
-                    year_ready = False
-                else:
-                    partial_data = True
-                if month == 12:
-                    if year_ready:
-                        status = SetStatus.DATA_READY
-                    else:
-                        if partial_data:
-                            status = SetStatus.PARTIAL_DATA
-                        else:
-                            status = SetStatus.NO_DATA
-                    file_display_list.append('Year {year} - {status}'.format(
-                        year=year,
-                        status=status))
+            # for line in sorted(file_list, cmp=file_list_cmp):
+            #     index = line.find('-')
+            #     year = int(line[:index])
+            #     month = int(line[index + 1:])
+            #     if month == 1:
+            #         year_ready = True
+            #         partial_data = False
+            #     if file_list[line] != SetStatus.DATA_READY:
+            #         year_ready = False
+            #     else:
+            #         partial_data = True
+            #     if month == 12:
+            #         if year_ready:
+            #             status = SetStatus.DATA_READY
+            #         else:
+            #             if partial_data:
+            #                 status = SetStatus.PARTIAL_DATA
+            #             else:
+            #                 status = SetStatus.NO_DATA
+            #         file_display_list.append('Year {year} - {status}'.format(
+            #             year=year,
+            #             status=status))
 
-            line_length = len(file_display_list[0])
-            num_cols = wmax/line_length
-            for line in file_display_list:
-                if x + len(line) >= wmax:
-                    diff = wmax - (x + len(line))
-                    line = line[:diff]
-                pad.addstr(y, x, line, curses.color_pair(4))
-                pad.clrtoeol()
-                y += 1
-                if y >= (hmax-10):
-                    y = file_start_y
-                    x += line_length + 5
-                    if x >= wmax:
-                        break
-                if y > file_end_y:
-                    file_end_y = y
+            # line_length = len(file_display_list[0])
+            # num_cols = wmax/line_length
+            # for line in file_display_list:
+            #     if x + len(line) >= wmax:
+            #         diff = wmax - (x + len(line))
+            #         line = line[:diff]
+            #     pad.addstr(y, x, line, curses.color_pair(4))
+            #     pad.clrtoeol()
+            #     y += 1
+            #     if y >= (hmax-10):
+            #         y = file_start_y
+            #         x += line_length + 5
+            #         if x >= wmax:
+            #             break
+            #     if y > file_end_y:
+            #         file_end_y = y
 
             y = file_end_y + 1
             x = 0
             msg = 'Active transfers: {}'.format(active_transfers)
             pad.addstr(y, x, msg, curses.color_pair(4))
             pad.clrtoeol()
+            if active_transfers:
+                for line in event_list:
+                    if 'Transfer' in line:
+                        index = line.find('%')
+                        if index:
+                            s_index = line.rfind(' ', 0, index)
+                            percent = float(line[s_index: index])
+                            if percent < 100:
+                                y += 1
+                                pad.addstr(y, x, line, curses.color_pair(4))
+                                pad.clrtoeol()
             spin_line = spinner[spin_index]
             spin_index += 1
             if spin_index == spin_len:
                 spin_index = 0
             y += 1
             pad.addstr(y, x, spin_line, curses.color_pair(4))
+            pad.clrtoeol()
+            pad.clrtobot()
             y += 1
             if event and event.is_set():
                 return
-            pad.clrtobot()
             pad.refresh(0, 0, 3, 5, hmax, wmax)
             initializing = False
             sleep(1)
@@ -942,9 +998,8 @@ if __name__ == "__main__":
         event_list = push_event(event_list, line)
 
     # If all the data is local, dont start the monitor
-    if not all_data:
-        pattern = config.get('global').get('output_pattern').replace('YYYY', '[0-9][0-9][0-9][0-9]')
-        pattern = pattern.replace('MM', '[0-9][0-9]')
+    if not all_data and not config.get('global').get('no_monitor', False):
+        pattern = config.get('global').get('output_pattern')
         monitor_config = {
             'remote_host': config.get('monitor').get('compute_host'),
             'remote_dir': config.get('transfer').get('source_path'),
@@ -953,7 +1008,7 @@ if __name__ == "__main__":
         }
         if config.get('monitor').get('compute_password'):
             monitor_config['password'] = config.get('monitor').get('compute_password')
-        if config.get('monitor').get('compute_keyfile'):
+        elif config.get('monitor').get('compute_keyfile'):
             monitor_config['keyfile'] = config.get('monitor').get('compute_keyfile')
         else:
             logging.error('No password or keyfile path given for compute resource, please add to your config and try again')
@@ -964,11 +1019,10 @@ if __name__ == "__main__":
         line = 'Attempting connection to {}'.format(config.get('monitor').get('compute_host'))
         event_list = push_event(event_list, line)
         if monitor.connect() == 0:
-            # print_message('connected', 'ok')
+            monitor.check()
             line = 'Connected'
             event_list = push_event(event_list, line)
         else:
-            # print_message('unable to connect, exiting')
             line = 'Unable to connect, exiting'
             logging.error(line)
             event_list = push_event(event_list, line)
@@ -980,8 +1034,12 @@ if __name__ == "__main__":
     try:
         while True:
             # Setup remote monitoring system
-            if not all_data and monitor:
+            if monitor and \
+               not all_data and \
+               not config.get('global').get('no_monitor', False):
+                # event_list = push_event(event_list, 'Running monitor check')
                 monitor_check(monitor)
+
             # Check if a year_set is ready to run
             check_year_sets(
                 job_sets=job_sets,
@@ -1028,6 +1086,7 @@ if __name__ == "__main__":
                     if 'q' in key:
                         try:
                             config['global']['ui'] = True
+                            config['global']['debug'] = False
                             sys.stdout.write('Turning on the display')
                             for i in range(8):
                                 sys.stdout.write('.')

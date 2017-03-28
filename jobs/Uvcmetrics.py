@@ -17,9 +17,10 @@ from lib.util import print_debug
 from lib.util import print_message
 from lib.util import check_slurm_job_submission
 from lib.util import create_symlink_dir
+from lib.util import push_event
 from JobStatus import JobStatus
 
-class Diagnostic(object):
+class Uvcmetrics(object):
     """
     Performs the ACME diagnostic job
     """
@@ -28,7 +29,7 @@ class Diagnostic(object):
         self.raw_config = config
         self.config = {}
         self.proc = None
-        self.type = 'diagnostic'
+        self.type = 'uvcmetrics'
         self.status = JobStatus.INVALID
         self.year_set = config.get('year_set', 0)
         self.uuid = uuid4().hex
@@ -45,7 +46,8 @@ class Diagnostic(object):
             'regrid_path': '',
             'diag_temp_dir': '',
             'start_year': '',
-            'end_year':''
+            'end_year':'',
+            'dataset_name': ''
         }
         self.outputs = {
             'output_path': '',
@@ -56,6 +58,7 @@ class Diagnostic(object):
             'num_cores': '-n 16', # 16 cores
             'run_time': '-t 0-05:00', # 1 hour run time
             'num_machines': '-N 1', # run on one machine
+            'exclusive': '--exclusive'
         }
         self.prevalidate(config)
 
@@ -139,14 +142,9 @@ class Diagnostic(object):
         """
         if self.setup_input_directory() == -1:
             return
+        self.status = JobStatus.PENDING
 
-        dataset_name = '{time}_uvcmetrics_{set}_{start}_{end}_{uuid}'.format(
-            time=time.strftime("%d-%m-%Y"),
-            set=str(self.year_set),
-            start=self.config.get('start_year'),
-            end=self.config.get('end_year'),
-            uuid=self.uuid[:5])
-        cmd = ['metadiags', '--dsname', dataset_name]
+        cmd = ['metadiags', '--dsname', self.config.get('dataset_name')]
 
         cmd_config = {
             '--model': self.config.get('--model'),
@@ -158,17 +156,21 @@ class Diagnostic(object):
         for i in cmd_config:
             cmd.append(i)
             cmd.append(self.config[i])
-        cmd = ' '.join(cmd)
         if not batch:
             # Not running in batch mode
             try:
                 console_output = ''
-                self.proc = Popen(
-                    cmd,
-                    stdout=PIPE,
-                    stdin=PIPE,
-                    stderr=PIPE,
-                    shell=True)
+                while True:
+                    try:
+                        self.proc = Popen(
+                            cmd,
+                            stdout=PIPE,
+                            stdin=PIPE,
+                            stderr=PIPE,
+                            shell=True)
+                        break
+                    except:
+                        sleep(1)
                 self.status = JobStatus.RUNNING
                 done = 2
                 while done != 0:
@@ -196,6 +198,7 @@ class Diagnostic(object):
                 print_message('Error running diagnostic')
         else:
             # Submitting to SLURM queue
+
             expected_name = 'uvcmetrics_set_{set}_{start}_{end}_{uuid}'.format(
                 set=self.year_set,
                 start=self.config.get('start_year'),
@@ -204,17 +207,25 @@ class Diagnostic(object):
             run_script = os.path.join(os.getcwd(), 'run_scripts', expected_name)
             self.slurm_args['error_file'] = '-e {error_file}'.format(error_file=run_script + '.err')
             self.slurm_args['output_file'] = '-o {output_file}'.format(output_file=run_script + '.out')
+
             with open(run_script, 'w') as batchfile:
                 batchfile.write('#!/bin/bash\n')
                 slurm_prefix = '\n'.join(['#SBATCH ' + self.slurm_args[s] for s in self.slurm_args]) + '\n'
                 batchfile.write(slurm_prefix)
-                batchfile.write(cmd)
+                batchfile.write(' '.join(cmd))
 
+
+            self.event_list = push_event(self.event_list, 'Script generation complete, submitting batch job')
             slurm_cmd = ['sbatch', run_script]
             started = False
             retry_count = 0
             while not started and retry_count < 5:
-                self.proc = Popen(slurm_cmd, stdout=PIPE)
+                while True:
+                    try:
+                        self.proc = Popen(slurm_cmd, stdout=PIPE, stderr=PIPE)
+                        break
+                    except:
+                        sleep(1)
                 output, err = self.proc.communicate()
                 started, job_id = check_slurm_job_submission(expected_name)
                 if started:

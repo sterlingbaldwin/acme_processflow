@@ -44,8 +44,9 @@ class UploadDiagnosticOutput(object):
         self.run_script = None
         self.slurm_args = {
             'num_cores': '-n 1', # 1 core
-            'run_time': '-t 0-00:10', # 1 hour run time
+            'run_time': '-t 0-01:00', # 1 hour run time
             'num_machines': '-N 1', # run on one machine
+            'oversubscribe': '--oversubscribe'
         }
         self.prevalidate(config)
 
@@ -195,7 +196,9 @@ except Exception as e:\n\
             # write out a script to call the upload code
             self.batch_script_name = os.path.join(os.getcwd(), 'run_scripts', self.expected_name)
             with open(self.batch_script_name, 'w') as batchfile:
-                batchfile.write('#!/bin/bash\npython {0}'.format(self.run_script))
+                batchfile.write('#!/bin/bash\n')
+                batchfile.write('\n'.join([val for key, val in self.slurm_args.items()]))
+                batchfile.write('\npython {0}'.format(self.run_script))
             submitted = False
             while not submitted:
                 try:
@@ -222,8 +225,13 @@ except Exception as e:\n\
         slurm_cmd = ['sbatch', '-o', output_path, self.batch_script_name]
         started = False
         while not started:
-            self.proc = Popen(slurm_cmd, stdout=PIPE, stderr=PIPE)
-            output, err = self.proc.communicate()
+            while True:
+                try:
+                    self.proc = Popen(slurm_cmd, stdout=PIPE, stderr=PIPE)
+                    break
+                except:
+                    sleep(1)
+            _, _ = self.proc.communicate()
             # print_message('upload job output:\n {0}\nerr: {1}'.format(output, err))
             started, job_id = check_slurm_job_submission(self.expected_name)
             if started:

@@ -6,6 +6,7 @@ import time
 from uuid import uuid4
 from pprint import pformat
 from subprocess import Popen, PIPE
+from time import sleep
 
 from output_viewer.index import OutputPage
 from output_viewer.index import OutputIndex
@@ -58,12 +59,14 @@ class CoupledDiagnostic(object):
             'obs_iceareaNH': '',
             'obs_iceareaSH': '',
             'obs_icevolNH': '',
-            'obs_icevolSH': ''
+            'obs_icevolSH': '',
+            'dataset_name': '',
         }
         self.slurm_args = {
             'num_cores': '-n 16', # 16 cores
             'run_time': '-t 0-02:00', # 1 hour run time
             'num_machines': '-N 1', # run on one machine
+            'oversubscribe': '--oversubscribe'
         }
         self.var_list = [
             'PRECT',
@@ -123,13 +126,7 @@ class CoupledDiagnostic(object):
     def generateIndex(self):
         self.event_list = push_event(self.event_list, 'Starting index generataion for coupled diagnostic')
         outpage = OutputPage('Coupled Diagnostic')
-        dataset_name = '{time}_coupled_diag_{set}_{start}_{end}_{uuid}'.format(
-            time=time.strftime("%d-%m-%Y"),
-            set=str(self.year_set),
-            start=self.config.get('start_year'),
-            end=self.config.get('end_year'),
-            uuid=self.uuid[:5])
-        index = OutputIndex('Coupled Diagnostic', version=dataset_name)
+        index = OutputIndex('Coupled Diagnostic', version=self.config.get('dataset_name'))
 
         images_path = os.path.join(
             self.config.get('coupled_project_dir'),
@@ -239,7 +236,12 @@ class CoupledDiagnostic(object):
                     os.makedirs(user_dir)
 
                 while not started and retry_count < 5:
-                    self.proc = Popen(slurm_cmd, stdout=PIPE)
+                    while True:
+                        try:
+                            self.proc = Popen(slurm_cmd, stdout=PIPE, stderr=PIPE)
+                            break
+                        except:
+                            sleep(1)
                     output, err = self.proc.communicate()
                     started, job_id = check_slurm_job_submission(expected_name)
                     if started:

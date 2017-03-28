@@ -1,19 +1,19 @@
 {
     "global": {
-        "output_path": "/space2/kendra/output",
+        "output_path": "/space2/sbaldwin/output",
         "data_cache_path": "/space2/sbaldwin/cache",
         "output_pattern": "20161117.beta0.A_WCYCL1850S.ne30_oEC_ICG.edison.cam.h0.YYYY-MM.nc",
         "simulation_start_year": 1,
         "simulation_end_year": 2,
         "set_frequency": [2],
-        "experiment": "20161117.beta0.A_WCYCL1850S.ne30_oEC_ICG.edison",
+        "experiment": "20161117.beta0.A_WCYCL1850S.ne30_oEC_ICG.edison.cam.h0",
         "batch_system_type": "slurm"
     },
     "monitor": {
         "compute_host": "edison.nersc.gov",
         "compute_username": "sbaldwin",
-        "compute_password": "",
-        "compute_keyfile": ""
+        "compute_password": "asdf",
+        "compute_keyfile": "asdf"
     },
     "ncclimo": {
         "regrid_map_path": "/export/kuivenhoven1/projects/acme_workflow/resources/map_ne30np4_to_fv129x256_aave.20150901.nc",
@@ -23,6 +23,7 @@
         "obs_for_diagnostics_path": "/space2/ACME_obs_data/acme-repo/acme/obs_for_diagnostics"
     },
     "primary_diags": {
+        "coupled_home_directory": "/export/baldwin32/projects/PreAndPostProcessing/coupled_diags",
         "mpas_meshfile": "/space2/mapping/MPAS-grids/ocn/gridfile.oEC60to30.nc",
         "mpas_remapfile": "/space2/mapping/maps/map_oEC60to30_TO_0.5x0.5degree_blin.160412.nc",
         "pop_remapfile": "/space2/mapping/maps/map_gx1v6_TO_0.5x0.5degree_blin.160413.nc",
@@ -34,7 +35,6 @@
         "yr_offset": 1999,
         "ref_case": "obs",
         "ref_case_dir": "",
-        "test_native_res": "ne30",
         "obs_ocndir": "/space2/diagnostics/observations/Ocean",
         "obs_seaicedir": "/space2/diagnostics/observations/SeaIce",
         "obs_sstdir": "/space2/diagnostics/observations/Ocean/SST",
@@ -43,18 +43,21 @@
         "obs_icevolNH": "space2/diagnostics/observations/SeaIce/PIOMAS/PIOMASvolume_monthly_climo.nc"
     },
     "upload_diagnostic": {
-        "diag_viewer_username": "",
-        "diag_viewer_password": "",
-        "diag_viewer_server": ""
+        "diag_viewer_username": "asdf",
+        "diag_viewer_password": "asdf",
+        "diag_viewer_server": "http://pcmdi10.llnl.gov:8008"
     },
     "transfer": {
         "source_path": "/global/homes/s/sbaldwin/test",
         "source_endpoint": "b9d02196-6d04-11e5-ba46-22000b92c6ec",
         "processing_host": "aims4.llnl.gov",
         "processing_username": "baldwin32",
-        "processing_password": "",
+        "processing_password": "asd",
         "globus_username": "sbaldwin",
-        "globus_password": "",
+        "globus_password": "adsf",
         "destination_endpoint": "43d64772-a82e-11e5-99d3-22000b96db58"
+    },
+    "amwg": {
+        "diag_home": "/space2/amwg/amwg_code/"
     }
 }
