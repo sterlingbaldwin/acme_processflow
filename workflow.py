@@ -632,6 +632,12 @@ def xy_check(x, y, hmax, wmax):
     else:
         return 0
 
+def write_line(pad, line, x, y, color):
+    try:
+        pad.addstr(y, x, line, color)
+    except:
+        pass
+
 def display(stdscr, event, config):
     """
     Display current execution status via curses
@@ -644,7 +650,6 @@ def display(stdscr, event, config):
     spinner = ['\\', '|', '/', '-']
     spin_index = 0
     spin_len = 4
-
     try:
         stdscr.nodelay(True)
         curses.curs_set(0)
@@ -683,7 +688,8 @@ def display(stdscr, event, config):
                     num=year_set.set_number,
                     start=year_set.set_start_year,
                     end=year_set.set_end_year)
-                pad.addstr(y, x, line, curses.color_pair(1))
+                #pad.addstr(y, x, line, curses.color_pair(1))
+                write_line(pad, line, x, y, curses.color_pair(1))
                 pad.clrtoeol()
                 y += 1
                 # if xy_check(x, y, hmax, wmax) == -1:
@@ -698,7 +704,8 @@ def display(stdscr, event, config):
                     color_pair = curses.color_pair(6)
                 line = 'status: {status}'.format(
                     status=year_set.status)
-                pad.addstr(y, x, line, color_pair)
+                #pad.addstr(y, x, line, color_pair)
+                write_line(pad, line, x, y, color_pair)
                 if initializing:
                     sleep(0.01)
                     pad.refresh(0, 0, 3, 5, hmax, wmax)
@@ -721,7 +728,8 @@ def display(stdscr, event, config):
                     line = '  >   {type} -- {id} '.format(
                         type=job.get_type(),
                         id=job.job_id)
-                    pad.addstr(y, x, line, curses.color_pair(4))
+                    # pad.addstr(y, x, line, curses.color_pair(4))
+                    write_line(pad, line, x, y, curses.color_pair(4))
                     color_pair = curses.color_pair(4)
                     if job.status == JobStatus.COMPLETED:
                         color_pair = curses.color_pair(5)
@@ -897,6 +905,8 @@ if __name__ == "__main__":
     event_list = []
     # A list of files that have been transfered
     transfer_list = []
+
+    state = []
 
     if config == -1:
         print "Error in setup, exiting"
@@ -1105,6 +1115,7 @@ if __name__ == "__main__":
                         except KeyboardInterrupt as e:
                             display_event.set()
             else:
+                write_human_state(event_list, job_sets)
                 sleep(10)
     except KeyboardInterrupt as e:
         print_message('----- KEYBOARD INTERUPT -----')
@@ -1113,4 +1124,3 @@ if __name__ == "__main__":
         for t in thread_list:
             thread_kill_event.set()
             t.join()
-
