@@ -138,7 +138,10 @@ def start_ready_job_sets(job_sets, thread_list, debug, event, upload_config, eve
                     # return
 
                     job_id = job.execute(batch=True)
-                    job.set_status(JobStatus.SUBMITTED)
+                    if job_id == 0:
+                        job.set_status(JobStatus.COMPLETED)
+                    else:
+                        job.set_status(JobStatus.SUBMITTED)
 
                     message = 'Submitted Ncclimo for year_set {}'.format(job_set.set_number)
                     event_list = push_event(event_list, message)
@@ -182,35 +185,38 @@ def start_ready_job_sets(job_sets, thread_list, debug, event, upload_config, eve
 
                     if ready:
                         job_id = job.execute(batch='slurm')
-                        job.set_status(JobStatus.SUBMITTED)
+                        if job_id == 0:
+                            job.set_status(JobStatus.COMPLETED)
+                        else:
+                            job.set_status(JobStatus.SUBMITTED)
 
-                        message = 'Submitted {type} for year_set {set}'.format(
-                            set=job_set.set_number,
-                            type=job.get_type())
-                        event_list = push_event(event_list, message)
+                            message = 'Submitted {type} for year_set {set}'.format(
+                                set=job_set.set_number,
+                                type=job.get_type())
+                            event_list = push_event(event_list, message)
 
-                        message = "## {job}: {id} status changed to {status}".format(
-                            job=job.get_type(),
-                            id=job.job_id,
-                            status=job.status)
-                        logging.info(message)
+                            message = "## {job}: {id} status changed to {status}".format(
+                                job=job.get_type(),
+                                id=job.job_id,
+                                status=job.status)
+                            logging.info(message)
 
-                        while True:
-                            try:
-                                args = (
-                                    job_id, job,
-                                    job_set, event,
-                                    debug, 'slurm',
-                                    upload_config, event_list)
-                                thread = threading.Thread(
-                                    target=monitor_job,
-                                    args=args)
-                                thread_list.append(thread)
-                                thread.start()
-                            except:
-                                sleep(1)
-                            else:
-                                break
+                            while True:
+                                try:
+                                    args = (
+                                        job_id, job,
+                                        job_set, event,
+                                        debug, 'slurm',
+                                        upload_config, event_list)
+                                    thread = threading.Thread(
+                                        target=monitor_job,
+                                        args=args)
+                                    thread_list.append(thread)
+                                    thread.start()
+                                except:
+                                    sleep(1)
+                                else:
+                                    break
                         return
                 elif job.status == 'invalid':
                     message = "{type} id: {id} status changed to {status}".format(
@@ -234,146 +240,146 @@ def monitor_job(job_id, job, job_set, event=None, debug=False, batch_type='slurm
         # this check is here in case the loop is stuck and the thread needs to be canceled
         if event and event.is_set():
             return
-        cmd = ['scontrol', 'show', 'job', str(job_id)]
-        while True:
-            try:
-                out = Popen(cmd, stdout=PIPE, stderr=PIPE).communicate()[0]
-                break
-            except:
-                sleep(1)
-        if not out or len(out) == 0:
-            status = None
-
-        # loop through the scontrol output looking for the JobState field
-        job_status = None
-        run_time = None
-        for line in out.split('\n'):
-            for word in line.split():
-                if 'JobState' in word:
-                    index = word.find('=')
-                    job_status = word[index + 1:]
+        if job.status != JobStatus.COMPLETED and job.status != JobStatus.FAILED and job_id != 0:
+            cmd = ['scontrol', 'show', 'job', str(job_id)]
+            while True:
+                try:
+                    out = Popen(cmd, stdout=PIPE, stderr=PIPE).communicate()[0]
                     break
-            if job_status:
-                break
-        if not job_status:
-            sleep(5)
-            continue
+                except:
+                    sleep(1)
+            if not out or len(out) == 0:
+                status = None
 
-        if job_status == 'RUNNING':
-            status = JobStatus.RUNNING
-        elif job_status == 'PENDING':
-            status = JobStatus.PENDING
-        elif job_status == 'FAILED':
-            status = JobStatus.FAILED
-        elif job_status == 'COMPLETED':
-            status = JobStatus.COMPLETED
+            # loop through the scontrol output looking for the JobState field
+            job_status = None
+            run_time = None
+            for line in out.split('\n'):
+                for word in line.split():
+                    if 'JobState' in word:
+                        index = word.find('=')
+                        job_status = word[index + 1:]
+                        break
+                if job_status:
+                    break
+            if not job_status:
+                sleep(5)
+                continue
 
-        if status and status != job.status:
-            if debug:
-                if status != JobStatus.FAILED:
-                    message = "## {type}: {id} status changed to {status}".format(
-                        id=job.job_id,
-                        status=status,
-                        type=job.get_type())
-                    print_message(message, 'ok')
-                else:
-                    message = "## {type}: {id} status changed to {status}".format(
-                        id=job.job_id,
-                        status=status,
-                        type=job.get_type())
-                    print_message(message)
+            if job_status == 'RUNNING':
+                status = JobStatus.RUNNING
+            elif job_status == 'PENDING':
+                status = JobStatus.PENDING
+            elif job_status == 'FAILED':
+                status = JobStatus.FAILED
+            elif job_status == 'COMPLETED':
+                status = JobStatus.COMPLETED
 
-            if status == JobStatus.FAILED:
-                msg = 'Job {0} has failed'.format(job_id)
-                event_list = push_event(event_list, msg)
+            if status and status != job.status:
                 if debug:
-                    print_message(msg)
+                    if status != JobStatus.FAILED:
+                        message = "## {type}: {id} status changed to {status}".format(
+                            id=job.job_id,
+                            status=status,
+                            type=job.get_type())
+                        print_message(message, 'ok')
+                    else:
+                        message = "## {type}: {id} status changed to {status}".format(
+                            id=job.job_id,
+                            status=status,
+                            type=job.get_type())
+                        print_message(message)
 
-            job.status = status
-            message = "{type}: {id} status changed to {status}".format(
-                id=job.job_id,
-                status=status,
-                type=job.get_type())
-            logging.info('##' + message)
-            event_list = push_event(event_list, message)
+                if status == JobStatus.FAILED:
+                    msg = 'Job {0} has failed'.format(job_id)
+                    event_list = push_event(event_list, msg)
+                    if debug:
+                        print_message(msg)
 
-            if status == JobStatus.RUNNING and job_set.status != SetStatus.RUNNING:
-                job_set.status = SetStatus.RUNNING
+                job.status = status
+                message = "{type}: {id} status changed to {status}".format(
+                    id=job.job_id,
+                    status=status,
+                    type=job.get_type())
+                logging.info('##' + message)
+                event_list = push_event(event_list, message)
 
-        if status == JobStatus.FAILED:
-            job_set.status = SetStatus.FAILED
-            if getattr(job, 'resubmit', None):
-                if job.resubmit() == -1:
-                    return
-                else:
-                    event_list = push_event(event_list, 'Resubmitting {type} job'.format(
-                        type=job.get_type()))
-                    continue
-            return
+                if status == JobStatus.RUNNING and job_set.status != SetStatus.RUNNING:
+                    job_set.status = SetStatus.RUNNING
+        else:
+            if status == JobStatus.FAILED:
+                job_set.status = SetStatus.FAILED
+                if getattr(job, 'resubmit', None):
+                    if job.resubmit() == -1:
+                        return
+                    else:
+                        event_list = push_event(event_list, 'Resubmitting {type} job'.format(
+                            type=job.get_type()))
+                        continue
+                return
 
-        # if the job is done, or there has been an error, exit
-        if status == JobStatus.COMPLETED:
+            # if the job is done, or there has been an error, exit
+            if status == JobStatus.COMPLETED:
+                if job.get_type() == 'coupled_diagnostic':
+                    job.generateIndex()
+                        # coupled_diag upload
+                    index_path = os.path.join(
+                        job.config.get('coupled_project_dir'),
+                        os.environ['USER'])
+                    if not os.path.exists(index_path):
+                        os.makedirs(index_path)
+                    suffix = [s for s in os.listdir(index_path)
+                              if 'coupled' in s
+                              and not s.endswith('.logs')].pop()
+                    index_path = os.path.join(index_path, suffix)
 
-            if job.get_type() == 'coupled_diagnostic':
-                job.generateIndex()
-                    # coupled_diag upload
-                index_path = os.path.join(
-                    job.config.get('coupled_project_dir'),
-                    os.environ['USER'])
-                if not os.path.exists(index_path):
-                    os.makedirs(index_path)
-                suffix = [s for s in os.listdir(index_path)
-                          if 'coupled' in s
-                          and not s.endswith('.logs')].pop()
-                index_path = os.path.join(index_path, suffix)
+                    upload_config = {
+                        'year_set': job_set.set_number,
+                        'start_year': job_set.set_start_year,
+                        'end_year': job_set.set_end_year,
+                        'path_to_diagnostic': index_path,
+                        'username': upload_config.get('diag_viewer_username'),
+                        'password': upload_config.get('diag_viewer_password'),
+                        'server': upload_config.get('diag_viewer_server'),
+                        'depends_on': []
+                    }
+                    upload_2 = UploadDiagnosticOutput(upload_config)
+                    msg = 'Adding Upload job to the job list: {}'.format(str(upload_2))
+                    logging.info(msg)
+                    job_set.add_job(upload_2)
 
-                upload_config = {
-                    'year_set': job_set.set_number,
-                    'start_year': job_set.set_start_year,
-                    'end_year': job_set.set_end_year,
-                    'path_to_diagnostic': index_path,
-                    'username': upload_config.get('diag_viewer_username'),
-                    'password': upload_config.get('diag_viewer_password'),
-                    'server': upload_config.get('diag_viewer_server'),
-                    'depends_on': [len(job_set.jobs) - 3] # set the upload job to wait for the coupled_diag job to finish
-                }
-                upload_2 = UploadDiagnosticOutput(upload_config)
-                msg = 'Adding Upload job to the job list: {}'.format(str(upload_2))
-                logging.info(msg)
-                job_set.add_job(upload_2)
+                if job.get_type() == 'amwg_diagnostic':
+                    # index_path = os.path.join(job.config.get('run_directory'), 'index.json')
+                    job.generateIndex()
+                    upload_config = {
+                        'year_set': job_set.set_number,
+                        'start_year': job_set.set_start_year,
+                        'end_year': job_set.set_end_year,
+                        'path_to_diagnostic': job.config.get('run_directory'),
+                        'username': upload_config.get('diag_viewer_username'),
+                        'password': upload_config.get('diag_viewer_password'),
+                        'server': upload_config.get('diag_viewer_server'),
+                        'depends_on': []
+                    }
+                    upload_3 = UploadDiagnosticOutput(upload_config)
+                    msg = 'Adding Upload job to the job list: {}'.format(str(upload_3))
+                    logging.info(msg)
+                    job_set.add_job(upload_3)
 
-            if job.get_type() == 'amwg_diagnostic':
-                # index_path = os.path.join(job.config.get('run_directory'), 'index.json')
-                job.generateIndex()
-                upload_config = {
-                    'year_set': job_set.set_number,
-                    'start_year': job_set.set_start_year,
-                    'end_year': job_set.set_end_year,
-                    'path_to_diagnostic': job.config.get('run_directory'),
-                    'username': upload_config.get('diag_viewer_username'),
-                    'password': upload_config.get('diag_viewer_password'),
-                    'server': upload_config.get('diag_viewer_server'),
-                    'depends_on': [len(job_set.jobs) - 4] # set the upload job to wait for the coupled_diag job to finish
-                }
-                upload_3 = UploadDiagnosticOutput(upload_config)
-                msg = 'Adding Upload job to the job list: {}'.format(str(upload_3))
-                logging.info(msg)
-                job_set.add_job(upload_3)
+                job_set_done = True
+                for job in job_set.jobs:
+                    if job.status != JobStatus.COMPLETED:
+                        job_set_done = False
+                        break
+                    if job.status == JobStatus.FAILED:
+                        # print_message('Setting set to status FAILED')
+                        job_set.status = SetStatus.FAILED
+                        return
 
-            job_set_done = True
-            for job in job_set.jobs:
-                if job.status != JobStatus.COMPLETED:
-                    job_set_done = False
-                    break
-                if job.status == JobStatus.FAILED:
-                    # print_message('Setting set to status FAILED')
-                    job_set.status = SetStatus.FAILED
-                    return
+                if job_set_done:
+                    job_set.status = SetStatus.COMPLETED
 
-            if job_set_done:
-                job_set.status = SetStatus.COMPLETED
-
-            return
+                return
 
         # wait for 10 seconds, or if the kill_thread event has been set, exit
         if thread_sleep(10, event):
@@ -617,7 +623,6 @@ def check_slurm_job_submission(expected_name):
     Checks if a job with the expected_name is in the slurm queue
     """
     cmd = ['scontrol', 'show', 'job']
-    error_count = 0
     job_id = 0
     found_job = False
     while True:
@@ -638,16 +643,15 @@ def check_slurm_job_submission(expected_name):
                 if 'JobId' in word:
                     index = word.find('=') + 1
                     job_id = int(word[index:])
-                    continue
+                    # continue
                 if 'Name' in word:
                     index = word.find('=') + 1
                     if word[index:] == expected_name:
                         found_job = True
 
-                if found_job and job_id:
+                if found_job and job_id != 0:
                     return found_job, job_id
         sleep(1)
-        error_count += 1
     return found_job, job_id
 
 from jobs.UploadDiagnosticOutput import UploadDiagnosticOutput
