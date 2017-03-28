@@ -168,7 +168,7 @@ class Transfer(object):
                 message += '*'
             else:
                 message += '_'
-        message += '] {0}%'.format(percent_complete)
+        message += '] {0:.2f}%'.format(percent_complete)
         replaced = False
         for i, e in enumerate(event_list):
             if str(task_id) in e:
@@ -192,7 +192,7 @@ class Transfer(object):
             src=srcendpoint,
             dst=dstendpoint)
         logging.info(message)
-        event_list = push_event(event_list, message)
+        # event_list = push_event(event_list, message)
         # Get access token (This method of getting an acces token is deprecated and should be replaced by OAuth2 calls).
         globus_username = self.config.get('globus_username')
         globus_password = self.config.get('globus_password')
