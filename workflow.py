@@ -554,10 +554,16 @@ def monitor_check(monitor):
     logging.info('## Starting transfer %s with config: %s', transfer.uuid, pformat(transfer_config))
     # print_message('Starting file transfer', 'ok')
     if not config.get('global').get('dry_run', False):
-        thread = threading.Thread(target=handle_transfer, args=(transfer, checked_new_files, thread_kill_event, event_list))
-        thread_list.append(thread)
-        thread.start()
-        active_transfers += 1
+        while True:
+            try:
+                thread = threading.Thread(target=handle_transfer, args=(transfer, checked_new_files, thread_kill_event, event_list))
+            except:
+                sleep(1)
+            else:
+                thread_list.append(thread)
+                thread.start()
+                active_transfers += 1
+                break
 
 def handle_transfer(transfer_job, f_list, event, event_list):
     global active_transfers
