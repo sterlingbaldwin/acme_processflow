@@ -69,9 +69,20 @@ class Timeseries(object):
         Calls ncclimo in a subprocess
         """
         output_dir = os.listdir(self.config['output_directory'])
-        if len(output_dir) == len(self.config['var_list'].split(',')):
+        var_list_split = self.config['var_list'].split(',')
+        complete = True
+        for out in output_dir:
+            found = False
+            for var in var_list_split:
+                if var in out:
+                    found = True
+                    break
+            if not found:
+                complete = False
+        if complete:
             self.status = JobStatus.COMPLETED
-            return
+            self.event_list = push_event(self.event_list, 'Timeseries already computed, skipping')
+            return 0
 
         input_dir = self.config['input_directory']
         file_list = [os.path.join(input_dir, file) for file in os.listdir(input_dir)]

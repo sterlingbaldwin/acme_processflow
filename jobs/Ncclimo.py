@@ -71,6 +71,24 @@ class Climo(object):
         """
         Calls ncclimo in a subprocess
         """
+        # check if the output already exists and the job actually needs to run
+        if os.path.exists(self.config.get('climo_output_directory')):
+            set_start_year = self.config.get('start_year')
+            set_end_year = self.config.get('end_year')
+            contents = os.listdir(self.config.get('climo_output_directory'))
+
+            file_list = get_climo_output_files(
+                input_path=self.config.get('climo_output_directory'),
+                set_start_year=self.config.get('start_year'),
+                set_end_year=self.config.get('end_year'))
+
+            if len(file_list) >= 17:
+                self.status = JobStatus.COMPLETED
+                # print_message('Ncclimo job already computed, skipping', 'ok')
+                message = 'Ncclimo job already computed, skipping'
+                self.event_list = push_event(self.event_list, message)
+                return 0
+
         ncclimo = os.path.join(self.config['ncclimo_path'], 'ncclimo')
         # ncclimo = 'ncclimo'
         cmd = [
@@ -228,24 +246,7 @@ class Climo(object):
                 self.config[i] = config.get(i)
         self.status = JobStatus.VALID
 
-        # after checking that the job is valid to run,
-        # check if the output already exists and the job actually needs to run
-        if os.path.exists(self.config.get('climo_output_directory')):
-            set_start_year = self.config.get('start_year')
-            set_end_year = self.config.get('end_year')
-            contents = os.listdir(self.config.get('climo_output_directory'))
-
-            file_list = get_climo_output_files(
-                input_path=self.config.get('climo_output_directory'),
-                set_start_year=self.config.get('start_year'),
-                set_end_year=self.config.get('end_year'))
-
-            if len(file_list) >= 17:
-                self.status = JobStatus.COMPLETED
-                # print_message('Ncclimo job already computed, skipping', 'ok')
-                message = 'Ncclimo job already computed, skipping'
-                self.event_list = push_event(self.event_list, message)
-            return 0
+        return 0
 
     def postvalidate(self):
         """

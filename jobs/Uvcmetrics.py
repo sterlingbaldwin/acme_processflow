@@ -140,8 +140,20 @@ class Uvcmetrics(object):
         Executes the diagnostic job.
         If archive is set to True, will create a tarbal of the output directory
         """
+        # Check if the job has already been completed
+        outputdir = os.path.join(self.config.get('--outputdir'), 'amwg')
+        if os.path.exists(outputdir):
+            output_contents = os.listdir(outputdir)
+            if 'index.json' in output_contents:
+                if len(output_contents) > 500:
+                    self.status = JobStatus.COMPLETED
+                    self.event_list = push_event(self.event_list, 'Uvcmetrics already computed, skipping')
+                    return 0
+
         if self.setup_input_directory() == -1:
-            return
+            self.status = JobStatus.FAILED
+            return -1
+
         self.status = JobStatus.PENDING
 
         cmd = ['metadiags', '--dsname', self.config.get('dataset_name')]
@@ -335,13 +347,5 @@ class Uvcmetrics(object):
         self.outputs['output_path'] = self.config['--outputdir']
         self.outputs['console_output'] = ''
         self.status = JobStatus.VALID
-
-        # Check if the job has already been completed
-        outputdir = os.path.join(self.config.get('--outputdir'), 'amwg')
-        if os.path.exists(outputdir):
-            output_contents = os.listdir(outputdir)
-            if 'index.json' in output_contents:
-                if len(output_contents) > 1000:
-                    self.status = JobStatus.COMPLETED
 
         return 0

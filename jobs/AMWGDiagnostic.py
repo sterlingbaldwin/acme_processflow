@@ -188,7 +188,7 @@ class AMWGDiagnostic(object):
         if len(contents) > 2300:
             self.event_list = push_event(self.event_list, 'AMWG already computed, skipping job')
             self.status = JobStatus.COMPLETED
-            return 
+            return 0
 
         run_dir = self.config.get('run_directory')
         if not os.path.exists(run_dir):
