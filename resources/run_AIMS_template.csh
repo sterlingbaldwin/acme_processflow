@@ -112,7 +112,7 @@ setenv generate_mht                     0
 setenv generate_nino34                  0
 
 #Generate standalone html file to view plots on a browser, if required
-setenv generate_html                    0
+setenv generate_html                    1
 ###############################################################################################
 
 

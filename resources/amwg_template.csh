@@ -331,7 +331,7 @@ set cntl_name = cam3_5_cntl               # control case name
 # used with convert to make higher resolution images which will
 # work better in powerpoint presentations, try density = 150.
 
-set web_pages = 1    # (0=ON,1=OFF)  make images and html files
+set web_pages = 0    # (0=ON,1=OFF)  make images and html files
 set delete_ps = 0    # (0=ON,1=OFF)  delete postscript files 
 set img_type  = 0    # (0=PNG,1=GIF,2=JPG) select image type
 set density   = 85   # pixels/inch, use larger number for higher 
