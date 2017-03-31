@@ -68,24 +68,13 @@ class Timeseries(object):
         """
         Calls ncclimo in a subprocess
         """
-        output_dir = os.listdir(self.config['output_directory'])
-        var_list_split = self.config['var_list'].split(',')
-        complete = True
-        for out in output_dir:
-            found = False
-            for var in var_list_split:
-                if var in out:
-                    found = True
-                    break
-            if not found:
-                complete = False
-        if complete:
+        if self.postvalidate():
             self.status = JobStatus.COMPLETED
             self.event_list = push_event(self.event_list, 'Timeseries already computed, skipping')
             return 0
 
-        input_dir = self.config['input_directory']
-        file_list = [os.path.join(input_dir, file) for file in os.listdir(input_dir)]
+        input_dir = self.config.get('input_directory')
+        file_list = [os.path.join(input_dir, item) for item in os.listdir(input_dir)]
         cmd = [
             'ncclimo',
             '-a', self.config['annual_mode'],
@@ -151,7 +140,7 @@ class Timeseries(object):
                 slurm_command = ' '.join(cmd)
                 batchfile.write(slurm_command)
 
-            slurm_cmd = ['sbatch', run_script]
+            slurm_cmd = ['sbatch', run_script, '--oversubscribe']
             started = False
             retry_count = 0
             while not started and retry_count < 5:
@@ -225,34 +214,24 @@ class Timeseries(object):
         if self.status == JobStatus.VALID:
             return 0
         for i in config:
-            if i not in self.inputs:
-                # print_message("Unexpected arguement: {}, {}".format(i, config[i]))
-                pass
-            else:
+            if i in self.inputs:
                 self.config[i] = config.get(i)
         self.status = JobStatus.VALID
-
-        # after checking that the job is valid to run,
-        # check if the output already exists and the job actually needs to run
-        # if os.path.exists(self.config.get('climo_output_directory')):
-        #     set_start_year = self.config.get('start_year')
-        #     set_end_year = self.config.get('end_year')
-        #     contents = os.listdir(self.config.get('climo_output_directory'))
-
-        #     file_list = get_climo_output_files(
-        #         input_path=self.config.get('climo_output_directory'),
-        #         set_start_year=self.config.get('start_year'),
-        #         set_end_year=self.config.get('end_year'))
-
-        #     if len(file_list) >= 17:
-        #         self.status = JobStatus.COMPLETED
-        #         # print_message('Ncclimo job already computed, skipping', 'ok')
-        #         message = 'Ncclimo job already computed, skipping'
-        #         self.event_list = push_event(self.event_list, message)
-        #     return 0
 
     def postvalidate(self):
         """
         Post execution validation
         """
-        print "post validation"
+        output_dir = os.listdir(self.config.get('output_directory'))
+        var_list_split = self.config.get('var_list').split(',')
+        complete = True
+        for var in var_list_split:
+            found = False
+            for out in output_dir:
+                if var in out:
+                    found = True
+                    break
+            if not found:
+                complete = False
+                break
+        return complete

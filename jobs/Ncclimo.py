@@ -72,22 +72,11 @@ class Climo(object):
         Calls ncclimo in a subprocess
         """
         # check if the output already exists and the job actually needs to run
-        if os.path.exists(self.config.get('climo_output_directory')):
-            set_start_year = self.config.get('start_year')
-            set_end_year = self.config.get('end_year')
-            contents = os.listdir(self.config.get('climo_output_directory'))
-
-            file_list = get_climo_output_files(
-                input_path=self.config.get('climo_output_directory'),
-                set_start_year=self.config.get('start_year'),
-                set_end_year=self.config.get('end_year'))
-
-            if len(file_list) >= 17:
-                self.status = JobStatus.COMPLETED
-                # print_message('Ncclimo job already computed, skipping', 'ok')
-                message = 'Ncclimo job already computed, skipping'
-                self.event_list = push_event(self.event_list, message)
-                return 0
+        if self.postvalidate():
+            self.status = JobStatus.COMPLETED
+            message = 'Ncclimo job already computed, skipping'
+            self.event_list = push_event(self.event_list, message)
+            return 0
 
         ncclimo = os.path.join(self.config['ncclimo_path'], 'ncclimo')
         # ncclimo = 'ncclimo'
@@ -157,7 +146,7 @@ class Climo(object):
                 slurm_command = ' '.join(cmd)
                 batchfile.write(slurm_command)
 
-            slurm_cmd = ['sbatch', run_script]
+            slurm_cmd = ['sbatch', run_script, '--oversubscribe']
             started = False
             retry_count = 0
             while not started and retry_count < 5:
@@ -239,17 +228,36 @@ class Climo(object):
         if self.status == JobStatus.VALID:
             return 0
         for i in config:
-            if i not in self.inputs:
-                # print_message("Unexpected arguement: {}, {}".format(i, config[i]))
-                pass
-            else:
+            if i in self.inputs:
                 self.config[i] = config.get(i)
-        self.status = JobStatus.VALID
+        all_inputs = True
+        for i in self.inputs:
+            if i not in self.config:
+                all_inputs = False
+                message = 'Argument {} missing for Ncclimo, prevalidation failed'.format(i)
+                self.event_list = push_event(self.event_list, message)
+                break
 
+        self.status = JobStatus.VALID if all_inputs else JobStatus.INVALID
         return 0
 
     def postvalidate(self):
         """
-        Post execution validation
+        Post execution validation, also run before execution to determine if the output already extists
         """
-        print "post validation"
+        if os.path.exists(self.config.get('climo_output_directory')):
+            set_start_year = self.config.get('start_year')
+            set_end_year = self.config.get('end_year')
+            contents = os.listdir(self.config.get('climo_output_directory'))
+
+            file_list = get_climo_output_files(
+                input_path=self.config.get('climo_output_directory'),
+                set_start_year=self.config.get('start_year'),
+                set_end_year=self.config.get('end_year'))
+
+            if len(file_list) >= 17:
+                return 1
+            else:
+                return 0
+        else:
+            return 0
