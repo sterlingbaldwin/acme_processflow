@@ -2,12 +2,14 @@ from time import sleep
 from time import strftime
 import logging
 from subprocess import Popen, PIPE
+import subprocess
 import sys
 import traceback
 import re
 import os
 import threading
 from pprint import pformat
+from shutil import copytree, rmtree
 
 from YearSet import SetStatus
 from YearSet import YearSet
@@ -133,24 +135,19 @@ def start_ready_job_sets(job_sets, thread_list, debug, event, upload_config, eve
                     logging.info(msg)
 
                 if job.get_type() == 'climo' and job.status == JobStatus.VALID:
-                    # for debug purposes only
-                    # job.status = JobStatus.COMPLETED
-                    # return
-
                     job_id = job.execute(batch=True)
                     if job_id == 0:
                         job.set_status(JobStatus.COMPLETED)
                     else:
                         job.set_status(JobStatus.SUBMITTED)
+                        message = 'Submitted Ncclimo for year_set {}'.format(job_set.set_number)
+                        event_list = push_event(event_list, message)
 
-                    message = 'Submitted Ncclimo for year_set {}'.format(job_set.set_number)
-                    event_list = push_event(event_list, message)
-
-                    message = "## {job} id: {id} status changed to {status}".format(
-                        job=job.get_type(),
-                        id=job.job_id,
-                        status=job.status)
-                    logging.info(message)
+                        message = "## {job} id: {id} status changed to {status}".format(
+                            job=job.get_type(),
+                            id=job.job_id,
+                            status=job.status)
+                        logging.info(message)
 
                     while True:
                         try:
@@ -186,11 +183,11 @@ def start_ready_job_sets(job_sets, thread_list, debug, event, upload_config, eve
                     if ready:
                         job_id = job.execute(batch='slurm')
                         if job_id == 0:
-                            job.set_status(JobStatus.COMPLETED)
+                            if job.postvalidate():
+                                job.status = JobStatus.COMPLETED
                         else:
                             job.set_status(JobStatus.SUBMITTED)
-
-                            message = 'Submitted {type} for year_set {set}'.format(
+                            message = 'Submitted {type} for year_set_{set}'.format(
                                 set=job_set.set_number,
                                 type=job.get_type())
                             event_list = push_event(event_list, message)
@@ -201,59 +198,110 @@ def start_ready_job_sets(job_sets, thread_list, debug, event, upload_config, eve
                                 status=job.status)
                             logging.info(message)
 
-                            while True:
-                                try:
-                                    args = (
-                                        job_id, job,
-                                        job_set, event,
-                                        debug, 'slurm',
-                                        upload_config, event_list)
-                                    thread = threading.Thread(
-                                        target=monitor_job,
-                                        args=args)
-                                    thread_list.append(thread)
-                                    thread.start()
-                                except:
-                                    sleep(1)
-                                else:
-                                    break
+                        while True:
+                            try:
+                                args = (
+                                    job_id, job,
+                                    job_set, event,
+                                    debug, 'slurm',
+                                    upload_config, event_list)
+                                thread = threading.Thread(
+                                    target=monitor_job,
+                                    args=args)
+                                thread_list.append(thread)
+                                thread.start()
+                            except:
+                                sleep(1)
+                            else:
+                                break
                         return
-                elif job.status == 'invalid':
+                elif job.status == JobStatus.INVALID:
                     message = "{type} id: {id} status changed to {status}".format(
                         id=job.job_id,
                         status=job.status,
                         type=job.get_type())
                     logging.error(message)
-                    print_message('===== INVALID JOB =====\n{}'.format(str(job)))
 
 def cmd_exists(cmd):
     return any(os.access(os.path.join(path, cmd), os.X_OK) for path in os.environ["PATH"].split(os.pathsep))
+
+def handle_completed_job(job, job_set, event_list):
+    """
+    Perform post execution tasks
+    """
+    if not job.postvalidate():
+        event_list = push_event(
+            event_list,
+            '{} completed but doesnt have expected output'.format(job.get_type()))
+        job.status = JobStatus.FAILED
+
+    if job.get_type() == 'coupled_diagnostic':
+        img_dir = 'coupled_diagnostics_{casename}-obs'.format(
+            casename=job.config.get('test_casename'))
+        img_src = os.path.join(
+            job.config.get('coupled_project_dir'),
+            os.environ.get('USER'),
+            img_dir)
+        setup_local_hosting(job, event_list, img_src)
+    if job.get_type() == 'amwg_diagnostic':
+        img_dir = 'year_set_{year}{casename}-obs'.format(
+            year=job.config.get('year_set'),
+            casename=job.config.get('test_casename'))
+        img_src = os.path.join(
+            job.config.get('test_path_diag'),
+            '..',
+            img_dir)
+        setup_local_hosting(job, event_list, img_src)
+    job_set_done = True
+    for job in job_set.jobs:
+        if job.status != JobStatus.COMPLETED:
+            job_set_done = False
+            break
+        if job.status == JobStatus.FAILED:
+            job_set.status = SetStatus.FAILED
+            return
+    if job_set_done:
+        job_set.status = SetStatus.COMPLETED
 
 def monitor_job(job_id, job, job_set, event=None, debug=False, batch_type='slurm', upload_config=None, event_list=None):
     """
     Monitor the slurm job, and update the status to 'complete' when it finishes
     This function should only be called from within a thread
     """
+    # msg = 'Entering monitor_job for {}'.format(job.get_type())
+    # event_list = push_event(event_list, msg)
+    job.postvalidate()
+    if job.status == JobStatus.COMPLETED:
+        handle_completed_job(job, job_set, event_list)
+        return
 
-    status = None
+    exit_list = [JobStatus.VALID, JobStatus.SUBMITTED, JobStatus.RUNNING, JobStatus.PENDING]
+    none_exit_list = [JobStatus.RUNNING, JobStatus.PENDING, JobStatus.SUBMITTED]
     while True:
         # this check is here in case the loop is stuck and the thread needs to be canceled
         if event and event.is_set():
             return
-        if job.status != JobStatus.COMPLETED and job.status != JobStatus.FAILED and job_id != 0:
+        if job.status not in exit_list:
+            if job.status == JobStatus.INVALID:
+                return
+            if job.status == JobStatus.FAILED:
+                job_set.status = SetStatus.FAILED
+                return
+            # if the job is done, or there has been an error, exit
+            if job.status == JobStatus.COMPLETED:
+                handle_completed_job(job, job_set, event_list)
+                return
+        elif job.status in none_exit_list and job_id != 0:
             cmd = ['scontrol', 'show', 'job', str(job_id)]
             while True:
                 try:
                     out = Popen(cmd, stdout=PIPE, stderr=PIPE).communicate()[0]
-                    break
                 except:
                     sleep(1)
-            if not out or len(out) == 0:
-                status = None
-
+                else:
+                    break
             # loop through the scontrol output looking for the JobState field
             job_status = None
-            run_time = None
             for line in out.split('\n'):
                 for word in line.split():
                     if 'JobState' in word:
@@ -266,6 +314,7 @@ def monitor_job(job_id, job, job_set, event=None, debug=False, batch_type='slurm
                 sleep(5)
                 continue
 
+            status = None
             if job_status == 'RUNNING':
                 status = JobStatus.RUNNING
             elif job_status == 'PENDING':
@@ -306,84 +355,55 @@ def monitor_job(job_id, job, job_set, event=None, debug=False, batch_type='slurm
 
                 if status == JobStatus.RUNNING and job_set.status != SetStatus.RUNNING:
                     job_set.status = SetStatus.RUNNING
-        else:
-            if status == JobStatus.FAILED:
-                job_set.status = SetStatus.FAILED
-                if getattr(job, 'resubmit', None):
-                    if job.resubmit() == -1:
-                        return
-                    else:
-                        event_list = push_event(event_list, 'Resubmitting {type} job'.format(
-                            type=job.get_type()))
-                        continue
+
+            # wait for 10 seconds, or if the kill_thread event has been set, exit
+            if thread_sleep(10, event):
                 return
 
-            # if the job is done, or there has been an error, exit
-            if status == JobStatus.COMPLETED:
-                if job.get_type() == 'coupled_diagnostic':
-                    job.generateIndex()
-                        # coupled_diag upload
-                    index_path = os.path.join(
-                        job.config.get('coupled_project_dir'),
-                        os.environ['USER'])
-                    if not os.path.exists(index_path):
-                        os.makedirs(index_path)
-                    suffix = [s for s in os.listdir(index_path)
-                              if 'coupled' in s
-                              and not s.endswith('.logs')].pop()
-                    index_path = os.path.join(index_path, suffix)
+def setup_local_hosting(job, event_list, img_src):
+    """
+    Sets up the local directory for hosting diagnostic sets
+    """
+    msg = 'Setting up local hosting for {}'.format(job.get_type())
+    event_list = push_event(event_list, msg)
+    outter_dir = os.path.join(
+        job.config.get('host_directory'),
+        job.config.get('run_id'))
+    if not os.path.exists(outter_dir):
+        os.makedirs(outter_dir)
+    host_dir = os.path.join(
+        outter_dir,
+        'year_set_{}'.format(str(job.config.get('year_set'))))
+    msg = 'host_dir {}'.format(host_dir)
+    event_list = push_event(event_list, msg)
+    if os.path.exists(host_dir):
+        try:
+            msg = 'removing and replacing previous files from {}'.format(host_dir)
+            logging.info(msg)
+            rmtree(host_dir)
+        except Exception as e:
+            logging.error(format_debug(e))
+    try:
+        msg = 'copying images from {src} to {dst}'.format(src=img_src, dst=host_dir)
+        logging.info(msg)
+        copytree(src=img_src, dst=host_dir)
+    except Exception as e:
+        logging.error(format_debug(e))
+        msg = 'Error copying coupled_diag to host directory'
+        event_list = push_event(event_list, 'Error copying coupled_diag to host_location')
+        return
 
-                    upload_config = {
-                        'year_set': job_set.set_number,
-                        'start_year': job_set.set_start_year,
-                        'end_year': job_set.set_end_year,
-                        'path_to_diagnostic': index_path,
-                        'username': upload_config.get('diag_viewer_username'),
-                        'password': upload_config.get('diag_viewer_password'),
-                        'server': upload_config.get('diag_viewer_server'),
-                        'depends_on': []
-                    }
-                    upload_2 = UploadDiagnosticOutput(upload_config)
-                    msg = 'Adding Upload job to the job list: {}'.format(str(upload_2))
-                    logging.info(msg)
-                    job_set.add_job(upload_2)
+    subprocess.call(['chmod', '-R', '755', outter_dir])
 
-                if job.get_type() == 'amwg_diagnostic':
-                    # index_path = os.path.join(job.config.get('run_directory'), 'index.json')
-                    job.generateIndex()
-                    upload_config = {
-                        'year_set': job_set.set_number,
-                        'start_year': job_set.set_start_year,
-                        'end_year': job_set.set_end_year,
-                        'path_to_diagnostic': job.config.get('run_directory'),
-                        'username': upload_config.get('diag_viewer_username'),
-                        'password': upload_config.get('diag_viewer_password'),
-                        'server': upload_config.get('diag_viewer_server'),
-                        'depends_on': []
-                    }
-                    upload_3 = UploadDiagnosticOutput(upload_config)
-                    msg = 'Adding Upload job to the job list: {}'.format(str(upload_3))
-                    logging.info(msg)
-                    job_set.add_job(upload_3)
-
-                job_set_done = True
-                for job in job_set.jobs:
-                    if job.status != JobStatus.COMPLETED:
-                        job_set_done = False
-                        break
-                    if job.status == JobStatus.FAILED:
-                        # print_message('Setting set to status FAILED')
-                        job_set.status = SetStatus.FAILED
-                        return
-
-                if job_set_done:
-                    job_set.status = SetStatus.COMPLETED
-
-                return
-
-        # wait for 10 seconds, or if the kill_thread event has been set, exit
-        if thread_sleep(10, event):
-            return
+    host_location = os.path.join(
+        job.config.get('host_prefix'),
+        job.config.get('run_id'),
+        'year_set_{}'.format(str(job.config.get('year_set'))),
+        'index.html')
+    msg = '{job} hosted at {url}'.format(
+        url=host_location,
+        job=job.get_type())
+    event_list = push_event(event_list, msg)
 
 def check_for_inplace_data(file_list, file_name_list, job_sets, config):
     """
@@ -391,8 +411,6 @@ def check_for_inplace_data(file_list, file_name_list, job_sets, config):
     updates the file_list and job_sets accordingly
     """
     cache_path = config.get('global').get('data_cache_path')
-    date_pattern = config.get('global').get('date_pattern')
-    output_pattern = config.get('global').get('output_pattern')
 
     if not os.path.exists(cache_path):
         os.makedirs(cache_path)
@@ -411,7 +429,7 @@ def check_for_inplace_data(file_list, file_name_list, job_sets, config):
                 break
         if not in_range:
             continue
-        # if the file is less the 1MB, its probably still in transit
+        # if the file is less the 100MB, its probably still in transit
         if os.path.getsize(climo_file_path) / 100000000 < 1:
             file_list[file_key] = SetStatus.IN_TRANSIT
         else:
@@ -426,16 +444,22 @@ def check_for_inplace_data(file_list, file_name_list, job_sets, config):
     return all_data
 
 def print_debug(e):
+    """
+    Print an exceptions relavent information
+    """
     print '1', e.__doc__
     print '2', sys.exc_info()
     print '3', sys.exc_info()[0]
     print '4', sys.exc_info()[1]
     print '5', traceback.tb_lineno(sys.exc_info()[2])
-    ex_type, ex, tb = sys.exc_info()
+    _, _, tb = sys.exc_info()
     print '6', traceback.print_tb(tb)
 
 def format_debug(e):
-    ex_type, ex, tb = sys.exc_info()
+    """
+    Return a string of an exceptions relavent information
+    """
+    _, _, tb = sys.exc_info()
     return '1: {doc} \n2: {exec_info} \n3: {exec_0} \n 4: {exec_1} \n5: {lineno} \n6: {stack}'.format(
         doc=e.__doc__,
         exec_info=sys.exc_info(),
@@ -479,8 +503,20 @@ def write_human_state(event_list, job_sets):
     for line in event_list[-20:]:
         if 'Transfer' in line:
             continue
+        if 'hosted' in line:
+            continue
         outfile.write(line + '\n')
     outfile.write('\n')
+
+    for line in event_list:
+        if 'Transfer' not in line:
+            continue
+        outfile.write(line + '\n')
+
+    for line in event_list:
+        if 'hosted' not in line:
+            continue
+        outfile.write(line + '\n')
     outfile.close()
 
 class colors:
@@ -593,16 +629,24 @@ def create_symlink_dir(src_dir, src_list, dst):
     """
     Create a directory, and fill it with symlinks to all the items in src_list
     """
+    message = "creating symlink directory at {dst} with files {src_list}".format(
+        dst=dst,
+        src_list=pformat(src_list))
+    logging.info(message)
     if not os.path.exists(dst):
         os.makedirs(dst)
-    for f in src_list:
-        if not f or not src_list:
+    for file in src_list:
+        if not file or not src_list:
             continue
-        source = os.path.join(src_dir, f)
-        destination = os.path.join(dst, f)
+        source = os.path.join(src_dir, file)
+        destination = os.path.join(dst, file)
         if os.path.lexists(destination):
             continue
-        os.symlink(source, destination)
+        try:
+            os.symlink(source, destination)
+        except Exception as e:
+            msg = format_debug(e)
+            logging.error(e)
 
 def file_list_cmp(a, b):
     """
@@ -647,7 +691,7 @@ def raw_file_cmp(a, b):
 
 def thread_sleep(seconds, event):
     """
-    Allows a thread to sleep for one second at at time, and cancel when if the 
+    Allows a thread to sleep for one second at at time, and cancel when if the
     thread event is set
     """
     for i in range(seconds):
