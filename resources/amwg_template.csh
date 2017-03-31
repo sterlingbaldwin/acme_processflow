@@ -271,8 +271,8 @@ endif
 #-----------------------------------------------------------------
 # Select the output file type and style for plots.
 
-#set p_type = ps      # postscript
-set p_type = png     # portable document format (ncl ver 4.2.0.a028)
+set p_type = ps      # postscript
+#set p_type = png     # portable document format (ncl ver 4.2.0.a028)
 #set p_type = eps    # encapsulated postscript
 #set p_type = epsi   # encapsulated postscript with bitmap 
 #set p_type = ncgm   # ncar computer graphics metadata
@@ -3174,7 +3174,7 @@ if ($web_pages == 0) then
   set tardir = $tarfile:r
   echo MAKING TAR FILE OF DIRECTORY $tardir
   tar -cf ${test_path_diag}$tarfile $tardir
-  \rm -fr $WEBDIR
+#  \rm -fr $WEBDIR
 endif
 # send email message
 if ($email == 0) then
@@ -3183,7 +3183,7 @@ if ($email == 0) then
   echo THE PLOTS FOR $tardir ARE NOW READY! >> email_msg
   mail -s 'DIAG plots' $email_address < email_msg
   echo E-MAIL SENT
-  \rm -f email_msg
+#  \rm -f email_msg
 endif  
 # cleanup
 if ($weight_months == 0) then

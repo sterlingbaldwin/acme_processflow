@@ -29,7 +29,7 @@
 setenv PATH                             %%nco_path%%:$PATH
 
 set projdir =                           %%coupled_project_dir%%
-set coupled_diags_home =                %%coupled_diags_home%%
+setenv coupled_diags_home               %%coupled_diags_home%%
 #USER DEFINED CASE SPECIFIC VARIABLES TO SPECIFY (REQUIRED)
 
 #Test case variables, for casename, add any addendums like /run or /atm/hist
