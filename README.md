@@ -18,6 +18,14 @@ A workflow tool for the ACME project
 
     pip -r requirements.txt
 
+If this is a fresh install on a system that has not been configured to run this before, there
+are some additional tools you'll need. These include the following:
+
+* [NCL](https://www.ncl.ucar.edu/current_release.shtml) for plot generation
+* [SLURM](https://slurm.schedmd.com/quickstart_admin.html) for job management
+* If you plan on using the transfer mechanism, the system will have to be attached to a [Globus DTN](https://fasterdata.es.net/data-transfer-tools/globus/)
+
+
 # Usage
 
     usage: workflow.py [-h] [-c CONFIG] [-d] [-s STATE] [-n] [-r] [-l LOG] [-u]
@@ -97,4 +105,4 @@ When running in GUI mode, resizing the window is discouraged. Although there is 
 
 
 ## Example
-An example can be found here:  https://github.com/sterlingbaldwin/acme_workflow/blob/master/config.json
+An example can be found here:  https://github.com/sterlingbaldwin/acme_workflow/blob/master/run.cfg
