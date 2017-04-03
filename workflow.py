@@ -251,11 +251,26 @@ def add_jobs(year_set):
                 key_list.append('{0}-{1}'.format(year, month))
 
         climo_file_list = [file_name_list.get(x) for x in key_list]
+        if not climo_file_list:
+            logging.error('climo file list is empty, symlink dir will be empty, ncclimo will fail')
         climo_temp_dir = os.path.join(os.getcwd(), 'tmp', 'climo', year_set_str)
-        create_symlink_dir(
-            src_dir=config.get('global').get('data_cache_path'),
-            src_list=climo_file_list,
-            dst=climo_temp_dir)
+        link_dir_good = False
+        retry_count = 0
+        while not link_dir_good and retry_count < 5:
+            create_symlink_dir(
+                src_dir=config.get('global').get('data_cache_path'),
+                src_list=climo_file_list,
+                dst=climo_temp_dir)
+            contents = os.listdir(climo_temp_dir)
+            found_all = True
+            for item in climo_file_list:
+                if item in contents:
+                    continue
+                found_all = False
+                logging.error('Error creating ncclimo symlink directory')
+                retry_count += 1
+                break
+            link_dir_good = found_all
 
         # create the configuration object for the climo job
         climo_config = {
@@ -268,7 +283,7 @@ def add_jobs(year_set):
             'climo_output_directory': climo_output_dir,
             'regrid_output_directory': regrid_output_dir,
             'year_set': year_set.set_number,
-            'ncclimo_path': config.get('ncclimo').get('ncclimo_path')
+            'ncclimo_path': config.get('ncclimo').get('ncclimo_path'),
         }
         climo = Climo(climo_config, event_list=event_list)
         msg = 'Adding Ncclimo job to the job list: {}'.format(str(climo))
@@ -356,12 +371,14 @@ def add_jobs(year_set):
         g_config = config.get('global')
         c_config = config.get('coupled_diags')
         coupled_diag_config = {
+            'host_prefix': c_config.get('host_prefix'),
+            'host_directory': c_config.get('host_directory'),
+            'run_id': config.get('global').get('run_id'),
             'dataset_name': dataset_name,
             'year_set': year_set.set_number,
             'climo_tmp_dir': climo_temp_dir,
             'regrid_path': regrid_output_dir,
             'diag_temp_dir': diag_temp_dir,
-            'year_set': year_set.set_number,
             'start_year': year_set.set_start_year,
             'end_year': year_set.set_end_year,
             'nco_path': config.get('ncclimo').get('ncclimo_path'),
@@ -392,7 +409,7 @@ def add_jobs(year_set):
             'obs_iceareaSH': c_config.get('obs_iceareaSH'),
             'obs_icevolNH': c_config.get('obs_icevolNH'),
             'obs_icevolSH': 'None',
-            'depends_on': ['climo'],
+            'depends_on': [], # 'climo'
             'yr_offset': c_config.get('yr_offset')
         }
         coupled_diag = CoupledDiagnostic(coupled_diag_config, event_list)
@@ -414,6 +431,9 @@ def add_jobs(year_set):
             os.makedirs(diag_temp_dir)
         template_path = os.path.join(os.getcwd(), 'resources', 'amwg_template.csh')
         amwg_config = {
+            'run_id': config.get('global').get('run_id'),
+            'host_directory': config.get('amwg').get('host_directory'),
+            'host_prefix': config.get('amwg').get('host_prefix'),
             'dataset_name': dataset_name,
             'diag_home': config.get('amwg').get('diag_home'),
             'test_path': amwg_project_dir + os.sep,
@@ -424,7 +444,7 @@ def add_jobs(year_set):
             'test_path_diag': amwg_project_dir,
             'start_year': year_set.set_start_year,
             'end_year': year_set.set_end_year,
-            'set_number': year_set.set_number,
+            'year_set': year_set.set_number,
             'run_directory': amwg_project_dir,
             'template_path': template_path,
             'depends_on': ['climo']
@@ -554,10 +574,16 @@ def monitor_check(monitor):
     logging.info('## Starting transfer %s with config: %s', transfer.uuid, pformat(transfer_config))
     # print_message('Starting file transfer', 'ok')
     if not config.get('global').get('dry_run', False):
-        thread = threading.Thread(target=handle_transfer, args=(transfer, checked_new_files, thread_kill_event, event_list))
-        thread_list.append(thread)
-        thread.start()
-        active_transfers += 1
+        while True:
+            try:
+                thread = threading.Thread(target=handle_transfer, args=(transfer, checked_new_files, thread_kill_event, event_list))
+            except:
+                sleep(1)
+            else:
+                thread_list.append(thread)
+                thread.start()
+                active_transfers += 1
+                break
 
 def handle_transfer(transfer_job, f_list, event, event_list):
     global active_transfers
@@ -626,6 +652,12 @@ def xy_check(x, y, hmax, wmax):
     else:
         return 0
 
+def write_line(pad, line, x, y, color):
+    try:
+        pad.addstr(y, x, line, color)
+    except:
+        pass
+
 def display(stdscr, event, config):
     """
     Display current execution status via curses
@@ -638,7 +670,6 @@ def display(stdscr, event, config):
     spinner = ['\\', '|', '/', '-']
     spin_index = 0
     spin_len = 4
-
     try:
         stdscr.nodelay(True)
         curses.curs_set(0)
@@ -677,7 +708,8 @@ def display(stdscr, event, config):
                     num=year_set.set_number,
                     start=year_set.set_start_year,
                     end=year_set.set_end_year)
-                pad.addstr(y, x, line, curses.color_pair(1))
+                #pad.addstr(y, x, line, curses.color_pair(1))
+                write_line(pad, line, x, y, curses.color_pair(1))
                 pad.clrtoeol()
                 y += 1
                 # if xy_check(x, y, hmax, wmax) == -1:
@@ -692,7 +724,8 @@ def display(stdscr, event, config):
                     color_pair = curses.color_pair(6)
                 line = 'status: {status}'.format(
                     status=year_set.status)
-                pad.addstr(y, x, line, color_pair)
+                #pad.addstr(y, x, line, color_pair)
+                write_line(pad, line, x, y, color_pair)
                 if initializing:
                     sleep(0.01)
                     pad.refresh(0, 0, 3, 5, hmax, wmax)
@@ -715,11 +748,12 @@ def display(stdscr, event, config):
                     line = '  >   {type} -- {id} '.format(
                         type=job.get_type(),
                         id=job.job_id)
-                    pad.addstr(y, x, line, curses.color_pair(4))
+                    # pad.addstr(y, x, line, curses.color_pair(4))
+                    write_line(pad, line, x, y, curses.color_pair(4))
                     color_pair = curses.color_pair(4)
                     if job.status == JobStatus.COMPLETED:
                         color_pair = curses.color_pair(5)
-                    elif job.status == JobStatus.FAILED or job.status == 'CANCELED':
+                    elif job.status in [JobStatus.FAILED, 'CANCELED', JobStatus.INVALID]:
                         color_pair = curses.color_pair(3)
                     elif job.status == JobStatus.RUNNING:
                         color_pair = curses.color_pair(6)
@@ -750,6 +784,8 @@ def display(stdscr, event, config):
             #     continue
             for line in event_list[-10:]:
                 if 'Transfer' in line:
+                    continue
+                if 'hosted' in line:
                     continue
                 if 'failed' in line or 'FAILED' in line:
                     prefix = '[-]  '
@@ -835,6 +871,10 @@ def display(stdscr, event, config):
                                 y += 1
                                 pad.addstr(y, x, line, curses.color_pair(4))
                                 pad.clrtoeol()
+            for line in event_list:
+                if 'hosted' in line:
+                    y += 1
+                    pad.addstr(y, x, line, curses.color_pair(4))
             spin_line = spinner[spin_index]
             spin_index += 1
             if spin_index == spin_len:
@@ -891,6 +931,8 @@ if __name__ == "__main__":
     event_list = []
     # A list of files that have been transfered
     transfer_list = []
+
+    state = []
 
     if config == -1:
         print "Error in setup, exiting"
@@ -1055,6 +1097,7 @@ if __name__ == "__main__":
                 config=config)
             if config.get('global').get('dry_run', False):
                 event_list = push_event(event_list, 'Running in dry-run mode')
+                write_human_state(event_list, job_sets)
                 sleep(50)
                 display_event.set()
                 for t in thread_list:
@@ -1078,28 +1121,9 @@ if __name__ == "__main__":
                 print_message(message, 'ok')
                 logging.info("## All processes complete")
                 sys.exit(0)
-            #sleep(10)
-            if not config.get('global').get('ui'):
-                i, o, e = select.select([sys.stdin], [], [], 10)
-                if i:
-                    key = sys.stdin.readline().strip()
-                    if 'q' in key:
-                        try:
-                            config['global']['ui'] = True
-                            config['global']['debug'] = False
-                            sys.stdout.write('Turning on the display')
-                            for i in range(8):
-                                sys.stdout.write('.')
-                                sys.stdout.flush()
-                                sleep(0.1)
-                            print '\n'
-                            diaplay_thread = threading.Thread(target=start_display, args=(config, display_event))
-                            diaplay_thread.start()
 
-                        except KeyboardInterrupt as e:
-                            display_event.set()
-            else:
-                sleep(10)
+            write_human_state(event_list, job_sets)
+            sleep(10)
     except KeyboardInterrupt as e:
         print_message('----- KEYBOARD INTERUPT -----')
         print_message('cleaning up threads', 'ok')
@@ -1107,4 +1131,3 @@ if __name__ == "__main__":
         for t in thread_list:
             thread_kill_event.set()
             t.join()
-

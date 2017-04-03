@@ -36,7 +36,7 @@ MV2==3.0.0
 natgrid==1.0
 numpy==1.11.3
 ort==0.0.0
-output-viewer==1.2.1
+output-viewer==1.2.2
 paramiko==2.1.1
 pathlib2==2.2.1
 pexpect==4.2.1

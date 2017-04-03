@@ -197,7 +197,7 @@ except Exception as e:\n\
             self.batch_script_name = os.path.join(os.getcwd(), 'run_scripts', self.expected_name)
             with open(self.batch_script_name, 'w') as batchfile:
                 batchfile.write('#!/bin/bash\n')
-                batchfile.write('\n'.join([val for key, val in self.slurm_args.items()]))
+                batchfile.write('\n#SBATCH '.join([val for key, val in self.slurm_args.items()]))
                 batchfile.write('\npython {0}'.format(self.run_script))
             submitted = False
             while not submitted:

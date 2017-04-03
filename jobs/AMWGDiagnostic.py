@@ -33,23 +33,27 @@ class AMWGDiagnostic(object):
     """
     def __init__(self, config, event_list):
         """
-            Setup class attributes
+        Setup class attributes
 
-            inputs:
-                test_casename: the name of the test case e.g. b40.20th.track1.2deg.001
-                test_filetype: the filetype of the history files, either monthly_history or time_series
-                test_path_history: path to the directory holding your history files
-                test_path_climo: path to directory holding climo files
-                test_path_diag: the output path for the diagnostics to go
-                control: what type to use for the control set, either OBS for observations, or USER for another model
-                    the following are only set with control==USER
-                    cntl_casename: the case_name of the control case
-                    cntl_filetype: either monthly_history or time_series
-                    cntl_path_history: path to the control history file
-                    cntl_path_climo: path to the control climo files
+        inputs:
+            test_casename: the name of the test case e.g. b40.20th.track1.2deg.001
+            test_filetype: the filetype of the history files, either monthly_history or time_series
+            test_path_history: path to the directory holding your history files
+            test_path_climo: path to directory holding climo files
+            test_path_diag: the output path for the diagnostics to go
+            control: what type to use for the control set, either OBS for observations, or USER for another model
+                the following are only set with control==USER
+                cntl_casename: the case_name of the control case
+                cntl_filetype: either monthly_history or time_series
+                cntl_path_history: path to the control history file
+                cntl_path_climo: path to the control climo files
         """
         self.event_list = event_list
+        self.status = JobStatus.INVALID
         self.inputs = {
+            'host_directory': '',
+            'host_prefix': '',
+            'run_id': '',
             'diag_home': '',
             'test_casename': '',
             'test_path': '',
@@ -60,7 +64,7 @@ class AMWGDiagnostic(object):
             'regrided_climo_path': '',
             'start_year': '',
             'end_year': '',
-            'set_number': '',
+            'year_set': '',
             'run_directory': '',
             'template_path': '',
             'dataset_name': '',
@@ -80,15 +84,21 @@ class AMWGDiagnostic(object):
         self.prevalidate(config)
 
     def get_type(self):
+        """
+        Getter for the job type
+        """
         return self.type
 
     def set_status(self, status):
+        """
+        Setter for the job status
+        """
         self.status = status
 
     def prevalidate(self, config):
         """
-            Iterate over given config dictionary making sure all the inputs are set
-            and rejecting any inputs that arent in the input dict
+        Iterate over given config dictionary making sure all the inputs are set
+        and rejecting any inputs that arent in the input dict
         """
         for key, value in config.iteritems():
             if key in self.inputs:
@@ -97,19 +107,25 @@ class AMWGDiagnostic(object):
             if key not in self.config:
                 self.config[key] = value
 
-        for d in config.get('depends_on'):
-            self.depends_on.append(d)
+        for depend in config.get('depends_on'):
+            self.depends_on.append(depend)
         self.status = JobStatus.VALID
 
     def get_set(self, filename):
+        """
+        Find the files year_set
+        """
         for i in range(len(filename)):
             if filename[i].isdigit():
                 s_index = i
                 break
-        set_number = filename[i:]
-        return set_number
+        year_set = filename[i:]
+        return year_set
 
     def get_attrs(self, filename):
+        """
+        From an AMWG output file, find that files attributes
+        """
         filesplit = filename.split('_')
         set_id = self.get_set(filesplit[0])
         seasons = ['DJF', 'MAM', 'JJA', 'SON', 'ANN']
@@ -129,7 +145,11 @@ class AMWGDiagnostic(object):
         return set_id, group, row, col
 
     def generateIndex(self):
-        self.event_list = push_event(self.event_list, 'Starting index generataion for AMWG diagnostic')
+        """
+        Generates the index.json for the DiagnosticViewer
+        """
+        self.event_list = push_event(
+            self.event_list, 'Starting index generataion for AMWG diagnostic')
         contents = [s for s in os.listdir(self.config.get('run_directory')) if s.endswith('png')]
         dataset_name = self.config.get('dataset_name')
         index = OutputIndex('AMWG Diagnostic', version=dataset_name)
@@ -173,23 +193,35 @@ class AMWGDiagnostic(object):
 
     def postvalidate(self):
         """
-            Check that what the job was supposed to do actually happened
+        Check that what the job was supposed to do actually happened
+        returns 1 if the job is done, 0 otherwise
         """
-        print 'postvalidate'
+        base = str(os.sep).join(self.config.get('test_path_diag').split('/')[:-1])
+        year_set = 'year_set_{0}'.format(self.config.get('year_set'))
+        web_dir = '{base}/{year_set}{casename}-obs'.format(
+            base=base,
+            year_set=year_set,
+            casename=self.config.get('test_casename'))
+        if os.path.exists(web_dir):
+            out = Popen(['find', web_dir, '-type', 'f'], stdout=PIPE).communicate()
+            contents = out[0].split('\n')
+            return bool(len(contents) > 2300)
+        else:
+            return False
 
     def execute(self, batch='slurm'):
         """
-            Perform the actual work
+        Perform the actual work
         """
-
         # First check if the job has already been completed
-        if os.path.exists(self.config.get('run_directory')):
-            contents = os.listdir(self.config.get('run_directory'))
-        if len(contents) > 2300:
-            self.event_list = push_event(self.event_list, 'AMWG already computed, skipping job')
+        if self.postvalidate():
             self.status = JobStatus.COMPLETED
-            return 
+            message = 'AMWG job already computed, skipping'
+            self.event_list = push_event(self.event_list, message)
+            return 0
 
+
+        # setup the output directory
         run_dir = self.config.get('run_directory')
         if not os.path.exists(run_dir):
             os.makedirs(run_dir)
@@ -217,8 +249,8 @@ class AMWGDiagnostic(object):
                 os.path.join(self.config.get('test_path_climo'), item),
                 os.path.join(self.config.get('test_path_climo'), item[:s_index] + '_climo.nc'))
         # setup sbatch script
-        expected_name = 'amwg_set_{set_number}_{start}_{end}_{uuid}'.format(
-            set_number=self.config.get('set_number'),
+        expected_name = 'amwg_set_{year_set}_{start}_{end}_{uuid}'.format(
+            year_set=self.config.get('year_set'),
             start=self.config.get('start_year'),
             end=self.config.get('end_year'),
             uuid=self.uuid[:5])
@@ -242,7 +274,7 @@ class AMWGDiagnostic(object):
 
         prev_dir = os.getcwd()
         os.chdir(run_dir)
-        slurm_cmd = ['sbatch', run_script]
+        slurm_cmd = ['sbatch', run_script, '--oversubscribe']
         started = False
         while not started:
             while True:

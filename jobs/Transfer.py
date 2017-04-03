@@ -162,13 +162,22 @@ class Transfer(object):
         return dstpath
 
     def display_status(self, event_list, percent_complete, task_id):
-        message = 'Transfer {id} in progress ['.format(id=task_id)
+        start_file = self.config.get('file_list')[0]
+        end_file = self.config.get('file_list')[-1]
+        index = start_file.find('-')
+        start_readable = start_file[index - 4: index + 3]
+        index = end_file.find('-')
+        end_readable = end_file[index - 4: index + 3]
+
+        message = 'Transfer {start} to {end} in progress ['.format(
+            start=start_readable,
+            end=end_readable)
         for i in range(1, 100, 5):
             if i < percent_complete:
                 message += '*'
             else:
                 message += '_'
-        message += '] {0}%'.format(percent_complete)
+        message += '] {0:.2f}%'.format(percent_complete)
         replaced = False
         for i, e in enumerate(event_list):
             if str(task_id) in e:
@@ -177,6 +186,14 @@ class Transfer(object):
                 break
         if not replaced:
             event_list = push_event(event_list, message)
+
+    def error_cleanup(self):
+        print_message('Removing partially transfered files')
+        destination_contents = os.listdir(self.config.get('destination_path'))
+        for transfer in self.config['file_list']:
+            t_file = transfer.split(os.sep)[-1]
+            if t_file in destination_contents:
+                os.remove(os.path.join(self.config.get('destination_path'), t_file))
 
     def execute(self, event, event_list):
 
@@ -192,7 +209,7 @@ class Transfer(object):
             src=srcendpoint,
             dst=dstendpoint)
         logging.info(message)
-        event_list = push_event(event_list, message)
+        # event_list = push_event(event_list, message)
         # Get access token (This method of getting an acces token is deprecated and should be replaced by OAuth2 calls).
         globus_username = self.config.get('globus_username')
         globus_password = self.config.get('globus_password')
@@ -292,10 +309,6 @@ class Transfer(object):
                         time.sleep(1)
                     else:
                         break
-                # code, reason, data = api_client.task(task_id)
-                logging.info('transfer status: %s', data['status'])
-                # if the transfer is done, move any files that havent already been
-                # moved to their final destination
                 if data['status'] == 'SUCCEEDED':
                     logging.info('progress %d/%d', data['files_transferred'], data['files'])
                     percent_complete = 100.0
@@ -318,11 +331,13 @@ class Transfer(object):
                     status = JobStatus.RUNNING
                 if event and event.is_set():
                     api_client.task_cancel(task_id)
+                    self.error_cleanup()
                     return
             except Exception as e:
                 if code:
                     print code, reason
                 logging.error(format_debug(e))
                 api_client.task_cancel(task_id)
+                self.error_cleanup()
                 return
             time.sleep(5)
