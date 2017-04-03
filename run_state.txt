@@ -1,0 +1,59 @@
+Execution state as of 03, Apr 2017 12:42
+Year_set 1: 1 - 10
+status: SetStatus.FAILED
+  >   climo -- 0: JobStatus.COMPLETED
+  >   timeseries -- 0: JobStatus.COMPLETED
+  >   uvcmetrics -- 0: JobStatus.COMPLETED
+  >   coupled_diagnostic -- 0: JobStatus.COMPLETED
+  >   amwg_diagnostic -- 0: JobStatus.COMPLETED
+  >   upload_diagnostic_output -- 1178: JobStatus.FAILED
+
+Year_set 2: 11 - 20
+status: SetStatus.FAILED
+  >   climo -- 0: JobStatus.COMPLETED
+  >   timeseries -- 0: JobStatus.COMPLETED
+  >   uvcmetrics -- 0: JobStatus.COMPLETED
+  >   coupled_diagnostic -- 0: JobStatus.COMPLETED
+  >   amwg_diagnostic -- 0: JobStatus.COMPLETED
+  >   upload_diagnostic_output -- 1179: JobStatus.FAILED
+
+Year_set 3: 21 - 30
+status: SetStatus.RUNNING
+  >   climo -- 0: JobStatus.COMPLETED
+  >   timeseries -- 0: JobStatus.COMPLETED
+  >   uvcmetrics -- 0: JobStatus.COMPLETED
+  >   coupled_diagnostic -- 0: JobStatus.COMPLETED
+  >   amwg_diagnostic -- 1180: JobStatus.RUNNING
+  >   upload_diagnostic_output -- 1181: JobStatus.FAILED
+
+Year_set 4: 31 - 40
+status: SetStatus.NO_DATA
+
+Year_set 5: 41 - 50
+status: SetStatus.NO_DATA
+
+
+12:29 Uvcmetrics already computed, skipping
+12:29 Coupled_diag job already computed, skipping
+12:29 Setting up local hosting for coupled_diagnostic
+12:30 AMWG job already computed, skipping
+12:30 Setting up local hosting for amwg_diagnostic
+12:30 Submitted upload_diagnostic_output for year_set_2
+12:30 Ncclimo job already computed, skipping
+12:30 Timeseries already computed, skipping
+12:30 Uvcmetrics already computed, skipping
+12:30 Coupled_diag job already computed, skipping
+12:30 Setting up local hosting for coupled_diagnostic
+12:31 amwg_diagnostic id: 1180 changed state to JobStatus.SUBMITTED
+12:31 Submitted amwg_diagnostic for year_set_3
+12:31 amwg_diagnostic: 1180 status changed to JobStatus.PENDING
+12:31 Submitted upload_diagnostic_output for year_set_3
+12:31 amwg_diagnostic: 1180 status changed to JobStatus.RUNNING
+
+12:30 Transfer 0029-02 to 0029-08 in progress [********************] 100.00%
+12:30 Transfer 0029-02 to 0029-02 in progress [********************] 100.00%
+12:28 coupled_diagnostic hosted at https://acme-viewer.llnl.gov/coupled/20170313.beta1_2_auto_4/year_set_1/index.html
+12:29 amwg_diagnostic hosted at https://acme-viewer.llnl.gov/amwg/20170313.beta1_2_auto_4/year_set_1/index.html
+12:29 coupled_diagnostic hosted at https://acme-viewer.llnl.gov/coupled/20170313.beta1_2_auto_4/year_set_2/index.html
+12:30 amwg_diagnostic hosted at https://acme-viewer.llnl.gov/amwg/20170313.beta1_2_auto_4/year_set_2/index.html
+12:30 coupled_diagnostic hosted at https://acme-viewer.llnl.gov/coupled/20170313.beta1_2_auto_4/year_set_3/index.html
