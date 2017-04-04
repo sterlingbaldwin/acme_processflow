@@ -8,3 +8,4 @@ class JobStatus(Enum):
     FAILED = 4
     SUBMITTED = 5
     PENDING = 6
+    WAITING_ON_INPUT = 7

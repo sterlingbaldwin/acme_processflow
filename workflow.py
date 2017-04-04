@@ -121,8 +121,6 @@ def setup(parser):
             except IOError as e:
                 logging.error('Error loading from state file {}'.format(args.state))
                 logging.error(format_debug(e))
-                # print_debug(e)
-                # print_message('Error loading state file')
                 sys.exit(1)
             if debug:
                 print_message('saved file_list: \n{}'.format(pformat(sorted(file_list, cmp=file_list_cmp))))
@@ -131,7 +129,7 @@ def setup(parser):
             for job_set in job_sets:
                 for job in job_set.jobs:
                     if job.status != JobStatus.COMPLETED:
-                        job.status = JobStatus.UNVALIDATED
+                        job.status = JobStatus.INVALID
                         job.prevalidate(job, job.config)
 
     # no state file, load from config
@@ -147,7 +145,12 @@ def setup(parser):
                     config[section] = {}
                     for option in confParse.options(section):
                         opt = confParse.get(section, option)
-                        if opt.startswith('['):
+                        if not opt:
+                            if 'pass' in option:
+                                opt = getpass('>> ' + option + ': ')
+                            else:
+                                opt = raw_input('>> ' + option + ': ')
+                        if opt.startswith('[') or opt.startswith('{'):
                             opt = json.loads(opt)
                         config[section][option] = opt
             except Exception as e:
@@ -157,28 +160,6 @@ def setup(parser):
                 print_debug(e)
                 return -1
 
-            # required_fields = ['output_pattern']
-            # for field in required_fields:
-            #     if field == 'output_pattern':
-            #         patterns = ['YYYY-MM', 'YYYY-MM-DD']
-            #         output_pattern = config.get('global').get(field)
-            #         for p in patterns:
-            #             index = re.search(p, output_pattern)
-            #             if index:
-            #                 start = index.start()
-            #                 end = start + len(p)
-            #                 date_pattern = output_pattern[start:end]
-            #                 config['global']['output_pattern'] = config['global']['output_pattern'][:start] + p + '.nc'
-            #                 config['global']['date_pattern'] = date_pattern
-            #         if not config.get('global').get('date_pattern'):
-            #             msg = 'Unable to parse output_pattern {}, exiting'.format(output_pattern)
-            #             print_message(msg)
-            #             logging.error(msg)
-            #             message = "## year_set {set} status change to {status}".format(
-            #                 set=year_set.set_number,
-            #                 status=year_set.status)
-            #             logging.error(message)
-            #             sys.exit(1)
     if args.no_ui:
         config['global']['ui'] = False
     else:
@@ -201,6 +182,22 @@ def setup(parser):
     else:
         config['global']['no_monitor'] = False
 
+    # setup config for file type directories
+    for key, val in config.get('global').get('output_patterns').items():
+        new_dir = os.path.join(
+            config['global']['data_cache_path'],
+            key)
+        if not os.path.exists(new_dir):
+            os.makedirs(new_dir)
+        if val == 'mpaso.hist.am.timeSeriesStatsMonthly':
+            config['global']['mpas_dir'] = new_dir
+        elif val == 'cam.h0':
+            config['global']['atm_dir'] = new_dir
+        elif val == 'mpaso.rst.0':
+            config['global']['mpas_rst_dir'] = new_dir
+        elif val == 'mpas-o_in' or val == 'mpas-cice_in':
+            config['global']['mpas_in_dir'] = new_dir
+
     if not os.path.exists(config['global']['output_path']):
         os.makedirs(config['global']['output_path'])
     if not os.path.exists(config['global']['data_cache_path']):
@@ -218,7 +215,7 @@ def add_jobs(year_set):
         'climo': False,
         'timeseries': False,
         'uvcmetrics': False,
-        'upload_diagnostic_output': False,
+        'upload_diagnostic_output': True,
         'coupled_diagnostic': False,
         'amwg_diagnostic': False
     }
@@ -230,13 +227,15 @@ def add_jobs(year_set):
     # first initialize the climo job
     if not required_jobs['climo']:
         required_jobs['climo'] = True
-        climo_output_dir = config.get('global').get('output_path')
+        climo_output_dir = os.path.join(
+            config.get('global').get('output_path'),
+            'climo')
         if not os.path.exists(climo_output_dir):
-            msg = "Creating climotology output directory {}".format(climo_output_dir)
-            logging.info(msg)
             os.makedirs(climo_output_dir)
 
-        regrid_output_dir = os.path.join(climo_output_dir, 'regrid')
+        regrid_output_dir = os.path.join(
+            config.get('global').get('output_path'),
+            'regrid')
         if not os.path.exists(regrid_output_dir):
             os.makedirs(regrid_output_dir)
 
@@ -251,14 +250,11 @@ def add_jobs(year_set):
                 key_list.append('{0}-{1}'.format(year, month))
 
         climo_file_list = [file_name_list.get(x) for x in key_list]
-        if not climo_file_list:
-            logging.error('climo file list is empty, symlink dir will be empty, ncclimo will fail')
         climo_temp_dir = os.path.join(os.getcwd(), 'tmp', 'climo', year_set_str)
         link_dir_good = False
-        retry_count = 0
-        while not link_dir_good and retry_count < 5:
+        for _ in range(5):
             create_symlink_dir(
-                src_dir=config.get('global').get('data_cache_path'),
+                src_dir=config.get('global').get('atm_dir'),
                 src_list=climo_file_list,
                 dst=climo_temp_dir)
             contents = os.listdir(climo_temp_dir)
@@ -268,9 +264,9 @@ def add_jobs(year_set):
                     continue
                 found_all = False
                 logging.error('Error creating ncclimo symlink directory')
-                retry_count += 1
                 break
-            link_dir_good = found_all
+            if found_all:
+                break
 
         # create the configuration object for the climo job
         climo_config = {
@@ -474,7 +470,7 @@ def add_jobs(year_set):
 
     return year_set
 
-def monitor_check(monitor):
+def monitor_check(monitor, config, file_list):
     """
     Check the remote directory for new files that match the given pattern,
     if there are any new files, create new transfer jobs. If they're in a new job_set,
@@ -493,43 +489,49 @@ def monitor_check(monitor):
         return
     monitor.check()
     new_files = monitor.known_files
+
+    patterns = config.get('global').get('output_patterns')
+    for file_info in new_files:
+        for folder, file_type in patterns.items():
+            if file_type in file_info['filename']:
+                file_info['type'] = folder
+                break
+
     checked_new_files = []
 
-    output_pattern = config.get('global').get('output_pattern')
-    date_pattern = config.get('global').get('date_pattern')
-    frequencies = config.get('global').get('set_frequency')
-
-    for f in new_files:
-        file_key = filename_to_file_list_key(f)
+    for new_file in new_files:
+        file_key = filename_to_file_list_key(new_file['filename'])
         status = file_list.get(file_key)
-        if status and status != SetStatus.DATA_READY and status != SetStatus.IN_TRANSIT:
-            checked_new_files.append(f)
+        if not status:
+            continue
+        if status == SetStatus.DATA_READY:
+            local_path = os.path.join(
+                config.get('global').get('data_cache_path'),
+                new_file['type'],
+                new_file['filename'].split('/')[-1])
+            if not os.path.exists(local_path):
+                checked_new_files.append(new_file)
+                continue
+            if not int(os.path.getsize(local_path)) == int(new_file['size']):
+                os.remove(local_path)
+                checked_new_files.append(new_file)
+        if not status == SetStatus.DATA_READY and not status == SetStatus.IN_TRANSIT:
+            checked_new_files.append(new_file)
 
     # if there are any new files
     if not checked_new_files:
-        if debug:
-            print_message('No new files found', 'ok')
-        # event_list = push_event(event_list, 'no new files found')
         return
 
-    if debug:
-        print_message('Found new files:\n  {}'.format(
-            pformat(checked_new_files, indent=4)), 'ok')
-
     # find which year set the data belongs to
-    for file in checked_new_files:
+    frequencies = config.get('global').get('set_frequency')
+    for file_info in checked_new_files:
         for freq in frequencies:
-            year_set = filename_to_year_set(file, freq)
+            year_set = filename_to_year_set(file_info['filename'], freq)
             for job_set in job_sets:
                 if job_set.set_number == year_set and job_set.status == SetStatus.NO_DATA:
-
                     job_set.status = SetStatus.PARTIAL_DATA
                     # Spawn jobs for that yearset
                     job_set = add_jobs(job_set)
-
-    # construct list of files to transfer
-    # f_path = config.get('transfer').get('source_path')
-    # f_list = ['{path}/{file}'.format(path=f_path, file=f)  for f in checked_new_files]
 
     t_config = config.get('transfer')
     g_config = config.get('global')
@@ -548,19 +550,18 @@ def monitor_check(monitor):
         'source_path': t_config.get('source_path'),
         'destination_path': g_config.get('data_cache_path') + '/',
         'recursive': 'False',
-        'final_destination_path': config.get('global').get('data_cache_path'),
-        'pattern': config.get('global').get('output_pattern'),
+        'pattern': config.get('global').get('output_patterns'),
         'ncclimo_path': config.get('ncclimo').get('ncclimo_path')
     }
     transfer = Transfer(transfer_config, event_list)
 
     for f in transfer.config.get('file_list'):
-        f = f.split('/').pop()
+        f = f['filename'].split('/').pop()
         key = filename_to_file_list_key(f)
         file_list[key] = SetStatus.IN_TRANSIT
 
-    start_file = transfer.config.get('file_list')[0]
-    end_file = transfer.config.get('file_list')[-1]
+    start_file = transfer.config.get('file_list')[0]['filename']
+    end_file = transfer.config.get('file_list')[-1]['filename']
     index = start_file.find('-')
     start_readable = start_file[index - 4: index + 3]
     index = end_file.find('-')
@@ -570,9 +571,8 @@ def monitor_check(monitor):
         start_readable,
         end_readable)
     event_list = push_event(event_list, message)
+    logging.info('## ' + message)
 
-    logging.info('## Starting transfer %s with config: %s', transfer.uuid, pformat(transfer_config))
-    # print_message('Starting file transfer', 'ok')
     if not config.get('global').get('dry_run', False):
         while True:
             try:
@@ -582,7 +582,6 @@ def monitor_check(monitor):
             else:
                 thread_list.append(thread)
                 thread.start()
-                active_transfers += 1
                 break
 
 def handle_transfer(transfer_job, f_list, event, event_list):
@@ -596,6 +595,7 @@ def handle_transfer(transfer_job, f_list, event, event_list):
         event: a thread event to handle shutting down from keyboard exception, not used in this case
             but it needs to be there for any threads handlers
     """
+    active_transfers += 1
     # start the transfer job
     transfer_job.execute(event, event_list)
     # the transfer is complete, so we can decrement the active_transfers counter
@@ -994,11 +994,24 @@ if __name__ == "__main__":
     # initialize the file_list
     line = 'Initializing file list'
     event_list = push_event(event_list, line)
-    for year in range(1, number_of_sim_years + 1):
-        for month in range(1, 13):
-            key = str(year) + '-' + str(month)
-            file_list[key] = SetStatus.NO_DATA
-            file_name_list[key] = ''
+    for key, val in config.get('global').get('output_patterns').items():
+        file_list[key] = {}
+        file_name_list[key] = {}
+        if key in ['ATM', 'MPAS_AM']:
+            for year in range(1, number_of_sim_years + 1):
+                for month in range(1, 13):
+                    file_key = str(year) + '-' + str(month)
+                    file_list[key][file_key] = SetStatus.NO_DATA
+                    file_name_list[key][file_key] = ''
+        elif key == 'MPAS_CICE':
+            file_list[key]['mpas-cice_in'] = SetStatus.NO_DATA
+        elif key == 'MPAS_O':
+            file_list[key]['mpas-o_in'] = SetStatus.NO_DATA
+        elif key == 'MPAS_RST':
+            file_list[key]['0002-01-01'] = SetStatus.NO_DATA
+        elif key == 'STREAMS':
+            file_list[key]['streams.ocean'] = SetStatus.NO_DATA
+            file_list[key]['streams.cice'] = SetStatus.NO_DATA
 
     # Check for any data already on the System
     all_data = check_for_inplace_data(
@@ -1009,26 +1022,11 @@ if __name__ == "__main__":
 
     check_year_sets(
         job_sets=job_sets,
-        file_list=file_list,
+        file_list=file_list['ATM'],
         sim_start_year=config.get('global').get('simulation_start_year'),
         sim_end_year=config.get('global').get('simulation_end_year'),
         debug=debug,
         add_jobs=add_jobs)
-
-    if debug:
-        for s in job_sets:
-            print_message('year_set {0}:'.format(s.set_number), 'ok')
-            for job in s.jobs:
-                print_message('    {}'.format(str(job)))
-
-        print_message('printing year sets', 'ok')
-        for key in job_sets:
-            msg = '{0}: {1}'.format(key.set_number, key.status)
-            print_message(msg, 'ok')
-        print_message('printing file list', 'ok')
-        for key in sorted(file_list, cmp=file_list_cmp):
-            msg = '{0}: {1}'.format(key, file_list[key])
-            print_message(msg, 'ok')
 
     if all_data:
         # print_message('All data is local, disabling remote monitor', 'ok')
@@ -1041,12 +1039,14 @@ if __name__ == "__main__":
 
     # If all the data is local, dont start the monitor
     if not all_data and not config.get('global').get('no_monitor', False):
-        pattern = config.get('global').get('output_pattern')
+        output_pattern = config.get('global').get('output_patterns')
+        patterns = [v for k, v in config.get('global').get('output_patterns').items()]
         monitor_config = {
             'remote_host': config.get('monitor').get('compute_host'),
             'remote_dir': config.get('transfer').get('source_path'),
             'username': config.get('monitor').get('compute_username'),
-            'pattern': pattern
+            'patterns': patterns,
+            'file_list': file_list
         }
         if config.get('monitor').get('compute_password'):
             monitor_config['password'] = config.get('monitor').get('compute_password')
@@ -1057,11 +1057,14 @@ if __name__ == "__main__":
             sys.exit(1)
 
         monitor = Monitor(monitor_config)
+        if not monitor:
+            print 'error setting up monitor'
+            sys.exit()
         # print_message('attempting connection to {}'.format(config.get('monitor').get('compute_host')), 'ok')
         line = 'Attempting connection to {}'.format(config.get('monitor').get('compute_host'))
         event_list = push_event(event_list, line)
         if monitor.connect() == 0:
-            monitor.check()
+            # monitor.check()
             line = 'Connected'
             event_list = push_event(event_list, line)
         else:
@@ -1074,14 +1077,16 @@ if __name__ == "__main__":
 
     # Main loop
     try:
+        loop_count = 6
         while True:
             # Setup remote monitoring system
             if monitor and \
                not all_data and \
-               not config.get('global').get('no_monitor', False):
+               not config.get('global').get('no_monitor', False) and \
+               loop_count >= 6:
                 # event_list = push_event(event_list, 'Running monitor check')
-                monitor_check(monitor)
-
+                monitor_check(monitor, config)
+                loop_count = 0
             # Check if a year_set is ready to run
             check_year_sets(
                 job_sets=job_sets,
@@ -1124,6 +1129,7 @@ if __name__ == "__main__":
 
             write_human_state(event_list, job_sets)
             sleep(10)
+            loop_count += 1
     except KeyboardInterrupt as e:
         print_message('----- KEYBOARD INTERUPT -----')
         print_message('cleaning up threads', 'ok')

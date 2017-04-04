@@ -6,10 +6,14 @@ import sys
 import json
 import time
 import logging
+import paramiko
 
 from pprint import pformat
 from datetime import datetime, timedelta
 from uuid import uuid4
+
+from paramiko import PasswordRequiredException
+from paramiko import SSHException
 
 from globusonline.transfer import api_client
 from globusonline.transfer.api_client import Transfer as globus_transfer
@@ -52,7 +56,6 @@ class Transfer(object):
             'destination_password': '',
             'source_path': '',
             'destination_path': '',
-            'final_destination_path': '',
             'pattern': '',
         }
         self.maximum_transfers = 12
@@ -99,10 +102,7 @@ class Transfer(object):
         if self.status == JobStatus.VALID:
             return 0
         for i in config:
-            if i not in self.inputs:
-                # print_message("Unexpected arguement: {}, {}".format(i, config[i]))
-                pass
-            else:
+            if i in self.inputs:
                 if i == 'recursive':
                     if config.get(i) == 'True':
                         self.config[i] = True
@@ -125,6 +125,11 @@ class Transfer(object):
         # only add the first n transfers up to the max
         file_list = sorted(self.config.get('file_list'), raw_file_cmp)
         self.config['file_list'] = file_list[:self.maximum_transfers]
+
+        for file_info in file_list:
+            destination = os.path.join(self.config.get('destination_path'), file_info['type'])
+            if not os.path.exists(destination):
+                os.makedirs(destination)
         return 0
 
     def postvalidate(self):
@@ -164,14 +169,15 @@ class Transfer(object):
     def display_status(self, event_list, percent_complete, task_id):
         start_file = self.config.get('file_list')[0]
         end_file = self.config.get('file_list')[-1]
-        index = start_file.find('-')
-        start_readable = start_file[index - 4: index + 3]
-        index = end_file.find('-')
-        end_readable = end_file[index - 4: index + 3]
+        index = start_file['filename'].find('-')
+        start_readable = start_file['filename'][index - 4: index + 3]
+        index = end_file['filename'].find('-')
+        end_readable = end_file['filename'][index - 4: index + 3]
 
-        message = 'Transfer {start} to {end} in progress ['.format(
+        start_end_str = '{start} to {end}'.format(
             start=start_readable,
             end=end_readable)
+        message = 'Transfer {0} in progress ['.format(start_end_str)
         for i in range(1, 100, 5):
             if i < percent_complete:
                 message += '*'
@@ -180,7 +186,7 @@ class Transfer(object):
         message += '] {0:.2f}%'.format(percent_complete)
         replaced = False
         for i, e in enumerate(event_list):
-            if str(task_id) in e:
+            if start_end_str in e:
                 event_list[i] = time.strftime("%I:%M") + ' ' + message
                 replaced = True
                 break
@@ -188,15 +194,16 @@ class Transfer(object):
             event_list = push_event(event_list, message)
 
     def error_cleanup(self):
-        print_message('Removing partially transfered files')
-        destination_contents = os.listdir(self.config.get('destination_path'))
-        for transfer in self.config['file_list']:
-            t_file = transfer.split(os.sep)[-1]
-            if t_file in destination_contents:
-                os.remove(os.path.join(self.config.get('destination_path'), t_file))
+        pass
+        # print_message('Removing partially transfered files')
+        # destination_contents = os.listdir(self.config.get('destination_path'))
+        # for transfer in self.config['file_list']:
+        #     t_file = transfer['filename'].split(os.sep)[-1]
+        #     if t_file in destination_contents:
+        #         os.remove(os.path.join(self.config.get('destination_path'), t_file))
 
     def execute(self, event, event_list):
-
+        # reject if job isnt valid
         if self.status != JobStatus.VALID:
             logging.error('Transfer job in invalid state')
             logging.error(str(self))
@@ -271,12 +278,17 @@ class Transfer(object):
             return
         try:
             for path in self.config['file_list']:
-                dst_path = self.get_destination_path(
-                    path,
+                # dst_path = self.get_destination_path(
+                #     path['filename'],
+                #     os.path.join(self.config.get('destination_path'), path['type']),
+                #     self.config.get('recursive'))
+                dst_path = os.path.join(
                     self.config.get('destination_path'),
-                    self.config.get('recursive'))
+                    path['type'],
+                    path['filename'].split('/')[-1])
+                print 'Moving file from {src} to {dst}'.format(src=path['filename'].split('/')[-1], dst=dst_path)
                 transfer_task.add_item(
-                    path,
+                    path['filename'],
                     dst_path,
                     recursive=self.config.get('recursive'))
         except IOError as e:
@@ -328,7 +340,7 @@ class Transfer(object):
                         percent_complete = (float(data['files_transferred']) / float(data['files'])) * 100
                         self.display_status(event_list, percent_complete, task_id)
 
-                    status = JobStatus.RUNNING
+                    self.status = JobStatus.RUNNING
                 if event and event.is_set():
                     api_client.task_cancel(task_id)
                     self.error_cleanup()

@@ -129,6 +129,8 @@ class CoupledDiagnostic(object):
             output_path = os.path.join(
                 self.config.get('coupled_project_dir'),
                 os.environ.get('USER'))
+            if not os.path.exists(output_path):
+                return False
             output_contents = os.listdir(output_path)
         except IOError:
             return False

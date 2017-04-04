@@ -128,7 +128,6 @@ class Uvcmetrics(object):
             if start_year == set_start_year and end_year == set_end_year:
                 diag_file_list.append(d_file)
 
-
         create_symlink_dir(
             src_dir=regrid_path,
             src_list=diag_file_list,

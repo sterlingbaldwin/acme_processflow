@@ -135,20 +135,6 @@ def start_ready_job_sets(job_sets, thread_list, debug, event, upload_config, eve
                     logging.info(msg)
 
                 if job.get_type() == 'climo' and job.status == JobStatus.VALID:
-                    job_id = job.execute(batch=True)
-                    if job_id == 0:
-                        job.set_status(JobStatus.COMPLETED)
-                    else:
-                        job.set_status(JobStatus.SUBMITTED)
-                        message = 'Submitted Ncclimo for year_set {}'.format(job_set.set_number)
-                        event_list = push_event(event_list, message)
-
-                        message = "## {job} id: {id} status changed to {status}".format(
-                            job=job.get_type(),
-                            id=job.job_id,
-                            status=job.status)
-                        logging.info(message)
-
                     while True:
                         try:
                             args = (
@@ -268,8 +254,21 @@ def monitor_job(job_id, job, job_set, event=None, debug=False, batch_type='slurm
     Monitor the slurm job, and update the status to 'complete' when it finishes
     This function should only be called from within a thread
     """
-    # msg = 'Entering monitor_job for {}'.format(job.get_type())
-    # event_list = push_event(event_list, msg)
+    job_id = job.execute(batch=True)
+    if job_id == 0:
+        job.set_status(JobStatus.COMPLETED)
+    else:
+        while job_id == -1:
+            job.set_status(JobStatus.WAITING_ON_INPUT)
+            sleep(60)
+            job_id = job.execute(batch=True)
+        job.set_status(JobStatus.SUBMITTED)
+        message = 'Submitted {0} for year_set {1}'.format(
+            job.get_type(),
+            job_set.set_number)
+        event_list = push_event(event_list, message)
+        logging.info('## ' + message)
+
     job.postvalidate()
     if job.status == JobStatus.COMPLETED:
         handle_completed_job(job, job_set, event_list)
@@ -374,8 +373,6 @@ def setup_local_hosting(job, event_list, img_src):
     host_dir = os.path.join(
         outter_dir,
         'year_set_{}'.format(str(job.config.get('year_set'))))
-    msg = 'host_dir {}'.format(host_dir)
-    event_list = push_event(event_list, msg)
     if os.path.exists(host_dir):
         try:
             msg = 'removing and replacing previous files from {}'.format(host_dir)
@@ -416,30 +413,55 @@ def check_for_inplace_data(file_list, file_name_list, job_sets, config):
         os.makedirs(cache_path)
         return
 
-    for climo_file in os.listdir(cache_path):
-        climo_file_path = os.path.join(cache_path, climo_file)
-        file_key = filename_to_file_list_key(filename=climo_file)
-
-        index = file_key.find('-')
-        year = int(file_key[:index])
-        in_range = False
-        for job_set in job_sets:
-            if year <= job_set.set_end_year:
-                in_range = True
-                break
-        if not in_range:
-            continue
-        # if the file is less the 100MB, its probably still in transit
-        if os.path.getsize(climo_file_path) / 100000000 < 1:
-            file_list[file_key] = SetStatus.IN_TRANSIT
-        else:
-            file_list[file_key] = SetStatus.DATA_READY
-        file_name_list[file_key] = climo_file
-
+    patterns = config.get('global').get('output_patterns')
+    input_dirs = [os.path.join(cache_path, key) for key, val in patterns.items()]
+    for input_dir in input_dirs:
+        print input_dir
+        file_type = input_dir.split(os.sep)[-1]
+        for input_file in os.listdir(input_dir):
+            input_file_path = os.path.join(input_dir, input_file)
+            if file_type == 'ATM' or file_type == 'MPAS_AM':
+                file_key = filename_to_file_list_key(filename=input_file)
+                index = file_key.find('-')
+                year = int(file_key[:index])
+                in_range = False
+                for job_set in job_sets:
+                    if year <= job_set.set_end_year:
+                        in_range = True
+                        break
+                if not in_range:
+                    continue
+                if not file_list[file_type][file_key] == SetStatus.IN_TRANSIT:
+                    file_list[file_type][file_key] = SetStatus.DATA_READY
+            elif file_type == 'MPAS_CICE':
+                file_key = 'mpas-cice_in'
+                if os.path.exists(os.path.join(input_dir, input_file)) and \
+                   not file_list[file_type][file_key] == SetStatus.IN_TRANSIT:
+                    file_list[file_type][file_key] = SetStatus.DATA_READY
+            elif file_type == 'MPAS_O':
+                file_key = 'mpas-o_in'
+                if os.path.exists(os.path.join(input_dir, input_file)) and \
+                   not file_list[file_type][file_key] == SetStatus.IN_TRANSIT:
+                    file_list[file_type][file_key] = SetStatus.DATA_READY
+            elif file_type == 'MPAS_RST':
+                file_key = '0002-01-01'
+                if os.path.exists(os.path.join(input_dir, input_file)) and \
+                   not file_list[file_type][file_key] == SetStatus.IN_TRANSIT:
+                    file_list[file_type][file_key] = SetStatus.DATA_READY
+            elif file_type == 'STREAMS':
+                for file_key in ['streams.cice', 'streams.ocean']:
+                    file_name_list[file_type][file_key] = input_file
+                    if os.path.exists(os.path.join(input_dir, input_file)) and \
+                       not file_list[file_type][file_key] == SetStatus.IN_TRANSIT:
+                        file_list[file_type][file_key] = SetStatus.DATA_READY
+            file_name_list[file_type][file_key] = input_file
     all_data = True
-    for key in file_list:
-        if file_list[key] != SetStatus.DATA_READY:
-            all_data = False
+    for key, val in patterns.items():
+        for file_key in file_list[key]:
+            if file_list[key][file_key] != SetStatus.DATA_READY:
+                all_data = False
+                break
+        if not all_data:
             break
     return all_data
 
@@ -671,17 +693,17 @@ def file_list_cmp(a, b):
             return 0
 
 def raw_file_cmp(a, b):
-    a_index = a.find('-')
-    b_index = b.find('-')
-    a_year = int(a[a_index - 4: a_index])
-    b_year = int(b[b_index - 4: b_index])
+    a_index = a['filename'].find('-')
+    b_index = b['filename'].find('-')
+    a_year = int(a['filename'][a_index - 4: a_index])
+    b_year = int(b['filename'][b_index - 4: b_index])
     if a_year > b_year:
         return 1
     elif a_year < b_year:
         return -1
     else:
-        a_month = int(a[a_index + 1: a_index + 3])
-        b_month = int(b[b_index + 1: b_index + 3])
+        a_month = int(a['filename'][a_index + 1: a_index + 3])
+        b_month = int(b['filename'][b_index + 1: b_index + 3])
         if a_month > b_month:
             return 1
         elif a_month < b_month:
