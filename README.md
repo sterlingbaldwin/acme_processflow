@@ -18,6 +18,9 @@ A workflow tool for the ACME project
 
     pip -r requirements.txt
 
+Due to the coupled_diags, to get MPAS diagnostics you MUST have an ssh key on the server thats
+associated with an authorized github account for their repo.
+
 If this is a fresh install on a system that has not been configured to run this before, there
 are some additional tools you'll need. These include the following:
 
