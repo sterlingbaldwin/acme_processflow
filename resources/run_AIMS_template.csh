@@ -4,10 +4,14 @@
 # Template driver script to generate coupled diagnostics on rhea
 #
 #Basic usage:
-#       1. Activate the environment, set:
+#       0. Make sure you do not point to any particular python or conda environment
+#          in your .cshrc or .bashrc
+#       1. To activate the environment, set this in your .bashrc (or .cshrc):
 #               a. export NCL_PATH= /usr/local/src/NCL-6.3.0/bin
-#               b. export CONDA_PATH=/export/evans99/miniconda2/bin:$NCL_PATH:$PATH
-#               c. source activate /export/evans99/miniconda2
+#               b. export CONDA_PATH=/export/veneziani1/miniconda2.7/bin
+#               c. export NCO_PATH=/export/zender1/bin
+#               d. export PATH=${CONDA_PATH}\:${NCL_PATH}\:${NCO_PATH}\:${PATH}
+#               e. export LD_LIBRARY_PATH='/export/zender1/lib'\:${LD_LIBRARY_PATH}
 #       2. copy this template to something like run_AIMS_$user.csh
 #       3. open run_AIMS_$user.csh and set user defined, case-specific variables
 #       4. execute: csh run_AIMS_$user.csh
@@ -26,10 +30,11 @@
 #                       This includes climos, remapped climos, condensed files and data files used for plotting.
 #       short_term_archive:     Adds /atm/hist after the casename. If the data sits in a different structure, add it after
 #       the casename in test_casename
-setenv PATH                             %%nco_path%%:$PATH
 
 set projdir =                           %%coupled_project_dir%%
+set output_base_dir =                   %%output_base_dir%%
 setenv coupled_diags_home               %%coupled_diags_home%%
+
 #USER DEFINED CASE SPECIFIC VARIABLES TO SPECIFY (REQUIRED)
 
 #Test case variables, for casename, add any addendums like /run or /atm/hist
@@ -53,11 +58,12 @@ setenv test_condense_field_ts           1
 setenv test_remap_ts                    1
 
 #Reference case variables (similar to test_case variables)
-setenv ref_case                         %%ref_case%%
+setenv ref_case                         obs
 setenv ref_archive_dir                  %%ref_archive_dir%%
 
 #ACMEv0 ref_case info for ocn/ice diags
 # IMPORTANT: the ACMEv0 model data MUST have been pre-processed. If this pre-processed data is not available, set ref_case_v0 to None.
+#setenv ref_case_v0                   None
 setenv ref_case_v0                      None
 setenv ref_archive_v0_ocndir            None
 setenv ref_archive_v0_seaicedir         None
@@ -78,7 +84,7 @@ setenv ref_remap_ts                     1
 
 #Set yr_offset for ocn/ice time series plots
 #setenv yr_offset 1999    # for 2000 time slices
-setenv yr_offset                        %%yr_offset%%    # for 1850 time slices
+setenv yr_offset                        %%yr_offset%%   # for 1850 time slices
 
 #Set ocn/ice specific paths to mapping files locations
 # IMPORTANT: user will need to change mpas_meshfile and mpas_remapfile *if* MPAS grid varies.
@@ -103,6 +109,8 @@ setenv generate_ocnice_diags            1
 setenv generate_ohc_trends              1
 setenv generate_sst_trends              1
 setenv generate_sst_climo               1
+setenv generate_sss_climo               1
+setenv generate_mld_climo               1
 setenv generate_seaice_trends           1
 setenv generate_seaice_climo            1
 
@@ -119,10 +127,10 @@ setenv generate_html                    1
 #OTHER VARIABLES (NOT REQUIRED TO BE CHANGED BY THE USER - DEFAULTS SHOULD WORK, USER PREFERENCE BASED CHANGES)
 
 #Set paths to scratch, logs and plots directories
-setenv test_scratch_dir                 $projdir/$USER/$test_casename.test.pp
-setenv ref_scratch_dir                  $projdir/$USER/$ref_case.test.pp
-setenv plots_dir                        $projdir/$USER/coupled_diagnostics_${test_casename}-$ref_case
-setenv log_dir                          $projdir/$USER/coupled_diagnostics_${test_casename}-$ref_case.logs
+setenv test_scratch_dir                 $output_base_dir/$test_casename.test.pp
+setenv ref_scratch_dir                  $output_base_dir/$ref_case.test.pp
+setenv plots_dir                        $output_base_dir/coupled_diagnostics_${test_casename}-$ref_case
+setenv log_dir                          $output_base_dir/coupled_diagnostics_${test_casename}-$ref_case.logs
 
 #Set atm specific paths to mapping and data files locations
 setenv remap_files_dir                  %%remap_files_dir%%
@@ -134,53 +142,62 @@ setenv ERS_regrid_wgt_file              %%ERS_regrid_wgt_file%%
 setenv mpas_climodir                    $test_scratch_dir
 
 setenv obs_ocndir                       %%obs_ocndir%%
-setenv obs_seaicedir                    %obs_seaicedir%%
+setenv obs_seaicedir                    %%obs_seaicedir%%
 setenv obs_sstdir                       %%obs_sstdir%%
-setenv obs_iceareaNH                    %%obs_iceareaNH%%
-setenv obs_iceareaSH                    %%obs_iceareaSH%%
-setenv obs_icevolNH                     %%obs_icevolNH%%
-setenv obs_icevolSH                     None
+setenv obs_sssdir                       $obs_ocndir/SSS
+setenv obs_mlddir                       $obs_ocndir/MLD
+setenv obs_iceareaNH                    $obs_seaicedir/IceArea_timeseries/iceAreaNH_climo.nc
+setenv obs_iceareaSH                    $obs_seaicedir/IceArea_timeseries/iceAreaSH_climo.nc
+setenv obs_icevolNH                     $obs_seaicedir/PIOMAS/PIOMASvolume_monthly_climo.nc
+setenv obs_icevolSH                     none
 
 #Location of website directory to host the webpage
-setenv www_dir /var/www/acme/acme-diags/$USER
+setenv www_dir                          %%web_dir%%
 
 ##############################################################################
 ###USER SHOULD NOT NEED TO CHANGE ANYTHING HERE ONWARDS######################
 
-#setenv coupled_diags_home $PWD
-
-#LOAD THE ANACONDA-2.7-CLIMATE ENV WHICH LOADS ALL REQUIRED PYTHON MODULES
-# put this in your .bash_profile:
-# NCL_PATH = /usr/local/src/NCL-6.3.0/bin
-# NCO_PATH = /export/zender1/bin
-#CONDA_PATH = /export/evans99/miniconda2 (installed by user, see confluence for documentation)
-
-# then type "source activate uvcdat-nightly "
-
 #PUT THE PROVIDED CASE INFORMATION IN CSH ARRAYS TO FACILITATE READING BY OTHER SCRIPTS
-csh_scripts/setup.csh
+$coupled_diags_home/csh_scripts/setup.csh
 
 #RUN DIAGNOSTICS
 if ($generate_atm_diags == 1) then
         $coupled_diags_home/ACME_atm_diags.csh
+        set atm_status = $status
+else
+        set atm_status = 0
 endif
 
 if ($generate_ocnice_diags == 1) then
         $coupled_diags_home/ACME_ocnice_diags.csh
+        set ocnice_status = $status
+else
+        set ocnice_status = 0
 endif
 
 #GENERATE HTML PAGE IF ASKED
-source $log_dir/case_info.temp
+echo
+echo "Status of atmospheric diagnostics, 0 implies success or not invoked:" $atm_status
+echo "Status of ocean/ice diagnostics, 0 implies success or not invoked:" $ocnice_status
 
-set n_cases = $#case_set
+if ($atm_status == 0 || $ocnice_status == 0) then
+        source $log_dir/case_info.temp
 
-@ n_test_cases = $n_cases - 1
+        set n_cases = $#case_set
 
-foreach j (`seq 1 $n_test_cases`)
+        @ n_test_cases = $n_cases - 1
 
-        if ($generate_html == 1) then
-                csh csh_scripts/generate_html_index_file.csh    $j \
-                                                                $plots_dir \
-                                                                $www_dir
-        endif
-end
+        foreach j (`seq 1 $n_test_cases`)
+
+                if ($generate_html == 1) then
+                        csh csh_scripts/generate_html_index_file.csh    $j \
+                                                                        $plots_dir \
+                                                                        $www_dir
+                endif
+        end
+else
+        echo
+        echo Neither atmospheric nor ocn/ice diagnostics were successful. HTML page not generated!
+        echo
+        echo
+endif
