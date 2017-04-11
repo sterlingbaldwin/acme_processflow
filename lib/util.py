@@ -49,15 +49,17 @@ def path_exists(config_items):
     """
     Checks the config for any netCDF file paths and validates that they exist
     """
-    for k, v in config_items.items():
-        if type(v) != dict:
+    for section, options in config_items.items():
+        if type(options) != dict:
             continue
-        for j, m in v.items():
-            if j != 'output_pattern':
-                if str(m).endswith('.nc'):
-                    if not os.path.exists(m):
-                        print "File {key}: {value} does not exist, exiting.".format(key=j, value=m)
-                        sys.exit(1)
+        for key, val in options.items():
+            if key == 'output_pattern':
+                continue
+            if not type(val) == str:
+                continue
+            if val.endswith('.nc') and not os.path.exists(val):
+                print "File {key}: {value} does not exist, exiting.".format(key=key, value=val)
+                sys.exit(1)
 
 def check_year_sets(job_sets, file_list, sim_start_year, sim_end_year, debug, add_jobs):
     """
@@ -78,7 +80,7 @@ def check_year_sets(job_sets, file_list, sim_start_year, sim_end_year, debug, ad
         for i in range(start_year, end_year + 1):
             for j in range(1, 13):
                 file_key = '{0}-{1}'.format(i, j)
-                status = file_list[file_key]
+                status = file_list['ATM'][file_key]
 
                 if status in [SetStatus.NO_DATA, SetStatus.IN_TRANSIT, SetStatus.PARTIAL_DATA]:
                     data_ready = False
@@ -119,26 +121,26 @@ def start_ready_job_sets(job_sets, thread_list, debug, event, upload_config, eve
     """
     for job_set in job_sets:
         # if the job state is ready, but hasnt started yet
-        if debug:
-            msg = 'year_set: {0} status: {1}'.format(job_set.set_number, job_set.status)
-            print_message(msg, 'ok')
-            logging.info(msg)
         if job_set.status == SetStatus.DATA_READY or job_set.status == SetStatus.RUNNING:
             for job in job_set.jobs:
-                # if the job is a climo, and it hasnt been started yet, start it
-                if debug:
-                    msg = '    job type: {0}, job_status: {1}, job_id: {2}'.format(
-                        job.get_type(),
-                        job.status,
-                        job.job_id)
-                    print_message(msg, 'ok')
-                    logging.info(msg)
-
-                if job.get_type() == 'climo' and job.status == JobStatus.VALID:
+                if job.depends_on:
+                    ready = False
+                    for dependancy in job.depends_on:
+                        for djob in job_set.jobs:
+                            if djob.get_type() == dependancy \
+                               and djob.status == JobStatus.COMPLETED:
+                                ready = True
+                                break
+                else:
+                    ready = True
+                if not ready:
+                    continue
+                # if the job isnt a climo, and the job that it depends on is done, start it
+                if job.status == JobStatus.VALID:
                     while True:
                         try:
                             args = (
-                                job_id, job,
+                                job,
                                 job_set, event,
                                 debug, 'slurm',
                                 upload_config, event_list)
@@ -147,66 +149,17 @@ def start_ready_job_sets(job_sets, thread_list, debug, event, upload_config, eve
                                 args=args)
                             thread_list.append(thread)
                             thread.start()
-                        except:
+                        except Exception as e:
+                            print_debug(e)
                             sleep(1)
                         else:
                             break
-                    return
-
-                # if the job isnt a climo, and the job that it depends on is done, start it
-                elif job.get_type() != 'climo' and job.status == JobStatus.VALID:
-                    if job.depends_on:
-                        ready = False
-                        for dependancy in job.depends_on:
-                            for djob in job_set.jobs:
-                                if djob.get_type() == dependancy \
-                                   and djob.status == JobStatus.COMPLETED:
-                                    ready = True
-                                    break
-                    else:
-                        ready = True
-
-                    if ready:
-                        job_id = job.execute(batch='slurm')
-                        if job_id == 0:
-                            if job.postvalidate():
-                                job.status = JobStatus.COMPLETED
-                        else:
-                            job.set_status(JobStatus.SUBMITTED)
-                            message = 'Submitted {type} for year_set_{set}'.format(
-                                set=job_set.set_number,
-                                type=job.get_type())
-                            event_list = push_event(event_list, message)
-
-                            message = "## {job}: {id} status changed to {status}".format(
-                                job=job.get_type(),
-                                id=job.job_id,
-                                status=job.status)
-                            logging.info(message)
-
-                        while True:
-                            try:
-                                args = (
-                                    job_id, job,
-                                    job_set, event,
-                                    debug, 'slurm',
-                                    upload_config, event_list)
-                                thread = threading.Thread(
-                                    target=monitor_job,
-                                    args=args)
-                                thread_list.append(thread)
-                                thread.start()
-                            except:
-                                sleep(1)
-                            else:
-                                break
-                        return
-                elif job.status == JobStatus.INVALID:
+                if job.status == JobStatus.INVALID:
                     message = "{type} id: {id} status changed to {status}".format(
                         id=job.job_id,
                         status=job.status,
                         type=job.get_type())
-                    logging.error(message)
+                    logging.error('## ' + message)
 
 def cmd_exists(cmd):
     return any(os.access(os.path.join(path, cmd), os.X_OK) for path in os.environ["PATH"].split(os.pathsep))
@@ -229,7 +182,7 @@ def handle_completed_job(job, job_set, event_list):
             os.environ.get('USER'),
             img_dir)
         setup_local_hosting(job, event_list, img_src)
-    if job.get_type() == 'amwg_diagnostic':
+    elif job.get_type() == 'amwg_diagnostic':
         img_dir = 'year_set_{year}{casename}-obs'.format(
             year=job.config.get('year_set'),
             casename=job.config.get('test_casename'))
@@ -237,6 +190,9 @@ def handle_completed_job(job, job_set, event_list):
             job.config.get('test_path_diag'),
             '..',
             img_dir)
+        setup_local_hosting(job, event_list, img_src)
+    elif job.get_type() == 'uvcmetrics':
+        img_src = os.path.join(job.config.get('--outputdir'), 'amwg')
         setup_local_hosting(job, event_list, img_src)
     job_set_done = True
     for job in job_set.jobs:
@@ -249,19 +205,20 @@ def handle_completed_job(job, job_set, event_list):
     if job_set_done:
         job_set.status = SetStatus.COMPLETED
 
-def monitor_job(job_id, job, job_set, event=None, debug=False, batch_type='slurm', upload_config=None, event_list=None):
+def monitor_job(job, job_set, event=None, debug=False, batch_type='slurm', upload_config=None, event_list=None):
     """
     Monitor the slurm job, and update the status to 'complete' when it finishes
     This function should only be called from within a thread
     """
-    job_id = job.execute(batch=True)
+    job_id = job.execute(batch='slurm')
     if job_id == 0:
         job.set_status(JobStatus.COMPLETED)
     else:
         while job_id == -1:
             job.set_status(JobStatus.WAITING_ON_INPUT)
-            sleep(60)
-            job_id = job.execute(batch=True)
+            if thread_sleep(60, event):
+                return
+            job_id = job.execute(batch='slurm')
         job.set_status(JobStatus.SUBMITTED)
         message = 'Submitted {0} for year_set {1}'.format(
             job.get_type(),
@@ -324,20 +281,6 @@ def monitor_job(job_id, job, job_set, event=None, debug=False, batch_type='slurm
                 status = JobStatus.COMPLETED
 
             if status and status != job.status:
-                if debug:
-                    if status != JobStatus.FAILED:
-                        message = "## {type}: {id} status changed to {status}".format(
-                            id=job.job_id,
-                            status=status,
-                            type=job.get_type())
-                        print_message(message, 'ok')
-                    else:
-                        message = "## {type}: {id} status changed to {status}".format(
-                            id=job.job_id,
-                            status=status,
-                            type=job.get_type())
-                        print_message(message)
-
                 if status == JobStatus.FAILED:
                     msg = 'Job {0} has failed'.format(job_id)
                     event_list = push_event(event_list, msg)
@@ -350,7 +293,7 @@ def monitor_job(job_id, job, job_set, event=None, debug=False, batch_type='slurm
                     status=status,
                     type=job.get_type())
                 logging.info('##' + message)
-                event_list = push_event(event_list, message)
+                # event_list = push_event(event_list, message)
 
                 if status == JobStatus.RUNNING and job_set.status != SetStatus.RUNNING:
                     job_set.status = SetStatus.RUNNING
@@ -373,6 +316,8 @@ def setup_local_hosting(job, event_list, img_src):
     host_dir = os.path.join(
         outter_dir,
         'year_set_{}'.format(str(job.config.get('year_set'))))
+    if not os.path.exists(img_src):
+        return
     if os.path.exists(host_dir):
         try:
             msg = 'removing and replacing previous files from {}'.format(host_dir)
@@ -408,7 +353,7 @@ def check_for_inplace_data(file_list, file_name_list, job_sets, config):
     updates the file_list and job_sets accordingly
     """
     cache_path = config.get('global').get('data_cache_path')
-
+    sim_end_year = int(config.get('global').get('simulation_end_year'))
     if not os.path.exists(cache_path):
         os.makedirs(cache_path)
         return
@@ -416,35 +361,25 @@ def check_for_inplace_data(file_list, file_name_list, job_sets, config):
     patterns = config.get('global').get('output_patterns')
     input_dirs = [os.path.join(cache_path, key) for key, val in patterns.items()]
     for input_dir in input_dirs:
-        print input_dir
         file_type = input_dir.split(os.sep)[-1]
         for input_file in os.listdir(input_dir):
             input_file_path = os.path.join(input_dir, input_file)
-            if file_type == 'ATM' or file_type == 'MPAS_AM':
+            file_key = ""
+            if file_type in ['ATM', 'MPAS_AM', 'MPAS_CICE', 'MPAS_RST']:
                 file_key = filename_to_file_list_key(filename=input_file)
                 index = file_key.find('-')
                 year = int(file_key[:index])
-                in_range = False
-                for job_set in job_sets:
-                    if year <= job_set.set_end_year:
-                        in_range = True
-                        break
-                if not in_range:
+                if year > sim_end_year:
                     continue
                 if not file_list[file_type][file_key] == SetStatus.IN_TRANSIT:
                     file_list[file_type][file_key] = SetStatus.DATA_READY
-            elif file_type == 'MPAS_CICE':
+            elif file_type == 'MPAS_CICE_IN':
                 file_key = 'mpas-cice_in'
                 if os.path.exists(os.path.join(input_dir, input_file)) and \
                    not file_list[file_type][file_key] == SetStatus.IN_TRANSIT:
                     file_list[file_type][file_key] = SetStatus.DATA_READY
-            elif file_type == 'MPAS_O':
+            elif file_type == 'MPAS_O_IN':
                 file_key = 'mpas-o_in'
-                if os.path.exists(os.path.join(input_dir, input_file)) and \
-                   not file_list[file_type][file_key] == SetStatus.IN_TRANSIT:
-                    file_list[file_type][file_key] = SetStatus.DATA_READY
-            elif file_type == 'MPAS_RST':
-                file_key = '0002-01-01'
                 if os.path.exists(os.path.join(input_dir, input_file)) and \
                    not file_list[file_type][file_key] == SetStatus.IN_TRANSIT:
                     file_list[file_type][file_key] = SetStatus.DATA_READY
@@ -455,15 +390,14 @@ def check_for_inplace_data(file_list, file_name_list, job_sets, config):
                        not file_list[file_type][file_key] == SetStatus.IN_TRANSIT:
                         file_list[file_type][file_key] = SetStatus.DATA_READY
             file_name_list[file_type][file_key] = input_file
-    all_data = True
+
     for key, val in patterns.items():
         for file_key in file_list[key]:
             if file_list[key][file_key] != SetStatus.DATA_READY:
-                all_data = False
-                break
-        if not all_data:
-            break
-    return all_data
+                # print 'file: {} {} is not ready'.format(key, file_key)
+                # sys.exit()
+                return False
+    return True
 
 def print_debug(e):
     """
@@ -651,17 +585,19 @@ def create_symlink_dir(src_dir, src_list, dst):
     """
     Create a directory, and fill it with symlinks to all the items in src_list
     """
+    if not src_list:
+        return
     message = "creating symlink directory at {dst} with files {src_list}".format(
         dst=dst,
         src_list=pformat(src_list))
     logging.info(message)
     if not os.path.exists(dst):
         os.makedirs(dst)
-    for file in src_list:
-        if not file or not src_list:
+    for src_file in src_list:
+        if not src_file:
             continue
-        source = os.path.join(src_dir, file)
-        destination = os.path.join(dst, file)
+        source = os.path.join(src_dir, src_file)
+        destination = os.path.join(dst, src_file)
         if os.path.lexists(destination):
             continue
         try:
@@ -693,17 +629,24 @@ def file_list_cmp(a, b):
             return 0
 
 def raw_file_cmp(a, b):
-    a_index = a['filename'].find('-')
-    b_index = b['filename'].find('-')
-    a_year = int(a['filename'][a_index - 4: a_index])
-    b_year = int(b['filename'][b_index - 4: b_index])
+    a = a['filename'].split('/')[-1]
+    b = b['filename'].split('/')[-1]
+    if not filter(str.isdigit, a) or not filter(str.isdigit, b):
+        return a > b
+    a_index = a.find('-')
+    b_index = b.find('-')
+    try:
+        a_year = int(a[a_index - 4: a_index])
+    except:
+        print a
+    b_year = int(b[b_index - 4: b_index])
     if a_year > b_year:
         return 1
     elif a_year < b_year:
         return -1
     else:
-        a_month = int(a['filename'][a_index + 1: a_index + 3])
-        b_month = int(b['filename'][b_index + 1: b_index + 3])
+        a_month = int(a[a_index + 1: a_index + 3])
+        b_month = int(b[b_index + 1: b_index + 3])
         if a_month > b_month:
             return 1
         elif a_month < b_month:
