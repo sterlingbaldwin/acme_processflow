@@ -158,7 +158,6 @@ class Monitor(object):
             cmd = 'find {dir} {name}'.format(
                 name=name,
                 dir=self.remote_dir)
-            print cmd
             _, stdout, stderr = self.client.exec_command(cmd)
             files = stdout.read()
             files.strip()
