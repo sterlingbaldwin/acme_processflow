@@ -191,12 +191,18 @@ def setup(parser):
             os.makedirs(new_dir)
         if val == 'mpaso.hist.am.timeSeriesStatsMonthly':
             config['global']['mpas_dir'] = new_dir
+        elif val == 'mpascice.hist.am.timeSeriesStatsMonthly':
+            config['global']['mpas_cice_dir'] = new_dir
         elif val == 'cam.h0':
             config['global']['atm_dir'] = new_dir
         elif val == 'mpaso.rst.0':
             config['global']['mpas_rst_dir'] = new_dir
-        elif val == 'mpas-o_in' or val == 'mpas-cice_in':
-            config['global']['mpas_in_dir'] = new_dir
+        elif val == 'mpas-o_in':
+            config['global']['mpas_o-in_dir'] = new_dir
+        elif val == 'mpas-cice_in':
+            config['global']['mpas_cice-in_dir'] = new_dir
+        elif 'stream' in val:
+            config['global']['streams_dir'] = new_dir
 
     if not os.path.exists(config['global']['output_path']):
         os.makedirs(config['global']['output_path'])
@@ -214,16 +220,40 @@ def add_jobs(year_set):
     required_jobs = {
         'climo': False,
         'timeseries': False,
-        'uvcmetrics': False,
+        'uvcmetrics': True,
         'upload_diagnostic_output': True,
         'coupled_diagnostic': False,
         'amwg_diagnostic': False
     }
+    year_set_str = 'year_set_{}'.format(year_set.set_number)
+    dataset_name = '{time}_{set}_{start}_{end}'.format(
+        time=time.strftime("%d-%m-%Y"),
+        set=year_set.set_number,
+        start=year_set.set_start_year,
+        end=year_set.set_end_year)
+
+    # create a temp directory full of just symlinks to the regridded output we need for this diagnostic job
+    diag_temp_dir = os.path.join(os.getcwd(), 'tmp', 'diag', year_set_str)
+    if not os.path.exists(diag_temp_dir):
+        os.makedirs(diag_temp_dir)
+
     for job in year_set.jobs:
         if not required_jobs[job.get_type()]:
             required_jobs[job.get_type()] = True
 
-    year_set_str = 'year_set_' + str(year_set.set_number)
+    # create a temp directory, and fill it with symlinks to the actual data
+    key_list = []
+    for year in range(year_set.set_start_year, year_set.set_end_year + 1):
+        for month in range(1, 13):
+            key_list.append('{0}-{1}'.format(year, month))
+
+    climo_file_list = [file_name_list['ATM'].get(x) for x in key_list if file_name_list['ATM'].get(x)]
+    climo_temp_dir = os.path.join(os.getcwd(), 'tmp', 'climo', year_set_str)
+    create_symlink_dir(
+        src_dir=config.get('global').get('atm_dir'),
+        src_list=climo_file_list,
+        dst=climo_temp_dir)
+
     # first initialize the climo job
     if not required_jobs['climo']:
         required_jobs['climo'] = True
@@ -239,39 +269,10 @@ def add_jobs(year_set):
         if not os.path.exists(regrid_output_dir):
             os.makedirs(regrid_output_dir)
 
-        # Setup variables for climo job
-        climo_start_year = year_set.set_start_year
-        climo_end_year = year_set.set_end_year
-
-        # create a temp directory, and fill it with symlinks to the actual data
-        key_list = []
-        for year in range(climo_start_year, climo_end_year + 1):
-            for month in range(13):
-                key_list.append('{0}-{1}'.format(year, month))
-
-        climo_file_list = [file_name_list.get(x) for x in key_list]
-        climo_temp_dir = os.path.join(os.getcwd(), 'tmp', 'climo', year_set_str)
-        link_dir_good = False
-        for _ in range(5):
-            create_symlink_dir(
-                src_dir=config.get('global').get('atm_dir'),
-                src_list=climo_file_list,
-                dst=climo_temp_dir)
-            contents = os.listdir(climo_temp_dir)
-            found_all = True
-            for item in climo_file_list:
-                if item in contents:
-                    continue
-                found_all = False
-                logging.error('Error creating ncclimo symlink directory')
-                break
-            if found_all:
-                break
-
         # create the configuration object for the climo job
         climo_config = {
-            'start_year': climo_start_year,
-            'end_year': climo_end_year,
+            'start_year': year_set.set_start_year,
+            'end_year': year_set.set_end_year,
             'caseId': config.get('global').get('experiment'),
             'annual_mode': 'sdd',
             'regrid_map_path': config.get('ncclimo').get('regrid_map_path'),
@@ -318,11 +319,6 @@ def add_jobs(year_set):
     # init the diagnostic job
     if not required_jobs['uvcmetrics']:
         required_jobs['uvcmetrics'] = True
-        dataset_name = '{time}_{set}_{start}_{end}'.format(
-            time=time.strftime("%d-%m-%Y"),
-            set=year_set.set_number,
-            start=year_set.set_start_year,
-            end=year_set.set_end_year)
         # create the output directory
         output_path = config.get('global').get('output_path')
 
@@ -330,12 +326,13 @@ def add_jobs(year_set):
         if not os.path.exists(diag_output_path):
             os.makedirs(diag_output_path)
 
-        # create a temp directory full of just symlinks to the regridded output we need for this diagnostic job
-        diag_temp_dir = os.path.join(os.getcwd(), 'tmp', 'diag', year_set_str)
-        if not os.path.exists(diag_temp_dir):
-            os.makedirs(diag_temp_dir)
-
+        host_prefix = os.path.join(
+            config.get('global').get('img_host_server'),
+            config.get('uvcmetrics').get('host_prefix'))
         diag_config = {
+            'host_prefix': host_prefix,
+            'host_directory': config.get('uvcmetrics').get('host_directory'),
+            'run_id': config.get('global').get('run_id'),
             'dataset_name': dataset_name,
             '--model': diag_temp_dir,
             '--obs': config.get('uvcmetrics').get('obs_for_diagnostics_path'),
@@ -364,17 +361,27 @@ def add_jobs(year_set):
         if not os.path.exists(coupled_project_dir):
             os.makedirs(coupled_project_dir)
 
+        host_prefix = os.path.join(
+            config.get('global').get('img_host_server'),
+            config.get('coupled_diags').get('host_prefix'))
+
         g_config = config.get('global')
         c_config = config.get('coupled_diags')
         coupled_diag_config = {
-            'host_prefix': c_config.get('host_prefix'),
+            'output_base_dir': coupled_project_dir,
+            'mpas_am_dir': g_config.get('mpas_dir'),
+            'mpas_cice_dir': g_config.get('mpas_cice_dir'),
+            'mpas_cice_in_dir': g_config.get('mpas_cice-in_dir'),
+            'mpas_o_dir': g_config.get('mpas_o-in_dir'),
+            'mpas_rst_dir': g_config.get('mpas_rst_dir'),
+            'streams_dir': g_config.get('streams_dir'),
+            'host_prefix': host_prefix,
             'host_directory': c_config.get('host_directory'),
             'run_id': config.get('global').get('run_id'),
             'dataset_name': dataset_name,
             'year_set': year_set.set_number,
             'climo_tmp_dir': climo_temp_dir,
             'regrid_path': regrid_output_dir,
-            'diag_temp_dir': diag_temp_dir,
             'start_year': year_set.set_start_year,
             'end_year': year_set.set_end_year,
             'nco_path': config.get('ncclimo').get('ncclimo_path'),
@@ -392,19 +399,15 @@ def add_jobs(year_set):
             'mpas_remapfile': c_config.get('mpas_remapfile'),
             'pop_remapfile': c_config.get('pop_remapfile'),
             'remap_files_dir': c_config.get('remap_files_dir'),
-            'GPCP_regrid_wgt_file': c_config.get('GPCP_regrid_wgt_file'),
-            'CERES_EBAF_regrid_wgt_file': c_config.get('CERES_EBAF_regrid_wgt_file'),
-            'ERS_regrid_wgt_file': c_config.get('ERS_regrid_wgt_file'),
+            'GPCP_regrid_wgt_file': c_config.get('gpcp_regrid_wgt_file'),
+            'CERES_EBAF_regrid_wgt_file': c_config.get('ceres_ebaf_regrid_wgt_file'),
+            'ERS_regrid_wgt_file': c_config.get('ers_regrid_wgt_file'),
             'coupled_diags_home': c_config.get('coupled_diags_home'),
             'coupled_template_path': os.path.join(os.getcwd(), 'resources', 'run_AIMS_template.csh'),
             'rendered_output_path': os.path.join(coupled_project_dir, 'run_AIMS.csh'),
             'obs_ocndir': c_config.get('obs_ocndir'),
             'obs_seaicedir': c_config.get('obs_seaicedir'),
             'obs_sstdir': c_config.get('obs_sstdir'),
-            'obs_iceareaNH': c_config.get('obs_iceareaNH'),
-            'obs_iceareaSH': c_config.get('obs_iceareaSH'),
-            'obs_icevolNH': c_config.get('obs_icevolNH'),
-            'obs_icevolSH': 'None',
             'depends_on': [], # 'climo'
             'yr_offset': c_config.get('yr_offset')
         }
@@ -422,6 +425,10 @@ def add_jobs(year_set):
         if not os.path.exists(amwg_project_dir):
             os.makedirs(amwg_project_dir)
 
+        host_prefix = os.path.join(
+            config.get('global').get('img_host_server'),
+            config.get('amwg').get('host_prefix'))
+
         amwg_temp_dir = os.path.join(os.getcwd(), 'tmp', 'amwg', year_set_str)
         if not os.path.exists(diag_temp_dir):
             os.makedirs(diag_temp_dir)
@@ -429,7 +436,7 @@ def add_jobs(year_set):
         amwg_config = {
             'run_id': config.get('global').get('run_id'),
             'host_directory': config.get('amwg').get('host_directory'),
-            'host_prefix': config.get('amwg').get('host_prefix'),
+            'host_prefix': host_prefix,
             'dataset_name': dataset_name,
             'diag_home': config.get('amwg').get('diag_home'),
             'test_path': amwg_project_dir + os.sep,
@@ -470,7 +477,7 @@ def add_jobs(year_set):
 
     return year_set
 
-def monitor_check(monitor, config, file_list):
+def monitor_check(monitor, config, file_list, event_list):
     """
     Check the remote directory for new files that match the given pattern,
     if there are any new files, create new transfer jobs. If they're in a new job_set,
@@ -481,15 +488,14 @@ def monitor_check(monitor, config, file_list):
     """
     global job_sets
     global active_transfers
-    global event_list
     global transfer_list
     # if there are already three or more transfers in progress
     # hold off on starting any new ones until they complete
     if active_transfers >= 2:
         return
+    event_list = push_event(event_list, "Running check for remote files")
     monitor.check()
     new_files = monitor.known_files
-
     patterns = config.get('global').get('output_patterns')
     for file_info in new_files:
         for folder, file_type in patterns.items():
@@ -500,8 +506,21 @@ def monitor_check(monitor, config, file_list):
     checked_new_files = []
 
     for new_file in new_files:
-        file_key = filename_to_file_list_key(new_file['filename'])
-        status = file_list.get(file_key)
+        file_type = new_file['type']
+        file_key = ""
+        if file_type in ['ATM', 'MPAS_AM', 'MPAS_CICE', 'MPAS_RST']:
+            file_key = filename_to_file_list_key(new_file['filename'])
+        elif file_type == 'MPAS_CICE_IN':
+            file_key = 'mpas-cice_in'
+        elif file_type == 'MPAS_O_IN':
+            file_key = 'mpas-o_in'
+        elif file_type == 'STREAMS':
+            file_key = 'streams.cice' if 'cice' in new_file['filename'] else 'streams.ocean'
+
+        try:
+            status = file_list[file_type][file_key]
+        except KeyError:
+            continue
         if not status:
             continue
         if status == SetStatus.DATA_READY:
@@ -525,6 +544,8 @@ def monitor_check(monitor, config, file_list):
     # find which year set the data belongs to
     frequencies = config.get('global').get('set_frequency')
     for file_info in checked_new_files:
+        if file_info['type'] != 'ATM':
+            continue
         for freq in frequencies:
             year_set = filename_to_year_set(file_info['filename'], freq)
             for job_set in job_sets:
@@ -555,10 +576,20 @@ def monitor_check(monitor, config, file_list):
     }
     transfer = Transfer(transfer_config, event_list)
 
-    for f in transfer.config.get('file_list'):
-        f = f['filename'].split('/').pop()
-        key = filename_to_file_list_key(f)
-        file_list[key] = SetStatus.IN_TRANSIT
+    for item in transfer.config.get('file_list'):
+        item_name = item['filename'].split('/').pop()
+        item_type = item['type']
+        if item_type in ['ATM', 'MPAS_AM']:
+            file_key = filename_to_file_list_key(item_name)
+        elif item_type == 'MPAS_CICE':
+            file_key = 'mpas-cice_in'
+        elif item_type == 'MPAS_O':
+            file_key = 'mpas-o_in'
+        elif item_type == 'MPAS_RST':
+            file_key = '0002-01-01'
+        elif item_type == 'STREAMS':
+            file_key == 'streams.cice' if 'cice' in item_name else 'streams.ocean'
+        file_list[item_type][file_key] = SetStatus.IN_TRANSIT
 
     start_file = transfer.config.get('file_list')[0]['filename']
     end_file = transfer.config.get('file_list')[-1]['filename']
@@ -938,7 +969,7 @@ if __name__ == "__main__":
         print "Error in setup, exiting"
         sys.exit(1)
 
-    atexit.register(save_state, config, file_list, job_sets, file_name_list)
+    # atexit.register(save_state, config, file_list, job_sets, file_name_list)
     # check that all netCDF files exist
     path_exists(config)
     # cleanup any temp directories from previous runs
@@ -974,7 +1005,6 @@ if __name__ == "__main__":
     frequencies = config.get('global').get('set_frequency')
     if not from_saved_state:
         job_sets = []
-
         line = 'Initializing year sets'
         event_list = push_event(event_list, line)
         for freq in frequencies:
@@ -997,18 +1027,20 @@ if __name__ == "__main__":
     for key, val in config.get('global').get('output_patterns').items():
         file_list[key] = {}
         file_name_list[key] = {}
-        if key in ['ATM', 'MPAS_AM']:
+        if key in ['ATM', 'MPAS_AM', 'MPAS_CICE']:
             for year in range(1, number_of_sim_years + 1):
                 for month in range(1, 13):
                     file_key = str(year) + '-' + str(month)
                     file_list[key][file_key] = SetStatus.NO_DATA
                     file_name_list[key][file_key] = ''
-        elif key == 'MPAS_CICE':
+        elif key == 'MPAS_CICE_IN':
             file_list[key]['mpas-cice_in'] = SetStatus.NO_DATA
-        elif key == 'MPAS_O':
+        elif key == 'MPAS_O_IN':
             file_list[key]['mpas-o_in'] = SetStatus.NO_DATA
         elif key == 'MPAS_RST':
-            file_list[key]['0002-01-01'] = SetStatus.NO_DATA
+            for year in range(2, number_of_sim_years + 1):
+                file_key = '{year}-1'.format(year=year)
+                file_list[key][file_key] = SetStatus.NO_DATA
         elif key == 'STREAMS':
             file_list[key]['streams.ocean'] = SetStatus.NO_DATA
             file_list[key]['streams.cice'] = SetStatus.NO_DATA
@@ -1019,14 +1051,22 @@ if __name__ == "__main__":
         file_name_list=file_name_list,
         job_sets=job_sets,
         config=config)
-
     check_year_sets(
         job_sets=job_sets,
-        file_list=file_list['ATM'],
+        file_list=file_list,
         sim_start_year=config.get('global').get('simulation_start_year'),
         sim_end_year=config.get('global').get('simulation_end_year'),
         debug=debug,
         add_jobs=add_jobs)
+    if config.get('global').get('dry_run', False):
+        event_list = push_event(event_list, 'Running in dry-run mode')
+        write_human_state(event_list, job_sets)
+        sleep(50)
+        display_event.set()
+        for t in thread_list:
+            thread_kill_event.set()
+            t.join()
+        sys.exit()
 
     if all_data:
         # print_message('All data is local, disabling remote monitor', 'ok')
@@ -1038,7 +1078,9 @@ if __name__ == "__main__":
         event_list = push_event(event_list, line)
 
     # If all the data is local, dont start the monitor
-    if not all_data and not config.get('global').get('no_monitor', False):
+    if all_data or config.get('global').get('no_monitor', False):
+        monitor = None
+    else:
         output_pattern = config.get('global').get('output_patterns')
         patterns = [v for k, v in config.get('global').get('output_patterns').items()]
         monitor_config = {
@@ -1072,22 +1114,23 @@ if __name__ == "__main__":
             logging.error(line)
             event_list = push_event(event_list, line)
             sys.exit(1)
-    else:
-        monitor = None
 
     # Main loop
     try:
         loop_count = 6
         while True:
-            # Setup remote monitoring system
+            # only check the monitor once a minute, but check for jobs every loop
             if monitor and \
                not all_data and \
                not config.get('global').get('no_monitor', False) and \
                loop_count >= 6:
-                # event_list = push_event(event_list, 'Running monitor check')
-                monitor_check(monitor, config)
+                monitor_check(monitor, config, file_list, event_list)
                 loop_count = 0
-            # Check if a year_set is ready to run
+            all_data = check_for_inplace_data(
+                file_list=file_list,
+                file_name_list=file_name_list,
+                job_sets=job_sets,
+                config=config)
             check_year_sets(
                 job_sets=job_sets,
                 file_list=file_list,
@@ -1095,20 +1138,6 @@ if __name__ == "__main__":
                 sim_end_year=config.get('global').get('simulation_end_year'),
                 debug=debug,
                 add_jobs=add_jobs)
-            all_data = check_for_inplace_data(
-                file_list=file_list,
-                file_name_list=file_name_list,
-                job_sets=job_sets,
-                config=config)
-            if config.get('global').get('dry_run', False):
-                event_list = push_event(event_list, 'Running in dry-run mode')
-                write_human_state(event_list, job_sets)
-                sleep(50)
-                display_event.set()
-                for t in thread_list:
-                    thread_kill_event.set()
-                    t.join()
-                sys.exit()
             start_ready_job_sets(
                 job_sets=job_sets,
                 thread_list=thread_list,
