@@ -286,7 +286,6 @@ class Transfer(object):
                     self.config.get('destination_path'),
                     path['type'],
                     path['filename'].split('/')[-1])
-                print 'Moving file from {src} to {dst}'.format(src=path['filename'].split('/')[-1], dst=dst_path)
                 transfer_task.add_item(
                     path['filename'],
                     dst_path,
