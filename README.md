@@ -18,21 +18,14 @@ If you don't have Anaconda installed, follow [this guide](https://docs.continuum
 If you're on a machine behind a firewall that wont allow ssh connections to git, use
     
     wget https://github.com/sterlingbaldwin/acme_workflow/archive/master.zip
+    unzip master.zip
+    mv acme_workflow-master acme_workflow
 
 else clone like normal
 
     git clone https://github.com/sterlingbaldwin/acme_workflow.git
-    conda create -n acme -c conda-forge -c uvcdat/label/nightly -c uvcdat uvcdat-nox "cdms2>2017"
+    conda create -n acme --file env.txt
     source activate acme
-
-    conda install -c conda-forge nco=4.6.5
-    conda uninstall openblas
-
-    git clone https://github.com/globusonline/transfer-api-client-python.git
-    cd transfer-api-client-python
-    python setup.py install
-    cd ..
-    rm -rf transfer-api-client-python
 
     pip -r requirements.txt
 
