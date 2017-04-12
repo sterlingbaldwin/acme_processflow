@@ -57,7 +57,6 @@ are some additional tools you'll need. These include the following:
       -c CONFIG, --config CONFIG
                             Path to configuration file
       -v, --debug           Run in debug mode
-      -d, --daemon          Run in daemon mode
       -s STATE, --state STATE
                             Path to a json state file
       -n, --no-ui           Turn off the GUI
@@ -71,6 +70,15 @@ are some additional tools you'll need. These include the following:
 *NOTE*
 When running in GUI mode, resizing the window is discouraged. Although there is some checking
 for window resizes, the likely outcome will be a hard crash. This is a known bug.  
+
+### Common run commands
+
+* Basic run after configuration
+```python workflow.py -c run.cfg```
+
+* Uninterupted run in headless mode that wont stop if you close the terminal, writing to a custom log location, with no cleanup after completion
+```nohup workflow.py -c run.cfg --no-ui --log my_new_run.log --no-cleanup```
+
 
 # Configuration<a name="config"></a>
 ## Global
