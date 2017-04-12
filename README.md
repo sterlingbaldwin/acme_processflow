@@ -6,7 +6,7 @@ A workflow tool for the ACME project
 1. [Installation](#installation)
 2. [Usage](#usage)
 3. [Configuration](#config)
-4. [Quick Start](https://github.com/sterlingbaldwin/acme_workflow/blob/master/quick_start_instructions.ipynb)
+4. [Quick Start](doc/quick_start_instructions.ipynb)
 
 
 
