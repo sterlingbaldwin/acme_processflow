@@ -179,7 +179,6 @@ def handle_completed_job(job, job_set, event_list):
             casename=job.config.get('test_casename'))
         img_src = os.path.join(
             job.config.get('coupled_project_dir'),
-            os.environ.get('USER'),
             img_dir)
         setup_local_hosting(job, event_list, img_src)
     elif job.get_type() == 'amwg_diagnostic':
@@ -317,6 +316,10 @@ def setup_local_hosting(job, event_list, img_src):
         outter_dir,
         'year_set_{}'.format(str(job.config.get('year_set'))))
     if not os.path.exists(img_src):
+        msg = '{job} hosting failed, no image source at {path}'.format(
+            job=job.get_type(),
+            path=img_src)
+        logging.error(msg)
         return
     if os.path.exists(host_dir):
         try:
@@ -325,17 +328,18 @@ def setup_local_hosting(job, event_list, img_src):
             rmtree(host_dir)
         except Exception as e:
             logging.error(format_debug(e))
+            print_debug(e)
     try:
         msg = 'copying images from {src} to {dst}'.format(src=img_src, dst=host_dir)
         logging.info(msg)
         copytree(src=img_src, dst=host_dir)
     except Exception as e:
         logging.error(format_debug(e))
-        msg = 'Error copying coupled_diag to host directory'
+        msg = 'Error copying {} to host directory'.format(job.get_type())
         event_list = push_event(event_list, 'Error copying coupled_diag to host_location')
         return
 
-    subprocess.call(['chmod', '-R', '755', outter_dir])
+    subprocess.call(['chmod', '-R', '777', outter_dir])
 
     host_location = os.path.join(
         job.config.get('host_prefix'),

@@ -233,7 +233,7 @@ def add_jobs(year_set):
         end=year_set.set_end_year)
 
     # create a temp directory full of just symlinks to the regridded output we need for this diagnostic job
-    diag_temp_dir = os.path.join(os.getcwd(), 'tmp', 'diag', year_set_str)
+    diag_temp_dir = os.path.join(os.path.dirname(__file__), 'tmp', 'diag', year_set_str)
     if not os.path.exists(diag_temp_dir):
         os.makedirs(diag_temp_dir)
 
@@ -248,7 +248,7 @@ def add_jobs(year_set):
             key_list.append('{0}-{1}'.format(year, month))
 
     climo_file_list = [file_name_list['ATM'].get(x) for x in key_list if file_name_list['ATM'].get(x)]
-    climo_temp_dir = os.path.join(os.getcwd(), 'tmp', 'climo', year_set_str)
+    climo_temp_dir = os.path.join(os.path.dirname(__file__), 'tmp', 'climo', year_set_str)
     create_symlink_dir(
         src_dir=config.get('global').get('atm_dir'),
         src_list=climo_file_list,
@@ -403,7 +403,7 @@ def add_jobs(year_set):
             'CERES_EBAF_regrid_wgt_file': c_config.get('ceres_ebaf_regrid_wgt_file'),
             'ERS_regrid_wgt_file': c_config.get('ers_regrid_wgt_file'),
             'coupled_diags_home': c_config.get('coupled_diags_home'),
-            'coupled_template_path': os.path.join(os.getcwd(), 'resources', 'run_AIMS_template.csh'),
+            'coupled_template_path': os.path.join(os.path.dirname(__file__), 'resources', 'run_AIMS_template.csh'),
             'rendered_output_path': os.path.join(coupled_project_dir, 'run_AIMS.csh'),
             'obs_ocndir': c_config.get('obs_ocndir'),
             'obs_seaicedir': c_config.get('obs_seaicedir'),
@@ -429,10 +429,10 @@ def add_jobs(year_set):
             config.get('global').get('img_host_server'),
             config.get('amwg').get('host_prefix'))
 
-        amwg_temp_dir = os.path.join(os.getcwd(), 'tmp', 'amwg', year_set_str)
+        amwg_temp_dir = os.path.join(os.path.dirname(__file__), 'tmp', 'amwg', year_set_str)
         if not os.path.exists(diag_temp_dir):
             os.makedirs(diag_temp_dir)
-        template_path = os.path.join(os.getcwd(), 'resources', 'amwg_template.csh')
+        template_path = os.path.join(os.path.dirname(__file__), 'resources', 'amwg_template.csh')
         amwg_config = {
             'run_id': config.get('global').get('run_id'),
             'host_directory': config.get('amwg').get('host_directory'),
@@ -659,7 +659,7 @@ def cleanup():
         return
     logging.info('Cleaning up temp directories')
     try:
-        cwd = os.getcwd()
+        cwd = os.path.dirname(__file__)
         tmp_path = os.path.join(cwd, 'tmp')
         if os.path.exists(tmp_path):
             rmtree(tmp_path)
@@ -973,7 +973,7 @@ if __name__ == "__main__":
     # check that all netCDF files exist
     path_exists(config)
     # cleanup any temp directories from previous runs
-    rs = os.path.join(os.getcwd(), 'run_scripts')
+    rs = os.path.join(os.path.dirname(__file__), 'run_scripts')
     if os.path.exists(rs):
         if os.listdir(rs):
             if not config.get('global').get('no_cleanup'):
@@ -1102,7 +1102,7 @@ if __name__ == "__main__":
         if not monitor:
             print 'error setting up monitor'
             sys.exit()
-        # print_message('attempting connection to {}'.format(config.get('monitor').get('compute_host')), 'ok')
+
         line = 'Attempting connection to {}'.format(config.get('monitor').get('compute_host'))
         event_list = push_event(event_list, line)
         if monitor.connect() == 0:
@@ -1145,8 +1145,9 @@ if __name__ == "__main__":
                 event=thread_kill_event,
                 upload_config=config.get('upload_diagnostic'),
                 event_list=event_list)
+            write_human_state(event_list, job_sets)
             if is_all_done():
-                # cleanup()
+                cleanup()
                 message = ' ---- All processing complete ----'
                 event_list = push_event(event_list, message)
                 sleep(5)
@@ -1155,8 +1156,6 @@ if __name__ == "__main__":
                 print_message(message, 'ok')
                 logging.info("## All processes complete")
                 sys.exit(0)
-
-            write_human_state(event_list, job_sets)
             sleep(10)
             loop_count += 1
     except KeyboardInterrupt as e:
