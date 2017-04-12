@@ -77,7 +77,7 @@ for window resizes, the likely outcome will be a hard crash. This is a known bug
 ```python workflow.py -c run.cfg```
 
 * Uninterupted run in headless mode that wont stop if you close the terminal, writing to a custom log location, with no cleanup after completion
-```nohup workflow.py -c run.cfg --no-ui --log my_new_run.log --no-cleanup```
+```nohup workflow.py -c run.cfg --no-ui --log my_new_run.log --no-cleanup &```
 
 
 # Configuration<a name="config"></a>
