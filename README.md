@@ -16,6 +16,7 @@ A workflow tool for the ACME project
 If you don't have Anaconda installed, follow [this guide](https://docs.continuum.io/anaconda/install-linux).
 
 If you're on a machine behind a firewall that wont allow ssh connections to git, use
+    
     wget https://github.com/sterlingbaldwin/acme_workflow/archive/master.zip
 
 else clone like normal
