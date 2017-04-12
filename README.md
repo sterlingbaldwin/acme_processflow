@@ -1,7 +1,22 @@
 compute system
 A workflow tool for the ACME project
 
-# Installation
+# Table of Contents
+
+1. [Installation](#installation)
+2. [Usage](#usage)
+3. [Configuration](#config)
+4. [Quick Start](https://github.com/sterlingbaldwin/acme_workflow/blob/master/quick_start_instructions.ipynb)
+
+
+
+
+# Installation<a name="installation"></a>
+
+If you're on a machine behind a firewall that wont allow ssh connections to git, use
+    wget https://github.com/sterlingbaldwin/acme_workflow/archive/master.zip
+
+else clone like normal
 
     git clone https://github.com/sterlingbaldwin/acme_workflow.git
     conda create -n acme -c conda-forge -c uvcdat/label/nightly -c uvcdat uvcdat-nox "cdms2>2017"
@@ -21,6 +36,9 @@ A workflow tool for the ACME project
 Due to the coupled_diags, to get MPAS diagnostics you MUST have an ssh key on the server thats
 associated with an authorized github account for their repo.
 
+To run AMWG, make sure NCL is installed, and the line `export NCARG_ROOT=/usr/local/src/NCL-6.3.0/`
+has been added to your .bashrc
+
 If this is a fresh install on a system that has not been configured to run this before, there
 are some additional tools you'll need. These include the following:
 
@@ -29,27 +47,32 @@ are some additional tools you'll need. These include the following:
 * If you plan on using the transfer mechanism, the system will have to be attached to a [Globus DTN](https://fasterdata.es.net/data-transfer-tools/globus/)
 
 
-# Usage
+# Usage<a name="usage"></a>
 
-    usage: workflow.py [-h] [-c CONFIG] [-d] [-s STATE] [-n] [-r] [-l LOG] [-u]
+    usage: workflow.py [-h] [-c CONFIG] [-v] [-d] [-s STATE] [-n] [-r] [-l LOG]
+                       [-u] [-m]
 
     optional arguments:
-    -h, --help            show this help message and exit
-    -c CONFIG, --config CONFIG
+      -h, --help            show this help message and exit
+      -c CONFIG, --config CONFIG
                             Path to configuration file
-    -d, --debug           Run in debug mode
-    -s STATE, --state STATE
+      -v, --debug           Run in debug mode
+      -d, --daemon          Run in daemon mode
+      -s STATE, --state STATE
                             Path to a json state file
-    -n, --no-ui           Turn off the GUI
-    -r, --dry-run         Do all setup, but dont submit jobs
-    -l LOG, --log LOG     Path to logging output file
-    -u, --no-cleanup      Dont perform pre or post run cleanup. This will leave
+      -n, --no-ui           Turn off the GUI
+      -r, --dry-run         Do all setup, but dont submit jobs
+      -l LOG, --log LOG     Path to logging output file
+      -u, --no-cleanup      Don't perform pre or post run cleanup. This will leave
                             all run scripts in place
+      -m, --no-monitor      Don't run the remote monitor or move any files over
+                            globus
 
 *NOTE*
-When running in GUI mode, resizing the window is discouraged. Although there is some checking for window resizes, the likely outcome will be a hard crash.  
+When running in GUI mode, resizing the window is discouraged. Although there is some checking
+for window resizes, the likely outcome will be a hard crash. This is a known bug.  
 
-# Configuration
+# Configuration<a name="config"></a>
 ## Global
 * output_path: A path to the output directory
 * data_cache_path: an empty local directory for holding raw model output
