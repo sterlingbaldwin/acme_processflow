@@ -13,7 +13,7 @@ A workflow tool for the ACME project
 
 # Installation<a name="installation"></a>
 
-If you don't have Anaconda installed, follow [this guide](doc/anaconda_install.ipynb).
+If you don't have Anaconda installed, follow [this guide](doc/anaconda_install_instructions.ipynb).
 
 If you're on a machine behind a firewall that wont allow ssh connections to git, use
     
