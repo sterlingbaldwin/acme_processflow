@@ -101,8 +101,8 @@ class Monitor(object):
                     username=self.username,
                     password=self.password)
             except Exception as e:
-                print "Unable to connect to host with given username/password"
-                print_debug(e)
+                logging.error(format_debug(e))
+                raise
                 return -1
         else:
             print "no password or keyfile"

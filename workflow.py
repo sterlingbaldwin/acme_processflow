@@ -5,14 +5,11 @@ import argparse
 import json
 import sys
 import os
-import re
 import threading
-import atexit
 import logging
 import time
 import pickle
 import curses
-import select
 import ConfigParser
 
 from shutil import rmtree
@@ -20,7 +17,9 @@ from shutil import move
 from getpass import getpass
 from time import sleep
 from pprint import pformat
-from subprocess import Popen
+
+import paramiko
+from paramiko.ssh_exception import BadAuthenticationType
 
 from jobs.Uvcmetrics import Uvcmetrics
 from jobs.Transfer import Transfer
@@ -233,7 +232,7 @@ def add_jobs(year_set):
         end=year_set.set_end_year)
 
     # create a temp directory full of just symlinks to the regridded output we need for this diagnostic job
-    diag_temp_dir = os.path.join(os.path.dirname(__file__), 'tmp', 'diag', year_set_str)
+    diag_temp_dir = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'tmp', 'diag', year_set_str)
     if not os.path.exists(diag_temp_dir):
         os.makedirs(diag_temp_dir)
 
@@ -248,7 +247,7 @@ def add_jobs(year_set):
             key_list.append('{0}-{1}'.format(year, month))
 
     climo_file_list = [file_name_list['ATM'].get(x) for x in key_list if file_name_list['ATM'].get(x)]
-    climo_temp_dir = os.path.join(os.path.dirname(__file__), 'tmp', 'climo', year_set_str)
+    climo_temp_dir = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'tmp', 'climo', year_set_str)
     create_symlink_dir(
         src_dir=config.get('global').get('atm_dir'),
         src_list=climo_file_list,
@@ -403,7 +402,7 @@ def add_jobs(year_set):
             'CERES_EBAF_regrid_wgt_file': c_config.get('ceres_ebaf_regrid_wgt_file'),
             'ERS_regrid_wgt_file': c_config.get('ers_regrid_wgt_file'),
             'coupled_diags_home': c_config.get('coupled_diags_home'),
-            'coupled_template_path': os.path.join(os.path.dirname(__file__), 'resources', 'run_AIMS_template.csh'),
+            'coupled_template_path': os.path.join(os.path.abspath(os.path.dirname(__file__)), 'resources', 'run_AIMS_template.csh'),
             'rendered_output_path': os.path.join(coupled_project_dir, 'run_AIMS.csh'),
             'obs_ocndir': c_config.get('obs_ocndir'),
             'obs_seaicedir': c_config.get('obs_seaicedir'),
@@ -429,7 +428,7 @@ def add_jobs(year_set):
             config.get('global').get('img_host_server'),
             config.get('amwg').get('host_prefix'))
 
-        amwg_temp_dir = os.path.join(os.path.dirname(__file__), 'tmp', 'amwg', year_set_str)
+        amwg_temp_dir = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'tmp', 'amwg', year_set_str)
         if not os.path.exists(diag_temp_dir):
             os.makedirs(diag_temp_dir)
         template_path = os.path.join(os.path.dirname(__file__), 'resources', 'amwg_template.csh')
@@ -636,7 +635,7 @@ def handle_transfer(transfer_job, f_list, event, event_list):
         print_message("File transfer failed")
         message = "## Transfer {uuid} has failed".format(uuid=transfer_job.uuid)
         logging.error(message)
-        event_list = push_event(event_list, 'Tranfer FAILED')
+        event_list = push_event(event_list, 'Tranfer failed')
         return
     else:
         message = "## Transfer {uuid} has completed".format(uuid=transfer_job.uuid)
@@ -659,7 +658,7 @@ def cleanup():
         return
     logging.info('Cleaning up temp directories')
     try:
-        cwd = os.path.dirname(__file__)
+        cwd = os.path.abspath(os.path.dirname(__file__))
         tmp_path = os.path.join(cwd, 'tmp')
         if os.path.exists(tmp_path):
             rmtree(tmp_path)
@@ -973,7 +972,7 @@ if __name__ == "__main__":
     # check that all netCDF files exist
     path_exists(config)
     # cleanup any temp directories from previous runs
-    rs = os.path.join(os.path.dirname(__file__), 'run_scripts')
+    rs = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'run_scripts')
     if os.path.exists(rs):
         if os.listdir(rs):
             if not config.get('global').get('no_cleanup'):
@@ -1105,15 +1104,26 @@ if __name__ == "__main__":
 
         line = 'Attempting connection to {}'.format(config.get('monitor').get('compute_host'))
         event_list = push_event(event_list, line)
-        if monitor.connect() == 0:
-            # monitor.check()
-            line = 'Connected'
-            event_list = push_event(event_list, line)
-        else:
-            line = 'Unable to connect, exiting'
+
+        try:
+            monitor.connect()
+        except paramiko.ssh_exception.BadAuthenticationType as e:
+            line = 'Connection failed due to incorrect password, exiting'
             logging.error(line)
             event_list = push_event(event_list, line)
+            sleep(4)
+            display_event.set()
+            for t in thread_list:
+                thread_kill_event.set()
+                t.join()
+            sleep(1)
+            print line
+            sleep(1)
             sys.exit(1)
+        else:
+            line = 'Connected'
+            logging.info(line)
+            event_list = push_event(event_list, line)
 
     # Main loop
     try:

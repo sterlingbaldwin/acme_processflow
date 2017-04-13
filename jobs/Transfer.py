@@ -21,6 +21,7 @@ from globusonline.transfer.api_client import TransferAPIClient
 from globusonline.transfer.api_client import TransferAPIError
 from globusonline.transfer.api_client import x509_proxy
 from globusonline.transfer.api_client.goauth import get_access_token
+from globusonline.transfer.api_client.goauth import GOCredentialsError
 
 from lib.util import print_debug
 from lib.util import print_message
@@ -220,7 +221,13 @@ class Transfer(object):
         # Get access token (This method of getting an acces token is deprecated and should be replaced by OAuth2 calls).
         globus_username = self.config.get('globus_username')
         globus_password = self.config.get('globus_password')
-        auth_result = get_access_token(globus_username, globus_password)
+        try:
+            auth_result = get_access_token(globus_username, globus_password)
+        except GOCredentialsError as e:
+            msg = 'Invalid globus credentials, failed starting file transfer'
+            event_list = push_event(event_list, msg)
+            self.status = JobStatus.FAILED
+            return
 
         # Create a transfer submission
         successful_activation = False
@@ -240,7 +247,9 @@ class Transfer(object):
                 successful_activation = True
                 break
         if not successful_activation:
-            logging.error('Unable to activate source endpoint after five attempts, exiting')
+            msg = 'Unable to activate source endpoint after five attempts, exiting'
+            logging.error(msg)
+            self.event_list(msg)
             self.status = JobStatus.FAILED
             return
 
@@ -257,7 +266,9 @@ class Transfer(object):
                 successful_activation = True
                 break
         if not successful_activation:
-            logging.error('Unable to activate destination endpoint after five attempts, exiting')
+            msg = 'Unable to activate destination endpoint after five attempts, exiting'
+            logging.error(msg)
+            self.event_list(msg)
             self.status = JobStatus.FAILED
             return
 

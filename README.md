@@ -13,7 +13,7 @@ A workflow tool for the ACME project
 
 # Installation<a name="installation"></a>
 
-If you don't have Anaconda installed, follow [this guide](https://docs.continuum.io/anaconda/install-linux).
+If you don't have Anaconda installed, follow [this guide](doc/anaconda_install.ipynb).
 
 If you're on a machine behind a firewall that wont allow ssh connections to git, use
     
@@ -24,10 +24,13 @@ If you're on a machine behind a firewall that wont allow ssh connections to git,
 else clone like normal
 
     git clone https://github.com/sterlingbaldwin/acme_workflow.git
+
+next, create a new conda environment with the required packages:
+
     conda create -n acme --file env.txt
     source activate acme
 
-    pip -r requirements.txt
+    pip install -r requirements.txt
 
 Due to the coupled_diags, to get MPAS diagnostics you MUST have an ssh key on the server thats
 associated with an authorized github account for their repo.

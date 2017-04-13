@@ -269,6 +269,17 @@ class CoupledDiagnostic(object):
             self.event_list = push_event(self.event_list, message)
             return 0
 
+        # self.config['test_archive_dir'] = os.path.join(
+        #     os.path.abspath(os.path.dirname(__file__)),
+        #     '..',
+        #     self.config.get('test_archive_dir'),
+        #     self.config.get('test_casename'),
+        #     'run')
+        self.config['test_archive_dir'] = os.path.join(
+            os.path.abspath(os.path.dirname(__file__)),
+            '..',
+            self.config.get('test_archive_dir'))
+
         # render the run_AIMS.csh script
         render(
             variables=self.config,
@@ -287,7 +298,8 @@ class CoupledDiagnostic(object):
             end=self.config.get('test_end_yr_climo'),
             uuid=self.uuid[:5])
         run_script = os.path.join(
-            os.path.dirname(__file__),
+            os.path.abspath(os.path.dirname(__file__)),
+            '..',
             'run_scripts',
             expected_name)
         self.slurm_args['error_file'] = '-e {err}'.format(err=run_script + '.err')

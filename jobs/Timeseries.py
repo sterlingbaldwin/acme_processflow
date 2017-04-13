@@ -124,7 +124,7 @@ class Timeseries(object):
                 start=self.config.get('start_year'),
                 end=self.config.get('end_year'),
                 uuid=self.uuid[:5])
-            run_scripts_path = os.path.join(os.path.dirname(__file__), '..', 'run_scripts')
+            run_scripts_path = os.path.join(os.path.abspath(os.path.dirname(__file__)), '..', 'run_scripts')
             run_script = os.path.join(run_scripts_path, expected_name)
 
             if not os.path.exists(run_scripts_path):
