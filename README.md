@@ -27,13 +27,15 @@ else clone like normal
 
 next, create a new conda environment with the required packages:
 
+    cd acme_workflow
     conda create -n acme --file env.txt
     source activate acme
 
     pip install -r requirements.txt
 
 Due to the coupled_diags, to get MPAS diagnostics you MUST have an ssh key on the server thats
-associated with an authorized github account for their repo.
+associated with an authorized github account for their repo. You can find instructions on how to setup a github
+ssh key [here](https://help.github.com/articles/connecting-to-github-with-ssh/)
 
 To run AMWG, make sure NCL is installed, and the line `export NCARG_ROOT=/usr/local/src/NCL-6.3.0/`
 has been added to your .bashrc
@@ -80,6 +82,10 @@ for window resizes, the likely outcome will be a hard crash. This is a known bug
 
 
 # Configuration<a name="config"></a>
+
+## Example
+An example can be found here:  https://github.com/sterlingbaldwin/acme_workflow/blob/master/run.cfg
+
 ## Global
 * output_path: A path to the output directory
 * data_cache_path: an empty local directory for holding raw model output
@@ -135,7 +141,3 @@ for window resizes, the likely outcome will be a hard crash. This is a known bug
 * globus_username: Globus credentials
 * globus_password: Globus credentials
 * destination_endpoint: desired endpoint
-
-
-## Example
-An example can be found here:  https://github.com/sterlingbaldwin/acme_workflow/blob/master/run.cfg
