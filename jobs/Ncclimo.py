@@ -78,10 +78,9 @@ class Climo(object):
             self.event_list = push_event(self.event_list, message)
             return 0
 
-        ncclimo = os.path.join(self.config['ncclimo_path'], 'ncclimo')
         # ncclimo = 'ncclimo'
         cmd = [
-            ncclimo,
+            'ncclimo',
             '-c', self.config['caseId'],
             '-a', self.config['annual_mode'],
             '-s', str(self.config['start_year']),
