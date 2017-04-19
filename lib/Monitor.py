@@ -130,16 +130,33 @@ class Monitor(object):
         return info[4], ' '.join(info[5:7])
 
     def get_remote_file_info_batch(self, filelist):
-        cmd = 'ls -la {}'.format(' '.join(filelist))
-        _, stdout, _ = self.client.exec_command(cmd)
-        info = stdout.read()
-        info = info.split('\n')
-        out = []
-        for line in info:
-            lineinfo = line.split()
-            if not lineinfo or len(lineinfo) < 8:
-                continue
-            out.append((lineinfo[4], ' '.join(lineinfo[5:8]), lineinfo[-1]))
+        if len(filelist) < 1000:
+            cmd = 'ls -la {}'.format(' '.join(filelist))
+            _, stdout, _ = self.client.exec_command(cmd)
+            info = stdout.read()
+            info = info.split('\n')
+            out = []
+            for line in info:
+                lineinfo = line.split()
+                if not lineinfo or len(lineinfo) < 8:
+                    continue
+                out.append((lineinfo[4], ' '.join(lineinfo[5:8]), lineinfo[-1]))
+        else:
+            start_index = 0
+            end_index = 1000
+            out = []
+            while start_index < len(filelist):
+                cmd = 'ls -la {}'.format(' '.join(filelist[start_index: end_index]))
+                _, stdout, _ = self.client.exec_command(cmd)
+                info = stdout.read()
+                info = info.split('\n')
+                for line in info:
+                    lineinfo = line.split()
+                    if not lineinfo or len(lineinfo) < 8:
+                        continue
+                    out.append((lineinfo[4], ' '.join(lineinfo[5:8]), lineinfo[-1]))
+                start_index += 1000
+                end_index += 1000
         return out
 
     def check(self):

@@ -216,12 +216,19 @@ def add_jobs(year_set):
     """
     # each required job is a key, the value is if its in the job list already or not
     # this is here in case the jobs have already been added
+    run_coupled = False
+    patterns = config.get('global').get('output_patterns')
+    if not patterns.get('STREAMS') or \
+       not patterns.get('MPAS_AM') or \
+       not patterns.get('MPAS_O_IN') or \
+       not patterns.get('MPAS_CICE_IN'):
+        run_coupled = True
     required_jobs = {
         'climo': False,
         'timeseries': False,
         'uvcmetrics': True,
         'upload_diagnostic_output': True,
-        'coupled_diagnostic': False,
+        'coupled_diagnostic': run_coupled,
         'amwg_diagnostic': False
     }
     year_set_str = 'year_set_{}'.format(year_set.set_number)
@@ -252,7 +259,8 @@ def add_jobs(year_set):
         src_dir=config.get('global').get('atm_dir'),
         src_list=climo_file_list,
         dst=climo_temp_dir)
-
+    
+    g_config = config.get('global')
     # first initialize the climo job
     if not required_jobs['climo']:
         required_jobs['climo'] = True
@@ -364,7 +372,6 @@ def add_jobs(year_set):
             config.get('global').get('img_host_server'),
             config.get('coupled_diags').get('host_prefix'))
 
-        g_config = config.get('global')
         c_config = config.get('coupled_diags')
         coupled_diag_config = {
             'output_base_dir': coupled_project_dir,
@@ -505,7 +512,10 @@ def monitor_check(monitor, config, file_list, event_list):
     checked_new_files = []
 
     for new_file in new_files:
-        file_type = new_file['type']
+        file_type = new_file.get('type')
+        if not file_type:
+            event_list = push_event(event_list, "Failed accessing remote directory, do you have access permissions?")
+            continue
         file_key = ""
         if file_type in ['ATM', 'MPAS_AM', 'MPAS_CICE', 'MPAS_RST']:
             file_key = filename_to_file_list_key(new_file['filename'])
