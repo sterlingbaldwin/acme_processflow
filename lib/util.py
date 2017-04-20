@@ -434,56 +434,56 @@ def format_debug(e):
         lineno=traceback.tb_lineno(sys.exc_info()[2]),
         stack=traceback.print_tb(tb))
 
-def write_human_state(event_list, job_sets):
+def write_human_state(event_list, job_sets, state_path='run_state.txt'):
     """
     Writes out a human readable representation of the current execution state
     """
     import datetime
 
     try:
-        outfile = open('run_state.txt', 'w')
+        with open(state_path, 'w') as outfile:
+            line = "Execution state as of {0}\n\n".format(datetime.datetime.now().strftime('%d, %b %Y %I:%M'))
+            out_str = line
+            for year_set in job_sets:
+                line = 'Year_set {num}: {start} - {end}\n'.format(
+                    num=year_set.set_number,
+                    start=year_set.set_start_year,
+                    end=year_set.set_end_year)
+                out_str += line
+
+                line = 'status: {status}\n'.format(
+                    status=year_set.status)
+                out_str += line
+
+                for job in year_set.jobs:
+                    line = '  >   {type} -- {id}: {status}\n'.format(
+                        type=job.get_type(),
+                        id=job.job_id,
+                        status=job.status)
+                    out_str += line
+                out_str += '\n'
+            out_str += '\n'
+            for line in event_list[-20:]:
+                if 'Transfer' in line:
+                    continue
+                if 'hosted' in line:
+                    continue
+                out_str += line + '\n'
+            out_str += line + '\n'
+
+            for line in event_list:
+                if 'Transfer' not in line:
+                    continue
+                out_str += line + '\n'
+
+            for line in event_list:
+                if 'hosted' not in line:
+                    continue
+                out_str += line + '\n'
+            outfile.write(out_str)
     except Exception as e:
-        print_debug(e)
+        logging.error(format_debug(e))
         return
-    line = "Execution state as of {0}\n".format(datetime.datetime.now().strftime('%d, %b %Y %I:%M'))
-    outfile.write(line)
-    for year_set in job_sets:
-        line = 'Year_set {num}: {start} - {end}\n'.format(
-            num=year_set.set_number,
-            start=year_set.set_start_year,
-            end=year_set.set_end_year)
-        outfile.write(line)
-
-        line = 'status: {status}\n'.format(
-            status=year_set.status)
-        outfile.write(line)
-
-        for job in year_set.jobs:
-            line = '  >   {type} -- {id}: {status}\n'.format(
-                type=job.get_type(),
-                id=job.job_id,
-                status=job.status)
-            outfile.write(line)
-        outfile.write('\n')
-    outfile.write('\n')
-    for line in event_list[-20:]:
-        if 'Transfer' in line:
-            continue
-        if 'hosted' in line:
-            continue
-        outfile.write(line + '\n')
-    outfile.write('\n')
-
-    for line in event_list:
-        if 'Transfer' not in line:
-            continue
-        outfile.write(line + '\n')
-
-    for line in event_list:
-        if 'hosted' not in line:
-            continue
-        outfile.write(line + '\n')
-    outfile.close()
 
 class colors:
     HEADER = '\033[95m'
