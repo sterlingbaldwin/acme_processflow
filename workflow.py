@@ -33,6 +33,7 @@ from jobs.JobStatus import JobStatus
 from lib.Monitor import Monitor
 from lib.YearSet import YearSet
 from lib.YearSet import SetStatus
+from lib.mailer import Mailer
 
 from lib.util import *
 
@@ -40,32 +41,11 @@ parser = argparse.ArgumentParser()
 parser.add_argument('-c', '--config', help='Path to configuration file')
 parser.add_argument('-v', '--debug', help='Run in debug mode', action='store_true')
 parser.add_argument('-d', '--daemon', help='Run in daemon mode', action='store_true')
-parser.add_argument('-s', '--state', help='Path to a json state file')
 parser.add_argument('-n', '--no-ui', help='Turn off the GUI', action='store_true')
 parser.add_argument('-r', '--dry-run', help='Do all setup, but dont submit jobs', action='store_true')
 parser.add_argument('-l', '--log', help='Path to logging output file')
 parser.add_argument('-u', '--no-cleanup', help='Don\'t perform pre or post run cleanup. This will leave all run scripts in place', action='store_true')
 parser.add_argument('-m', '--no-monitor', help='Don\'t run the remote monitor or move any files over globus', action='store_true')
-
-def save_state(config, file_list, job_sets, file_name_list):
-    state_path = config.get('state_path')
-    if not state_path:
-        return
-    print_message('saving execution state to {0}'.format(state_path))
-    try:
-        with open(state_path, 'w') as outfile:
-            state = {
-                'file_list': file_list,
-                'job_sets': job_sets,
-                'config': config
-            }
-            pickle.dump(state, outfile)
-    except IOError as e:
-        logging.error("Error saving state file")
-    for job_set in job_sets:
-        for job in job_set.jobs:
-            if hasattr(job, 'proc'):
-                job.proc = None
 
 def setup(parser):
     """
@@ -84,80 +64,32 @@ def setup(parser):
         debug = True
         print_message('Running in debug mode', 'ok')
 
+    # read through the config file and setup the config dict
     config = {}
-    log_path = 'workflow.log'
-    if args.log:
-        log_path = args.log
-    logging.basicConfig(
-        format='%(asctime)s:%(levelname)s: %(message)s',
-        datefmt='%m/%d/%Y %I:%M:%S %p',
-        filename=log_path,
-        filemode='w',
-        level=logging.DEBUG)
-
-    # load from the state file given
-    if args.state:
-        state_path = os.path.abspath(args.state)
-        if not os.path.exists(state_path):
-            print_message('Ready to save state to {0}'.format(state_path))
-            config['state_path'] = state_path
-            from_saved_state = False
-        else:
-            print_message('Restoring from previous state')
-            from_saved_state = True
-            try:
-                with open(args.state, 'r') as statefile:
-                    state = pickle.load(statefile)
-                if debug:
-                    print_message('Loading from saved state {}'.format(args.state), 'ok')
-                    logging.info('Loading from saved state {}'.format(args.state))
-                    message = "## year_set {set} status change to {status}".format(set=year_set.set_number, status=year_set.status)
-                    logging.info(message)
-                config = state.get('config')
-                file_list = state.get('file_list')
-                job_sets = state.get('job_sets')
-                config['state_path'] = args.state
-            except IOError as e:
-                logging.error('Error loading from state file {}'.format(args.state))
-                logging.error(format_debug(e))
-                sys.exit(1)
-            if debug:
-                print_message('saved file_list: \n{}'.format(pformat(sorted(file_list, cmp=file_list_cmp))))
-                print_message('saved job_sets: \n{}'.format(pformat(job_sets)))
-                print_message('saved config: \n{}'.format(pformat(config)))
-            for job_set in job_sets:
-                for job in job_set.jobs:
-                    if job.status != JobStatus.COMPLETED:
-                        job.status = JobStatus.INVALID
-                        job.prevalidate(job, job.config)
-
-    # no state file, load from config
-    if not from_saved_state:
-        if not args.config:
-            parser.print_help()
-            sys.exit()
-        else:
-            try:
-                confParse = ConfigParser.ConfigParser()
-                confParse.read(args.config)
-                for section in confParse.sections():
-                    config[section] = {}
-                    for option in confParse.options(section):
-                        opt = confParse.get(section, option)
-                        if not opt:
-                            if 'pass' in option:
-                                opt = getpass('>> ' + option + ': ')
-                            else:
-                                opt = raw_input('>> ' + option + ': ')
-                        if opt.startswith('[') or opt.startswith('{'):
-                            opt = json.loads(opt)
-                        config[section][option] = opt
-            except Exception as e:
-                msg = 'Unable to read config file, is it properly formatted json?'
-                print_message(msg)
-                logging.error(msg)
-                print_debug(e)
-                return -1
+    if not args.config:
+        parser.print_help()
+        sys.exit()
+    else:
+        try:
+            confParse = ConfigParser.ConfigParser()
+            confParse.read(args.config)
+            for section in confParse.sections():
+                config[section] = {}
+                for option in confParse.options(section):
+                    opt = confParse.get(section, option)
+                    if not opt:
+                        if 'pass' in option:
+                            opt = getpass('>> ' + option + ': ')
+                        else:
+                            opt = raw_input('>> ' + option + ': ')
+                    if opt.startswith('[') or opt.startswith('{'):
+                        opt = json.loads(opt)
+                    config[section][option] = opt
+        except Exception as e:
+            msg = 'Unable to read config file, is it properly formatted json?'
+            print_message(msg)
+            print_debug(e)
+            return -1
 
     if args.no_ui:
         config['global']['ui'] = False
@@ -207,6 +139,20 @@ def setup(parser):
         os.makedirs(config['global']['output_path'])
     if not os.path.exists(config['global']['data_cache_path']):
         os.makedirs(config['global']['data_cache_path'])
+
+    # setup logging
+    if args.log:
+        log_path = args.log
+    else:
+        log_path = os.path.join(
+            config.get('global').get('output_path'),
+            'workflow.log')
+    logging.basicConfig(
+        format='%(asctime)s:%(levelname)s: %(message)s',
+        datefmt='%m/%d/%Y %I:%M:%S %p',
+        filename=log_path,
+        filemode='w',
+        level=logging.DEBUG)
 
     return config
 
@@ -990,7 +936,6 @@ if __name__ == "__main__":
         print "Error in setup, exiting"
         sys.exit(1)
 
-    # atexit.register(save_state, config, file_list, job_sets, file_name_list)
     # check that all netCDF files exist
     path_exists(config)
     # cleanup any temp directories from previous runs
@@ -1079,15 +1024,19 @@ if __name__ == "__main__":
         sim_end_year=config.get('global').get('simulation_end_year'),
         debug=debug,
         add_jobs=add_jobs)
+    state_path = os.path.join(
+        config.get('global').get('output_path'),
+        'run_state.txt')
     if config.get('global').get('dry_run', False):
         event_list = push_event(event_list, 'Running in dry-run mode')
-        write_human_state(event_list, job_sets)
-        sleep(50)
-        display_event.set()
-        for t in thread_list:
-            thread_kill_event.set()
-            t.join()
-        sys.exit()
+        write_human_state(event_list, job_sets, state_path)
+        if not config.get('global').get('no-ui', False):
+            sleep(50)
+            display_event.set()
+            for t in thread_list:
+                thread_kill_event.set()
+                t.join()
+            sys.exit()
 
     if all_data:
         # print_message('All data is local, disabling remote monitor', 'ok')
@@ -1177,11 +1126,28 @@ if __name__ == "__main__":
                 event=thread_kill_event,
                 upload_config=config.get('upload_diagnostic'),
                 event_list=event_list)
-            write_human_state(event_list, job_sets)
+            write_human_state(event_list, job_sets, state_path)
             if is_all_done():
                 if not config.get('global').get('no-cleanup', False):
                     cleanup()
                 message = ' ---- All processing complete ----'
+                emailaddr = config.get('global').get('email')
+                if emailaddr:
+                    try:
+                        msg = '''
+Processing job {id} has completed successfully
+
+You can view your diagnostic output here:\n'''.format(
+                            id= config.get('global').get('run_id'))
+                        for event in event_list:
+                            if 'hosted' in event:
+                                msg += event + '\n'
+                        m = Mailer(src=emailaddr, dst=emailaddr)
+                        m.send(
+                            status=message,
+                            msg=msg)
+                    except Exception as e:
+                        logging.error(format_debug(e))
                 event_list = push_event(event_list, message)
                 sleep(5)
                 display_event.set()
