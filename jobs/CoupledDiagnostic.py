@@ -9,7 +9,7 @@ from pprint import pformat
 from subprocess import Popen, PIPE
 from time import sleep
 
-from cdp.dcp_viewer import OutputViewer
+from cdp.cdp_viewer import OutputViewer
 
 from lib.util import render
 from lib.util import print_message
@@ -208,7 +208,7 @@ class CoupledDiagnostic(object):
                 dst=run_dir)
         return True
 
-    def generateIndex(self):
+    def generateIndex(self, output_dir):
         """
         Generates the index.json for uploading to the diagnostic viewer
         """
@@ -216,7 +216,14 @@ class CoupledDiagnostic(object):
             self.event_list,
             'Starting index generataion for coupled diagnostic')
 
-        viewer = OutputViewer(index_name="Coupled Diagnostic")
+        #prev_dir = os.getcwd()
+        # output_dir = os.path.join(
+        #     self.config.get('output_base_dir'),
+        #     'coupled_diagnostics_case_scripts-obs')
+        #os.chdir(output_dir)
+        viewer = OutputViewer(
+            path=output_dir,
+            index_name="Coupled Diagnostic")
         viewer.add_page("Coupled Diagnostics Output", ["Description", "ANN", "DJF", "JJA"])
 
         viewer.add_group('Time Series Plots: Global and Zonal-band means (ATM)')
@@ -336,6 +343,19 @@ class CoupledDiagnostic(object):
 
         viewer.generate_viewer(prompt_user=False)
 
+        find_str = '/var/www/html/coupled_diag'
+        replace_str = 'https://acme-viewer.llnl.gov/coupled'
+        for subdir, dirs, files in os.walk(output_dir):
+            for f in files:
+                if f.endswith('.html'):
+                    html_path = os.path.join(os.getcwd(), subdir, f)
+                    with open(html_path, 'r') as infile:
+                        old_html = infile.read()
+                    index = old_html.find(find_str)
+                    new_html = old_html.replace(find_str, replace_str)
+                    with open(html_path, 'w') as outfile:
+                        outfile.write(new_html)
+        #os.chdir(prev_dir)
     def execute(self, batch=False):
         """
         Perform the actual work
