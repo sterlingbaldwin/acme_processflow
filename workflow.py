@@ -259,7 +259,7 @@ def add_jobs(year_set):
         src_dir=config.get('global').get('atm_dir'),
         src_list=climo_file_list,
         dst=climo_temp_dir)
-    
+
     g_config = config.get('global')
     # first initialize the climo job
     if not required_jobs['climo']:
@@ -650,6 +650,18 @@ def handle_transfer(transfer_job, f_list, event, event_list):
     else:
         message = "## Transfer {uuid} has completed".format(uuid=transfer_job.uuid)
         logging.info(message)
+        for item in transfer_job.config['file_list']:
+            item_name = item['filename'].split('/').pop()
+            item_type = item['type']
+            if item_type in ['ATM', 'MPAS_AM', 'MPAS_RST']:
+                file_key = filename_to_file_list_key(item_name)
+            elif item_type == 'MPAS_CICE':
+                file_key = 'mpas-cice_in'
+            elif item_type == 'MPAS_O':
+                file_key = 'mpas-o_in'
+            elif item_type == 'STREAMS':
+                file_key == 'streams.cice' if 'cice' in item_name else 'streams.ocean'
+            file_list[item_type][file_key] = SetStatus.COMPLETED
 
 def is_all_done():
     """
@@ -1167,7 +1179,8 @@ if __name__ == "__main__":
                 event_list=event_list)
             write_human_state(event_list, job_sets)
             if is_all_done():
-                cleanup()
+                if not config.get('global').get('no-cleanup', False):
+                    cleanup()
                 message = ' ---- All processing complete ----'
                 event_list = push_event(event_list, message)
                 sleep(5)
