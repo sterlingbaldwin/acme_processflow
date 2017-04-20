@@ -28,21 +28,22 @@ def get_climo_output_files(input_path, set_start_year, set_end_year):
     contents = os.listdir(input_path)
     file_list_tmp = [s for s in contents if not os.path.isdir(s)]
     file_list = []
-    for file in file_list_tmp:
-        start_search = re.search(r'\_\d\d\d\d', file)
+    for climo_file in file_list_tmp:
+        start_search = re.search(r'\_\d\d\d\d\d\d', climo_file)
         if not start_search:
             continue
         start_index = start_search.start() + 1
-        start_year = int(file[start_index: start_index + 4])
-
-        end_search = re.search(r'\_\d\d\d\d', file[start_index:])
+        start_year = int(climo_file[start_index: start_index + 4])
+        if not start_year == set_start_year:
+            continue
+        end_search = re.search(r'\_\d\d\d\d\d\d', climo_file[start_index:])
         if not end_search:
             continue
         end_index = end_search.start() + start_index + 1
-        end_year = int(file[end_index: end_index + 4])
-
-        if start_year == set_start_year and end_year == set_end_year:
-            file_list.append(file)
+        end_year = int(climo_file[end_index: end_index + 4])
+        if not end_year == set_end_year:
+            continue
+        file_list.append(climo_file)
     return file_list
 
 def path_exists(config_items):
@@ -338,6 +339,11 @@ def setup_local_hosting(job, event_list, img_src):
         msg = 'Error copying {} to host directory'.format(job.get_type())
         event_list = push_event(event_list, 'Error copying coupled_diag to host_location')
         return
+
+    prev_dir = os.getcwd()
+    os.chdir(host_dir)
+    job.generateIndex(output_dir=host_dir)
+    os.chdir(prev_dir)
 
     subprocess.call(['chmod', '-R', '777', outter_dir])
 
