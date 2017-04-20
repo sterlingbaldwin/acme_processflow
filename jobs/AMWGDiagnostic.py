@@ -144,10 +144,11 @@ class AMWGDiagnostic(object):
             group = '_'.join(filesplit[s_index:])[:-4]
         return set_id, group, row, col
 
-    def generateIndex(self):
+    def generateIndex(self, output_dir):
         """
         Generates the index.json for the DiagnosticViewer
         """
+        return
         self.event_list = push_event(
             self.event_list, 'Starting index generataion for AMWG diagnostic')
         contents = [s for s in os.listdir(self.config.get('run_directory')) if s.endswith('png')]
