@@ -28,21 +28,22 @@ def get_climo_output_files(input_path, set_start_year, set_end_year):
     contents = os.listdir(input_path)
     file_list_tmp = [s for s in contents if not os.path.isdir(s)]
     file_list = []
-    for file in file_list_tmp:
-        start_search = re.search(r'\_\d\d\d\d', file)
+    for climo_file in file_list_tmp:
+        start_search = re.search(r'\_\d\d\d\d\d\d', climo_file)
         if not start_search:
             continue
         start_index = start_search.start() + 1
-        start_year = int(file[start_index: start_index + 4])
-
-        end_search = re.search(r'\_\d\d\d\d', file[start_index:])
+        start_year = int(climo_file[start_index: start_index + 4])
+        if not start_year == set_start_year:
+            continue
+        end_search = re.search(r'\_\d\d\d\d\d\d', climo_file[start_index:])
         if not end_search:
             continue
         end_index = end_search.start() + start_index + 1
-        end_year = int(file[end_index: end_index + 4])
-
-        if start_year == set_start_year and end_year == set_end_year:
-            file_list.append(file)
+        end_year = int(climo_file[end_index: end_index + 4])
+        if not end_year == set_end_year:
+            continue
+        file_list.append(climo_file)
     return file_list
 
 def path_exists(config_items):
@@ -339,6 +340,11 @@ def setup_local_hosting(job, event_list, img_src):
         event_list = push_event(event_list, 'Error copying coupled_diag to host_location')
         return
 
+    prev_dir = os.getcwd()
+    os.chdir(host_dir)
+    job.generateIndex(output_dir=host_dir)
+    os.chdir(prev_dir)
+
     subprocess.call(['chmod', '-R', '777', outter_dir])
 
     host_location = os.path.join(
@@ -428,56 +434,56 @@ def format_debug(e):
         lineno=traceback.tb_lineno(sys.exc_info()[2]),
         stack=traceback.print_tb(tb))
 
-def write_human_state(event_list, job_sets):
+def write_human_state(event_list, job_sets, state_path='run_state.txt'):
     """
     Writes out a human readable representation of the current execution state
     """
     import datetime
 
     try:
-        outfile = open('run_state.txt', 'w')
+        with open(state_path, 'w') as outfile:
+            line = "Execution state as of {0}\n\n".format(datetime.datetime.now().strftime('%d, %b %Y %I:%M'))
+            out_str = line
+            for year_set in job_sets:
+                line = 'Year_set {num}: {start} - {end}\n'.format(
+                    num=year_set.set_number,
+                    start=year_set.set_start_year,
+                    end=year_set.set_end_year)
+                out_str += line
+
+                line = 'status: {status}\n'.format(
+                    status=year_set.status)
+                out_str += line
+
+                for job in year_set.jobs:
+                    line = '  >   {type} -- {id}: {status}\n'.format(
+                        type=job.get_type(),
+                        id=job.job_id,
+                        status=job.status)
+                    out_str += line
+                out_str += '\n'
+            out_str += '\n'
+            for line in event_list[-20:]:
+                if 'Transfer' in line:
+                    continue
+                if 'hosted' in line:
+                    continue
+                out_str += line + '\n'
+            out_str += line + '\n'
+
+            for line in event_list:
+                if 'Transfer' not in line:
+                    continue
+                out_str += line + '\n'
+
+            for line in event_list:
+                if 'hosted' not in line:
+                    continue
+                out_str += line + '\n'
+            outfile.write(out_str)
     except Exception as e:
-        print_debug(e)
+        logging.error(format_debug(e))
         return
-    line = "Execution state as of {0}\n".format(datetime.datetime.now().strftime('%d, %b %Y %I:%M'))
-    outfile.write(line)
-    for year_set in job_sets:
-        line = 'Year_set {num}: {start} - {end}\n'.format(
-            num=year_set.set_number,
-            start=year_set.set_start_year,
-            end=year_set.set_end_year)
-        outfile.write(line)
-
-        line = 'status: {status}\n'.format(
-            status=year_set.status)
-        outfile.write(line)
-
-        for job in year_set.jobs:
-            line = '  >   {type} -- {id}: {status}\n'.format(
-                type=job.get_type(),
-                id=job.job_id,
-                status=job.status)
-            outfile.write(line)
-        outfile.write('\n')
-    outfile.write('\n')
-    for line in event_list[-20:]:
-        if 'Transfer' in line:
-            continue
-        if 'hosted' in line:
-            continue
-        outfile.write(line + '\n')
-    outfile.write('\n')
-
-    for line in event_list:
-        if 'Transfer' not in line:
-            continue
-        outfile.write(line + '\n')
-
-    for line in event_list:
-        if 'hosted' not in line:
-            continue
-        outfile.write(line + '\n')
-    outfile.close()
 
 class colors:
     HEADER = '\033[95m'

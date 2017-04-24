@@ -168,16 +168,21 @@ class Transfer(object):
         return dstpath
 
     def display_status(self, event_list, percent_complete, task_id):
+        """
+        Updates the event_list with a nicely formated percent completion
+        """
         start_file = self.config.get('file_list')[0]
         end_file = self.config.get('file_list')[-1]
-        index = start_file['filename'].find('-')
-        start_readable = start_file['filename'][index - 4: index + 3]
-        index = end_file['filename'].find('-')
-        end_readable = end_file['filename'][index - 4: index + 3]
+        if not 'mpas-' in start_file:
+            index = start_file['filename'].find('-')
+            start_file = start_file['filename'][index - 4: index + 3]
+        if not 'mpas-' in end_file:
+            index = end_file['filename'].find('-')
+            end_file = end_file['filename'][index - 4: index + 3]
 
         start_end_str = '{start} to {end}'.format(
-            start=start_readable,
-            end=end_readable)
+            start=start_file,
+            end=end_file)
         message = 'Transfer {0} in progress ['.format(start_end_str)
         for i in range(1, 100, 5):
             if i < percent_complete:
@@ -195,13 +200,12 @@ class Transfer(object):
             event_list = push_event(event_list, message)
 
     def error_cleanup(self):
-        pass
-        # print_message('Removing partially transfered files')
-        # destination_contents = os.listdir(self.config.get('destination_path'))
-        # for transfer in self.config['file_list']:
-        #     t_file = transfer['filename'].split(os.sep)[-1]
-        #     if t_file in destination_contents:
-        #         os.remove(os.path.join(self.config.get('destination_path'), t_file))
+        print_message('Removing partially transfered files')
+        destination_contents = os.listdir(self.config.get('destination_path'))
+        for transfer in self.config['file_list']:
+            t_file = transfer['filename'].split(os.sep)[-1]
+            if t_file in destination_contents:
+                os.remove(os.path.join(self.config.get('destination_path'), t_file))
 
     def execute(self, event, event_list):
         # reject if job isnt valid
@@ -289,10 +293,6 @@ class Transfer(object):
             return
         try:
             for path in self.config['file_list']:
-                # dst_path = self.get_destination_path(
-                #     path['filename'],
-                #     os.path.join(self.config.get('destination_path'), path['type']),
-                #     self.config.get('recursive'))
                 dst_path = os.path.join(
                     self.config.get('destination_path'),
                     path['type'],
@@ -335,7 +335,6 @@ class Transfer(object):
                     logging.info('progress %d/%d', data['files_transferred'], data['files'])
                     percent_complete = 100.0
                     self.display_status(event_list, percent_complete, task_id)
-
                     message = 'Transfer job completed'
                     self.status = JobStatus.COMPLETED
                     return ('success', '')
