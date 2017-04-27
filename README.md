@@ -15,8 +15,11 @@ A workflow tool for the ACME project
 
 If you don't have Anaconda installed, follow [this guide](doc/anaconda_install_instructions.ipynb).
 
+If you're running on acme1 or aims4, you can skip the following instructions, and instead
+use the [super quick start guide](doc/super_quick_start.ipynb)
+
 If you're on a machine behind a firewall that wont allow ssh connections to git, use
-    
+
     wget https://github.com/sterlingbaldwin/acme_workflow/archive/master.zip
     unzip master.zip
     mv acme_workflow-master acme_workflow
@@ -45,7 +48,8 @@ are some additional tools you'll need. These include the following:
 
 * [NCL](https://www.ncl.ucar.edu/current_release.shtml) for plot generation
 * [SLURM](https://slurm.schedmd.com/quickstart_admin.html) for job management
-* If you plan on using the transfer mechanism, the system will have to be attached to a [Globus DTN](https://fasterdata.es.net/data-transfer-tools/globus/)
+* [ImageMagick](https://www.vultr.com/docs/install-imagemagick-on-centos-6) for image conversion
+* If you plan on using the transfer mechanism, the system will have to be attached to a [Globus DTN](https://docs.globus.org/globus-connect-server-installation-guide/#centos_fedora_red_hat_enterprise_linux_scientific_linux)
 
 
 # Usage<a name="usage"></a>
