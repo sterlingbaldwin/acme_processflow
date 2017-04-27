@@ -50,7 +50,7 @@ class Climo(object):
             'regrid_output_directory': '',
             'regrid_map_path': '',
             'year_set': '',
-            'ncclimo_path': ''
+            'run_scripts_path': ''
         }
         self.proc = None
         self.slurm_args = {
@@ -71,6 +71,7 @@ class Climo(object):
         """
         Calls ncclimo in a subprocess
         """
+
         # check if the output already exists and the job actually needs to run
         if self.postvalidate():
             self.status = JobStatus.COMPLETED
@@ -99,9 +100,12 @@ class Climo(object):
                         stdout=PIPE,
                         stderr=PIPE,
                         shell=False)
-                    break
                 except:
+                    print 'problem starting job'
                     sleep(1)
+                else:
+                    print 'started job'
+                    break
             self.status = JobStatus.RUNNING
             done = 2
             console_output = ''
@@ -129,11 +133,7 @@ class Climo(object):
                 start=self.config.get('start_year'),
                 end=self.config.get('end_year'),
                 uuid=self.uuid[:5])
-            run_scripts_path = os.path.join(os.path.abspath(os.path.dirname(__file__)), '..', 'run_scripts')
-            run_script = os.path.join(run_scripts_path, expected_name)
-
-            if not os.path.exists(run_scripts_path):
-                os.makedirs(run_scripts_path)
+            run_script = os.path.join(self.config.get('run_scripts_path'), expected_name)
 
             self.slurm_args['error_file'] = '-e {error_file}'.format(error_file=run_script + '.err')
             self.slurm_args['output_file'] = '-o {output_file}'.format(output_file=run_script + '.out')
@@ -145,6 +145,7 @@ class Climo(object):
                 slurm_command = ' '.join(cmd)
                 batchfile.write(slurm_command)
 
+            # slurm_cmd = ['sbatch', run_script, '--oversubscribe']
             slurm_cmd = ['sbatch', run_script, '--oversubscribe']
             started = False
             retry_count = 0
@@ -253,10 +254,9 @@ class Climo(object):
                 input_path=self.config.get('climo_output_directory'),
                 set_start_year=self.config.get('start_year'),
                 set_end_year=self.config.get('end_year'))
-
-            if len(file_list) >= 17:
-                return 1
+            if len(file_list) >= 12:
+                return True
             else:
-                return 0
+                return False
         else:
-            return 0
+            return False

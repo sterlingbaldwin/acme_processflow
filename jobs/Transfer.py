@@ -191,9 +191,9 @@ class Transfer(object):
                 message += '_'
         message += '] {0:.2f}%'.format(percent_complete)
         replaced = False
-        for i, e in enumerate(event_list):
-            if start_end_str in e:
-                event_list[i] = time.strftime("%I:%M") + ' ' + message
+        for index, event in enumerate(event_list):
+            if start_end_str in event:
+                event_list[index] = time.strftime("%I:%M") + ' ' + message
                 replaced = True
                 break
         if not replaced:

@@ -68,6 +68,7 @@ class AMWGDiagnostic(object):
             'run_directory': '',
             'template_path': '',
             'dataset_name': '',
+            'run_scripts_path': ''
         }
         self.type = 'amwg_diagnostic'
         self.outputs = {}
@@ -255,11 +256,7 @@ class AMWGDiagnostic(object):
             start=self.config.get('start_year'),
             end=self.config.get('end_year'),
             uuid=self.uuid[:5])
-        run_scripts_path = os.path.join(os.path.abspath(os.path.dirname(__file__)), '..', 'run_scripts')
-        run_script = os.path.join(run_scripts_path, expected_name)
-
-        if not os.path.exists(run_scripts_path):
-            os.makedirs(run_scripts_path)
+        run_script = os.path.join(self.config.get('run_scripts_path'), expected_name)
 
         self.slurm_args['error_file'] = '-e {error_file}'.format(error_file=run_script + '.err')
         self.slurm_args['output_file'] = '-o {output_file}'.format(output_file=run_script + '.out')
@@ -280,10 +277,11 @@ class AMWGDiagnostic(object):
         while not started:
             while True:
                 try:
-                    self.proc = Popen(slurm_cmd, stdout=PIPE, stderr=PIPE)
-                    break
+                    self.proc = Popen(slurm_cmd, stdout=PIPE, stderr=PIPE) 
                 except:
                     sleep(1)
+                else:
+                    break
             output, err = self.proc.communicate()
             started, job_id = check_slurm_job_submission(expected_name)
             if started:
