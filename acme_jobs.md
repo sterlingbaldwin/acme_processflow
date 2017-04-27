@@ -67,7 +67,3 @@
 # Time series
     inputs:
     outputs:
-
-# CMOR
-    inputs:
-    outputs:

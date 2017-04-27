@@ -21,10 +21,10 @@ from pprint import pformat
 import paramiko
 from paramiko.ssh_exception import BadAuthenticationType
 
-from jobs.Uvcmetrics import Uvcmetrics
+# from jobs.Uvcmetrics import Uvcmetrics
 from jobs.Transfer import Transfer
 from jobs.Ncclimo import Climo
-from jobs.UploadDiagnosticOutput import UploadDiagnosticOutput
+# from jobs.UploadDiagnosticOutput import UploadDiagnosticOutput
 from jobs.Timeseries import Timeseries
 # from jobs.Publication import Publication
 from jobs.AMWGDiagnostic import AMWGDiagnostic
@@ -91,6 +91,7 @@ def setup(parser):
             print_debug(e)
             return -1
 
+    # Set command line arguments as flags in the config
     if args.no_ui:
         config['global']['ui'] = False
     else:
@@ -135,10 +136,20 @@ def setup(parser):
         elif 'stream' in val:
             config['global']['streams_dir'] = new_dir
 
+    # create root input and output directories
     if not os.path.exists(config['global']['output_path']):
         os.makedirs(config['global']['output_path'])
     if not os.path.exists(config['global']['data_cache_path']):
         os.makedirs(config['global']['data_cache_path'])
+
+    # setup run_scipts_path
+    config['global']['run_scripts_path'] = os.path.join(
+        config['global']['output_path'],
+        'run_scripts')
+    # setup tmp_path
+    config['global']['tmp_path'] = os.path.join(
+        config['global']['output_path'],
+        'tmp')
 
     # setup logging
     if args.log:
@@ -162,20 +173,23 @@ def add_jobs(year_set):
     """
     # each required job is a key, the value is if its in the job list already or not
     # this is here in case the jobs have already been added
-    run_coupled = False
+    run_coupled = 'coupled_diag' not in config.get('global').get('set_jobs', True)
     patterns = config.get('global').get('output_patterns')
     if not patterns.get('STREAMS') or \
        not patterns.get('MPAS_AM') or \
        not patterns.get('MPAS_O_IN') or \
        not patterns.get('MPAS_CICE_IN'):
         run_coupled = True
+
+    # if its False it will be run, if its True it will not be run
+    # this is because its a test of if the job has already been added, thus
+    # False means it hasnt been added yet, True means its already there
     required_jobs = {
-        'climo': False,
-        'timeseries': False,
-        'uvcmetrics': True,
-        'upload_diagnostic_output': True,
+        'climo': 'ncclimo' not in config.get('global').get('set_jobs', True),
+        'timeseries': 'timeseries' not in config.get('global').get('set_jobs', True),
+        'uvcmetrics': 'uvcmetrics' not in config.get('global').get('set_jobs', True),
         'coupled_diagnostic': run_coupled,
-        'amwg_diagnostic': False
+        'amwg_diagnostic': 'amwg' not in config.get('global').get('set_jobs', True)
     }
     year_set_str = 'year_set_{}'.format(year_set.set_number)
     dataset_name = '{time}_{set}_{start}_{end}'.format(
@@ -185,7 +199,10 @@ def add_jobs(year_set):
         end=year_set.set_end_year)
 
     # create a temp directory full of just symlinks to the regridded output we need for this diagnostic job
-    diag_temp_dir = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'tmp', 'diag', year_set_str)
+    diag_temp_dir = os.path.join(
+        config.get('global').get('tmp_path'),
+        'diag',
+        year_set_str)
     if not os.path.exists(diag_temp_dir):
         os.makedirs(diag_temp_dir)
 
@@ -200,7 +217,7 @@ def add_jobs(year_set):
             key_list.append('{0}-{1}'.format(year, month))
 
     climo_file_list = [file_name_list['ATM'].get(x) for x in key_list if file_name_list['ATM'].get(x)]
-    climo_temp_dir = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'tmp', 'climo', year_set_str)
+    climo_temp_dir = os.path.join(config['global']['tmp_path'], 'climo', year_set_str)
     create_symlink_dir(
         src_dir=config.get('global').get('atm_dir'),
         src_list=climo_file_list,
@@ -224,6 +241,7 @@ def add_jobs(year_set):
 
         # create the configuration object for the climo job
         climo_config = {
+            'run_scripts_path': config.get('global').get('run_scripts_path'),
             'start_year': year_set.set_start_year,
             'end_year': year_set.set_end_year,
             'caseId': config.get('global').get('experiment'),
@@ -254,6 +272,7 @@ def add_jobs(year_set):
         # create temp directory of symlinks to history files
         # we can reuse the input directory for the climo generation
         timeseries_config = {
+            'run_scripts_path': config.get('global').get('run_scripts_path'),
             'annual_mode': 'sdd',
             'caseId': config.get('global').get('experiment'),
             'year_set': year_set.set_number,
@@ -268,42 +287,6 @@ def add_jobs(year_set):
         msg = 'Adding Timeseries job to the job list: {}'.format(str(timeseries))
         logging.info(msg)
         year_set.add_job(timeseries)
-
-    # init the diagnostic job
-    if not required_jobs['uvcmetrics']:
-        required_jobs['uvcmetrics'] = True
-        # create the output directory
-        output_path = config.get('global').get('output_path')
-
-        diag_output_path = os.path.join(output_path, 'diagnostics', year_set_str)
-        if not os.path.exists(diag_output_path):
-            os.makedirs(diag_output_path)
-
-        host_prefix = os.path.join(
-            config.get('global').get('img_host_server'),
-            config.get('uvcmetrics').get('host_prefix'))
-        diag_config = {
-            'host_prefix': host_prefix,
-            'host_directory': config.get('uvcmetrics').get('host_directory'),
-            'run_id': config.get('global').get('run_id'),
-            'dataset_name': dataset_name,
-            '--model': diag_temp_dir,
-            '--obs': config.get('uvcmetrics').get('obs_for_diagnostics_path'),
-            '--outputdir': diag_output_path,
-            '--package': 'amwg',
-            '--set': '5',
-            '--archive': 'False',
-            'year_set': year_set.set_number,
-            'start_year': year_set.set_start_year,
-            'end_year': year_set.set_end_year,
-            'depends_on': ['climo'], # set the diag job to wait for the climo job to finish befor running
-            'regrid_path': regrid_output_dir,
-            'diag_temp_dir': diag_temp_dir
-        }
-        diag = Uvcmetrics(diag_config, event_list=event_list)
-        msg = 'Adding Diagnostic to the job list: {}'.format(str(diag))
-        logging.info(msg)
-        year_set.add_job(diag)
 
     if not required_jobs['coupled_diagnostic']:
         required_jobs['coupled_diagnostic'] = True
@@ -320,6 +303,7 @@ def add_jobs(year_set):
 
         c_config = config.get('coupled_diags')
         coupled_diag_config = {
+            'run_scripts_path': config.get('global').get('run_scripts_path'),
             'output_base_dir': coupled_project_dir,
             'mpas_am_dir': g_config.get('mpas_dir'),
             'mpas_cice_dir': g_config.get('mpas_cice_dir'),
@@ -381,11 +365,12 @@ def add_jobs(year_set):
             config.get('global').get('img_host_server'),
             config.get('amwg').get('host_prefix'))
 
-        amwg_temp_dir = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'tmp', 'amwg', year_set_str)
+        amwg_temp_dir = os.path.join(config['global']['tmp_path'], 'amwg', year_set_str)
         if not os.path.exists(diag_temp_dir):
             os.makedirs(diag_temp_dir)
-        template_path = os.path.join(os.path.dirname(__file__), 'resources', 'amwg_template.csh')
+        template_path = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'resources', 'amwg_template.csh')
         amwg_config = {
+            'run_scripts_path': config.get('global').get('run_scripts_path'),
             'run_id': config.get('global').get('run_id'),
             'host_directory': config.get('amwg').get('host_directory'),
             'host_prefix': host_prefix,
@@ -408,24 +393,6 @@ def add_jobs(year_set):
         msg = 'Adding AMWGDiagnostic job to the job list: {}'.format(str(amwg_config))
         logging.info(msg)
         year_set.add_job(amwg_diag)
-
-    # init the upload job
-    if not required_jobs['upload_diagnostic_output']:
-        # uvcmetrics diag upload
-        upload_config = {
-            'year_set': year_set.set_number,
-            'start_year': year_set.set_start_year,
-            'end_year': year_set.set_end_year,
-            'path_to_diagnostic': os.path.join(diag_output_path, 'amwg'),
-            'username': config.get('upload_diagnostic').get('diag_viewer_username'),
-            'password': config.get('upload_diagnostic').get('diag_viewer_password'),
-            'server': config.get('upload_diagnostic').get('diag_viewer_server'),
-            'depends_on': ['uvcmetrics'] # set the upload job to wait for the diag job to finish
-        }
-        upload_1 = UploadDiagnosticOutput(upload_config)
-        msg = 'Adding Upload job to the job list: {}'.format(str(upload_1))
-        logging.info(msg)
-        year_set.add_job(upload_1)
 
     return year_set
 
@@ -626,8 +593,7 @@ def cleanup():
         return
     logging.info('Cleaning up temp directories')
     try:
-        cwd = os.path.abspath(os.path.dirname(__file__))
-        tmp_path = os.path.join(cwd, 'tmp')
+        tmp_path = config.get('global').get('tmp_path')
         if os.path.exists(tmp_path):
             rmtree(tmp_path)
     except Exception as e:
@@ -635,11 +601,15 @@ def cleanup():
         print_message('Error removing temp directories')
 
     try:
-        archive_path = os.path.join(cwd, 'script_archive', time.strftime("%d-%m-%Y-%I:%M"))
+        archive_path = os.path.join(
+            config.get('global').get('output_path'),
+            'script_archive',
+            time.strftime("%Y-%m-%d-%I-%M"))
         if not os.path.exists(archive_path):
             os.makedirs(archive_path)
-        run_script_path = os.path.join(cwd, 'run_scripts')
-        move(run_script_path, archive_path)
+        run_script_path = config.get('global').get('run_scripts_path')
+        if os.path.exists(run_script_path):
+            move(run_script_path, archive_path)
     except Exception as e:
         logging.error(format_debug(e))
         logging.error('Error archiving run_scripts directory')
@@ -729,15 +699,7 @@ def display(stdscr, event, config):
                     pad.refresh(0, 0, 3, 5, hmax, wmax)
                 pad.clrtoeol()
                 y += 1
-                # if xy_check(x, y, hmax, wmax) == -1:
-                #     sleep(1)
-                #     break
-                # if y >= (hmax/3):
-                #     last_y = y
-                #     y = 0
-                #     x += (wmax/2)
-                #     if x >= wmax:
-                #         break
+
                 if year_set.status == SetStatus.COMPLETED \
                     or year_set.status == SetStatus.NO_DATA \
                     or year_set.status == SetStatus.PARTIAL_DATA:
@@ -764,22 +726,13 @@ def display(stdscr, event, config):
                         sleep(0.01)
                         pad.refresh(0, 0, 3, 5, hmax, wmax)
                     y += 1
-                # if y >= (hmax/3):
-                #     last_y = y
-                #     y = 0
-                #     x += (wmax/2)
-                #     if x >= wmax:
-                #         break
 
             x = 0
             if last_y:
                 y = last_y
-            # pad.refresh(0, 0, 3, 5, hmax, wmax)
             pad.clrtobot()
             y += 1
-            # if xy_check(x, y, hmax, wmax) == -1:
-            #     sleep(1)
-            #     continue
+
             for line in event_list[-10:]:
                 if 'Transfer' in line:
                     continue
@@ -796,7 +749,6 @@ def display(stdscr, event, config):
                 if initializing:
                     sleep(0.01)
                     pad.refresh(0, 0, 3, 5, hmax, wmax)
-                #pad.refresh(0, 0, 3, 5, hmax, wmax)
                 y += 1
                 if xy_check(x, y, hmax, wmax) == -1:
                     sleep(1)
@@ -813,45 +765,6 @@ def display(stdscr, event, config):
             current_year = 1
             year_ready = True
             partial_data = False
-            # for line in sorted(file_list, cmp=file_list_cmp):
-            #     index = line.find('-')
-            #     year = int(line[:index])
-            #     month = int(line[index + 1:])
-            #     if month == 1:
-            #         year_ready = True
-            #         partial_data = False
-            #     if file_list[line] != SetStatus.DATA_READY:
-            #         year_ready = False
-            #     else:
-            #         partial_data = True
-            #     if month == 12:
-            #         if year_ready:
-            #             status = SetStatus.DATA_READY
-            #         else:
-            #             if partial_data:
-            #                 status = SetStatus.PARTIAL_DATA
-            #             else:
-            #                 status = SetStatus.NO_DATA
-            #         file_display_list.append('Year {year} - {status}'.format(
-            #             year=year,
-            #             status=status))
-
-            # line_length = len(file_display_list[0])
-            # num_cols = wmax/line_length
-            # for line in file_display_list:
-            #     if x + len(line) >= wmax:
-            #         diff = wmax - (x + len(line))
-            #         line = line[:diff]
-            #     pad.addstr(y, x, line, curses.color_pair(4))
-            #     pad.clrtoeol()
-            #     y += 1
-            #     if y >= (hmax-10):
-            #         y = file_start_y
-            #         x += line_length + 5
-            #         if x >= wmax:
-            #             break
-            #     if y > file_end_y:
-            #         file_end_y = y
 
             y = file_end_y + 1
             x = 0
@@ -889,8 +802,7 @@ def display(stdscr, event, config):
             sleep(1)
 
     except KeyboardInterrupt as e:
-        print_debug(e)
-        return
+        raise
 
 def sigwinch_handler(n, frame):
     curses.endwin()
@@ -938,16 +850,13 @@ if __name__ == "__main__":
 
     # check that all netCDF files exist
     path_exists(config)
-    # cleanup any temp directories from previous runs
-    rs = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'run_scripts')
-    if os.path.exists(rs):
-        if os.listdir(rs):
-            if not config.get('global').get('no_cleanup'):
-                cleanup()
-                if not os.path.exists(rs):
-                    os.mkdir(rs)
-    else:
-        os.mkdir(rs)
+
+    # remove any old tmp directories
+    cleanup()
+    if not os.path.exists(config['global']['run_scripts_path']):
+        os.makedirs(config['global']['run_scripts_path'])
+    if not os.path.exists(config['global']['tmp_path']):
+        os.makedirs(config['global']['tmp_path'])
 
     if config.get('global').get('ui', False):
         try:
@@ -961,6 +870,7 @@ if __name__ == "__main__":
             diaplay_thread.start()
 
         except KeyboardInterrupt as e:
+            print 'keyboard'
             display_event.set()
             sys.exit()
 
@@ -1131,6 +1041,7 @@ if __name__ == "__main__":
                 if not config.get('global').get('no-cleanup', False):
                     cleanup()
                 message = ' ---- All processing complete ----'
+                event_list = push_event(event_list, message)
                 emailaddr = config.get('global').get('email')
                 if emailaddr:
                     try:
@@ -1148,12 +1059,16 @@ You can view your diagnostic output here:\n'''.format(
                             msg=msg)
                     except Exception as e:
                         logging.error(format_debug(e))
-                event_list = push_event(event_list, message)
+                    else:
+                        event_list = push_event(event_list, 'Sending email to {}'.format(emailaddr))
                 sleep(5)
                 display_event.set()
                 sleep(2)
                 print_message(message, 'ok')
                 logging.info("## All processes complete")
+                for t in thread_list:
+                    thread_kill_event.set()
+                    t.join()
                 sys.exit(0)
             sleep(10)
             loop_count += 1

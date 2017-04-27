@@ -34,7 +34,6 @@
 set projdir =                           %%coupled_project_dir%%
 set output_base_dir =                   %%output_base_dir%%
 setenv coupled_diags_home               %%coupled_diags_home%%
-
 #USER DEFINED CASE SPECIFIC VARIABLES TO SPECIFY (REQUIRED)
 
 #Test case variables, for casename, add any addendums like /run or /atm/hist

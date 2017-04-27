@@ -6,17 +6,16 @@ A workflow tool for the ACME project
 1. [Installation](#installation)
 2. [Usage](#usage)
 3. [Configuration](#config)
-4. [Quick Start](doc/quick_start_instructions.ipynb)
+4. [Quick Start](doc/quick_start_guide.md)
 
 
 
 
 # Installation<a name="installation"></a>
 
-If you don't have Anaconda installed, follow [this guide](doc/anaconda_install_instructions.ipynb).
+If you don't have Anaconda installed, follow [this guide](doc/anaconda_install_guide.md).
 
-If you're running on acme1 or aims4, you can skip the following instructions, and instead
-use the [super quick start guide](doc/super_quick_start.ipynb)
+If you're not running on acme1.llnl.gov or aims4.llnl.gov, use the [setup guide](doc/setup_guide.md) for more detailed instructions.
 
 If you're on a machine behind a firewall that wont allow ssh connections to git, use
 

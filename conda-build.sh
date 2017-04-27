@@ -1,0 +1,1 @@
+conda build -c conda-forge -c scitools -c uvcdat/label/2.8 -c uvcdat acme_automated.recipe
