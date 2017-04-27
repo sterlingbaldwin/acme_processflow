@@ -340,10 +340,10 @@ def setup_local_hosting(job, event_list, img_src):
         event_list = push_event(event_list, 'Error copying coupled_diag to host_location')
         return
 
-    prev_dir = os.getcwd()
-    os.chdir(host_dir)
-    job.generateIndex(output_dir=host_dir)
-    os.chdir(prev_dir)
+    # prev_dir = os.getcwd()
+    # os.chdir(host_dir)
+    # job.generateIndex(output_dir=host_dir)
+    # os.chdir(prev_dir)
 
     subprocess.call(['chmod', '-R', '777', outter_dir])
 
@@ -442,8 +442,9 @@ def write_human_state(event_list, job_sets, state_path='run_state.txt'):
 
     try:
         with open(state_path, 'w') as outfile:
-            line = "Execution state as of {0}\n\n".format(datetime.datetime.now().strftime('%d, %b %Y %I:%M'))
+            line = "Execution state as of {0}\n".format(datetime.datetime.now().strftime('%d, %b %Y %I:%M'))
             out_str = line
+            out_str += 'Running under process {0}\n\n'.format(os.getpid())
             for year_set in job_sets:
                 line = 'Year_set {num}: {start} - {end}\n'.format(
                     num=year_set.set_number,
