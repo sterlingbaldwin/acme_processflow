@@ -62,7 +62,8 @@ class CoupledDiagnostic(object):
             'obs_seaicedir': '',
             'obs_sstdir': '',
             'dataset_name': '',
-            'output_base_dir': ''
+            'output_base_dir': '',
+            'run_scripts_path': ''
         }
         self.slurm_args = {
             'num_cores': '-n 16', # 16 cores
@@ -122,6 +123,9 @@ class CoupledDiagnostic(object):
             self.config.get('run_id'),
             str(self.config.get('year_set')))
         self.config['web_dir'] = web_dir
+
+        if not os.path.exists(self.config.get('run_scripts_path')):
+            os.makedirs(self.config.get('run_scripts_path'))
 
 
     def postvalidate(self):
@@ -208,7 +212,7 @@ class CoupledDiagnostic(object):
                 dst=run_dir)
         return True
 
-    def generateIndex(self, output_dir):
+    def generateIndex(self):
         """
         Generates the index.json for uploading to the diagnostic viewer
         """
@@ -216,14 +220,7 @@ class CoupledDiagnostic(object):
             self.event_list,
             'Starting index generataion for coupled diagnostic')
 
-        #prev_dir = os.getcwd()
-        # output_dir = os.path.join(
-        #     self.config.get('output_base_dir'),
-        #     'coupled_diagnostics_case_scripts-obs')
-        #os.chdir(output_dir)
-        viewer = OutputViewer(
-            path=output_dir,
-            index_name="Coupled Diagnostic")
+        viewer = OutputViewer(index_name="Coupled Diagnostic")
         viewer.add_page("Coupled Diagnostics Output", ["Description", "ANN", "DJF", "JJA"])
 
         viewer.add_group('Time Series Plots: Global and Zonal-band means (ATM)')
@@ -343,19 +340,6 @@ class CoupledDiagnostic(object):
 
         viewer.generate_viewer(prompt_user=False)
 
-        find_str = '/var/www/html/coupled_diag'
-        replace_str = 'https://acme-viewer.llnl.gov/coupled'
-        for subdir, dirs, files in os.walk(output_dir):
-            for f in files:
-                if f.endswith('.html'):
-                    html_path = os.path.join(os.getcwd(), subdir, f)
-                    with open(html_path, 'r') as infile:
-                        old_html = infile.read()
-                    index = old_html.find(find_str)
-                    new_html = old_html.replace(find_str, replace_str)
-                    with open(html_path, 'w') as outfile:
-                        outfile.write(new_html)
-        #os.chdir(prev_dir)
     def execute(self, batch=False):
         """
         Perform the actual work
@@ -395,11 +379,8 @@ class CoupledDiagnostic(object):
             start=self.config.get('test_begin_yr_climo'),
             end=self.config.get('test_end_yr_climo'),
             uuid=self.uuid[:5])
-        run_script = os.path.join(
-            os.path.abspath(os.path.dirname(__file__)),
-            '..',
-            'run_scripts',
-            expected_name)
+    
+        run_script = os.path.join(self.config.get('run_scripts_path'), expected_name)
         self.slurm_args['error_file'] = '-e {err}'.format(err=run_script + '.err')
         self.slurm_args['out_file'] = '-o {out}'.format(out=run_script + '.out')
         with open(run_script, 'w') as batchfile:
@@ -409,6 +390,7 @@ class CoupledDiagnostic(object):
             batchfile.write(slurm_prefix)
             batchfile.write(cmd)
 
+        # slurm_cmd = ['sbatch', run_script, '--oversubscribe']
         slurm_cmd = ['sbatch', run_script, '--oversubscribe']
         started = False
         retry_count = 0

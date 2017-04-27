@@ -47,7 +47,8 @@ class Timeseries(object):
             'input_directory': '',
             'output_directory': '',
             'var_list': '',
-            'caseId': ''
+            'caseId': '',
+            'run_scripts_path': ''
         }
         self.proc = None
         self.slurm_args = {
@@ -124,11 +125,7 @@ class Timeseries(object):
                 start=self.config.get('start_year'),
                 end=self.config.get('end_year'),
                 uuid=self.uuid[:5])
-            run_scripts_path = os.path.join(os.path.abspath(os.path.dirname(__file__)), '..', 'run_scripts')
-            run_script = os.path.join(run_scripts_path, expected_name)
-
-            if not os.path.exists(run_scripts_path):
-                os.makedirs(run_scripts_path)
+            run_script = os.path.join(self.config.get('run_scripts_path'), expected_name)
 
             self.slurm_args['error_file'] = '-e {error_file}'.format(error_file=run_script + '.err')
             self.slurm_args['output_file'] = '-o {output_file}'.format(output_file=run_script + '.out')
@@ -140,6 +137,7 @@ class Timeseries(object):
                 slurm_command = ' '.join(cmd)
                 batchfile.write(slurm_command)
 
+            # slurm_cmd = ['sbatch', run_script, '--oversubscribe']
             slurm_cmd = ['sbatch', run_script, '--oversubscribe']
             started = False
             retry_count = 0
