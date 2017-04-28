@@ -188,6 +188,10 @@ class CoupledDiagnostic(object):
                 s_index = start.start() + 1
                 year = int(mpas[s_index: s_index + 4])
                 if year > set_end_year or year < set_start_year:
+                    if year == set_end_year + 1:
+                        month = int(mpas[s_index + 5: s_index + 7])
+                        if month == 1:
+                            mpas_temp_list.append(mpas)
                     continue
                 mpas_temp_list.append(mpas)
                 if year not in all_years:
@@ -379,7 +383,7 @@ class CoupledDiagnostic(object):
             start=self.config.get('test_begin_yr_climo'),
             end=self.config.get('test_end_yr_climo'),
             uuid=self.uuid[:5])
-    
+
         run_script = os.path.join(self.config.get('run_scripts_path'), expected_name)
         self.slurm_args['error_file'] = '-e {err}'.format(err=run_script + '.err')
         self.slurm_args['out_file'] = '-o {out}'.format(out=run_script + '.out')
