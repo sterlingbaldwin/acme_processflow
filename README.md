@@ -16,6 +16,7 @@ A workflow tool for the ACME project
 If you don't have Anaconda installed, follow [this guide](doc/anaconda_install_guide.md).
 
 If you're not running on acme1.llnl.gov or aims4.llnl.gov, use the [setup guide](doc/setup_guide.md) for more detailed instructions.
+If you are running on acme1/aims4, follow [the quick start guide](doc/quick_start_guide.md)
 
 If you're on a machine behind a firewall that wont allow ssh connections to git, use
 
