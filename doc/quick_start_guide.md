@@ -10,7 +10,7 @@ Note: Due to a recent change to the lab firewall settings, internal users cannot
 from acme1:/p/cscratch/acme/data/run.cfg.example
 
 
-Once you have the file, open it in your favorite editor. There are are 12 values that must be changed before you're ready to run. You can find an explanation of each of them [here](doc/quick_start_instructions.ipynb)
+Once you have the file, open it in your favorite editor. There are are 12 values that must be changed before you're ready to run. You can find an explanation of each of them [here](doc/setup_guide.md)
 
 The keys you need to change before running the first time are:
 ```
