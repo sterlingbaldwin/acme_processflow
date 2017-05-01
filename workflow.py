@@ -46,6 +46,7 @@ parser.add_argument('-r', '--dry-run', help='Do all setup, but dont submit jobs'
 parser.add_argument('-l', '--log', help='Path to logging output file')
 parser.add_argument('-u', '--no-cleanup', help='Don\'t perform pre or post run cleanup. This will leave all run scripts in place', action='store_true')
 parser.add_argument('-m', '--no-monitor', help='Don\'t run the remote monitor or move any files over globus', action='store_true')
+parser.add_argument('-V', '--viewer', help='Turn on generation for output_viewer style web pages', action='store_true')
 
 def setup(parser):
     """
@@ -106,6 +107,7 @@ def setup(parser):
     if args.no_cleanup:
         config['global']['no_cleanup'] = True
     else:
+        print 'Turning off output cleanup'
         config['global']['no_cleanup'] = False
 
     if args.no_monitor:
@@ -113,6 +115,12 @@ def setup(parser):
         print "Turning off remote monitoring"
     else:
         config['global']['no_monitor'] = False
+
+    if args.viewer:
+        print 'Turning on output_viewer mode'
+        config['global']['viewer'] = True
+    else:
+        config['global']['viewer'] = False
 
     # setup config for file type directories
     for key, val in config.get('global').get('output_patterns').items():
@@ -123,6 +131,8 @@ def setup(parser):
             os.makedirs(new_dir)
         if val == 'mpaso.hist.am.timeSeriesStatsMonthly':
             config['global']['mpas_dir'] = new_dir
+        elif val == 'rpointer':
+            config['global']['rpt_dir'] = new_dir
         elif val == 'mpascice.hist.am.timeSeriesStatsMonthly':
             config['global']['mpas_cice_dir'] = new_dir
         elif val == 'cam.h0':
@@ -303,6 +313,8 @@ def add_jobs(year_set):
 
         c_config = config.get('coupled_diags')
         coupled_diag_config = {
+            'rpt_dir': g_config.get('rpt_dir'),
+            'mpas_regions_file': g_config.get('mpas_regions_file'),
             'run_scripts_path': config.get('global').get('run_scripts_path'),
             'output_base_dir': coupled_project_dir,
             'mpas_am_dir': g_config.get('mpas_dir'),
@@ -410,6 +422,7 @@ def monitor_check(monitor, config, file_list, event_list):
     global transfer_list
     # if there are already three or more transfers in progress
     # hold off on starting any new ones until they complete
+    print 'starting minitor check'
     if active_transfers >= 2:
         return
     event_list = push_event(event_list, "Running check for remote files")
@@ -438,8 +451,17 @@ def monitor_check(monitor, config, file_list, event_list):
             file_key = 'mpas-o_in'
         elif file_type == 'STREAMS':
             file_key = 'streams.cice' if 'cice' in new_file['filename'] else 'streams.ocean'
+        elif file_type == 'RPT':
+            if 'ocn' in new_file['filename']:
+                file_key = 'rpointer.ocn'
+            elif 'atm' in new_file['filename']:
+                file_key = 'rpointer.atm'
+            else:
+                continue
 
         try:
+            if file_type == 'RPT':
+                print file_list[file_type][file_key]
             status = file_list[file_type][file_key]
         except KeyError:
             continue
@@ -461,7 +483,10 @@ def monitor_check(monitor, config, file_list, event_list):
 
     # if there are any new files
     if not checked_new_files:
+        print 'no news files'
         return
+    else:
+        print pformat(checked_new_files)
 
     # find which year set the data belongs to
     frequencies = config.get('global').get('set_frequency')
@@ -572,6 +597,8 @@ def handle_transfer(transfer_job, f_list, event, event_list):
                 file_key = 'mpas-cice_in'
             elif item_type == 'MPAS_O':
                 file_key = 'mpas-o_in'
+            elif item_type == 'RPT':
+                file_key = 'rpointer.ocn' if 'ocn' in item_name else 'rpointer.atm'
             elif item_type == 'STREAMS':
                 file_key == 'streams.cice' if 'cice' in item_name else 'streams.ocean'
             file_list[item_type][file_key] = SetStatus.COMPLETED
@@ -913,6 +940,9 @@ if __name__ == "__main__":
             file_list[key]['mpas-cice_in'] = SetStatus.NO_DATA
         elif key == 'MPAS_O_IN':
             file_list[key]['mpas-o_in'] = SetStatus.NO_DATA
+        elif key == 'RPT':
+            file_list[key]['rpointer.ocn'] = SetStatus.NO_DATA
+            file_list[key]['rpointer.atm'] = SetStatus.NO_DATA
         elif key == 'MPAS_RST':
             for year in range(2, number_of_sim_years + 1):
                 file_key = '{year}-1'.format(year=year)

@@ -302,7 +302,7 @@ def monitor_job(job, job_set, event=None, debug=False, batch_type='slurm', uploa
             if thread_sleep(10, event):
                 return
 
-def setup_local_hosting(job, event_list, img_src):
+def setup_local_hosting(job, event_list, img_src, generate=False):
     """
     Sets up the local directory for hosting diagnostic sets
     """
@@ -340,10 +340,11 @@ def setup_local_hosting(job, event_list, img_src):
         event_list = push_event(event_list, 'Error copying coupled_diag to host_location')
         return
 
-    # prev_dir = os.getcwd()
-    # os.chdir(host_dir)
-    # job.generateIndex(output_dir=host_dir)
-    # os.chdir(prev_dir)
+    if generate:
+        prev_dir = os.getcwd()
+        os.chdir(host_dir)
+        job.generateIndex(output_dir=host_dir)
+        os.chdir(prev_dir)
 
     subprocess.call(['chmod', '-R', '777', outter_dir])
 
@@ -395,6 +396,12 @@ def check_for_inplace_data(file_list, file_name_list, job_sets, config):
                     file_list[file_type][file_key] = SetStatus.DATA_READY
             elif file_type == 'STREAMS':
                 for file_key in ['streams.cice', 'streams.ocean']:
+                    file_name_list[file_type][file_key] = input_file
+                    if os.path.exists(os.path.join(input_dir, input_file)) and \
+                       not file_list[file_type][file_key] == SetStatus.IN_TRANSIT:
+                        file_list[file_type][file_key] = SetStatus.DATA_READY
+            elif file_type == 'RPT':
+                for file_key in ['rpointer.ocn', 'rpointer.atm']:
                     file_name_list[file_type][file_key] = input_file
                     if os.path.exists(os.path.join(input_dir, input_file)) and \
                        not file_list[file_type][file_key] == SetStatus.IN_TRANSIT:

@@ -28,8 +28,10 @@ class CoupledDiagnostic(object):
         """
         self.event_list = event_list
         self.inputs = {
+            'mpas_regions_file': '',
             'web_dir': '',
             'mpas_am_dir': '',
+            'rpt_dir': '',
             'mpas_cice_dir': '',
             'mpas_o_dir': '',
             'streams_dir': '',
@@ -121,7 +123,7 @@ class CoupledDiagnostic(object):
         web_dir = outter_dir = os.path.join(
             self.config.get('host_directory'),
             self.config.get('run_id'),
-            str(self.config.get('year_set')))
+            'year_set_' + str(self.config.get('year_set')))
         self.config['web_dir'] = web_dir
 
         if not os.path.exists(self.config.get('run_scripts_path')):
@@ -152,7 +154,7 @@ class CoupledDiagnostic(object):
         output_directory = os.path.join(output_path, output_directory)
         if os.path.exists(output_directory):
             contents = os.listdir(output_directory)
-            return bool(len(contents) > 30)
+            return bool(len(contents) >= 60)
         else:
             return False
 
@@ -204,7 +206,7 @@ class CoupledDiagnostic(object):
                 src_list=mpas_temp_list,
                 dst=run_dir)
 
-        extras = ['mpas_am_dir', 'mpas_cice_in_dir', 'mpas_o_dir', 'streams_dir', 'mpas_rst_dir']
+        extras = ['mpas_am_dir', 'mpas_cice_in_dir', 'mpas_o_dir', 'streams_dir', 'mpas_rst_dir', 'rpt_dir']
         for extra in extras:
             path = self.config.get(extra)
             src_list = os.listdir(path)
@@ -354,17 +356,19 @@ class CoupledDiagnostic(object):
             message = 'Coupled_diag job already computed, skipping'
             self.event_list = push_event(self.event_list, message)
             return 0
-
+        # create symlinks to the input data
+        if not self.setup_input_directory():
+            return -1
         # self.config['test_archive_dir'] = os.path.join(
         #     os.path.abspath(os.path.dirname(__file__)),
         #     '..',
         #     self.config.get('test_archive_dir'),
         #     self.config.get('test_casename'),
         #     'run')
-        self.config['test_archive_dir'] = os.path.join(
-            os.path.abspath(os.path.dirname(__file__)),
-            '..',
-            self.config.get('test_archive_dir'))
+        # self.config['test_archive_dir'] = os.path.join(
+        #     os.path.abspath(os.path.dirname(__file__)),
+        #     '..',
+        #     self.config.get('test_archive_dir'))
 
         # render the run_AIMS.csh script
         render(
@@ -372,9 +376,6 @@ class CoupledDiagnostic(object):
             input_path=self.config.get('coupled_template_path'),
             output_path=self.config.get('rendered_output_path'),
             delimiter='%%')
-        # create symlinks to the input data
-        if not self.setup_input_directory():
-            return -1
 
         cmd = 'csh {run_AIMS}'.format(run_AIMS=self.config.get('rendered_output_path'))
 
