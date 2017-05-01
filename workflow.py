@@ -422,7 +422,6 @@ def monitor_check(monitor, config, file_list, event_list):
     global transfer_list
     # if there are already three or more transfers in progress
     # hold off on starting any new ones until they complete
-    print 'starting minitor check'
     if active_transfers >= 2:
         return
     event_list = push_event(event_list, "Running check for remote files")
@@ -485,8 +484,6 @@ def monitor_check(monitor, config, file_list, event_list):
     if not checked_new_files:
         print 'no news files'
         return
-    else:
-        print pformat(checked_new_files)
 
     # find which year set the data belongs to
     frequencies = config.get('global').get('set_frequency')
@@ -696,6 +693,7 @@ def display(stdscr, event, config):
             if len(job_sets) == 0:
                 sleep(1)
                 continue
+            pad.clrtobot()
             y = 0
             x = 0
             for year_set in job_sets:

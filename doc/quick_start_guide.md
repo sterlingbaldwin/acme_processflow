@@ -4,8 +4,12 @@ Use this guide if you're already an acme1 or aims4 user.
 
 For a new run all you will need is to setup your runs configuration file. Make a copy of the sample config file
 ```
-wget https://github.com/sterlingbaldwin/acme_workflow/blob/master/run.cfg
+wget https://raw.githubusercontent.com/sterlingbaldwin/acme_workflow/master/run.cfg
 ```
+Note: Due to a recent change to the lab firewall settings, internal users cannot access raw content from github. You can get a recent copy of the example run.cfg
+from acme1:/p/cscratch/acme/data/run.cfg.example
+
+
 Once you have the file, open it in your favorite editor. There are are 12 values that must be changed before you're ready to run. You can find an explanation of each of them [here](doc/quick_start_instructions.ipynb)
 
 The keys you need to change before running the first time are:
@@ -35,19 +39,19 @@ Once these are set, only the data_cache_path, output_path, and run_id need to be
 
 Running on acme1 and aims4 is very easy. Simply activate the conda environment provided, and run the script.
 ```
-source activate /p/cscratch/acme/bin/env
-python /p/cscratch/acme/bin/acme_workflow/workflow.py -c run.cfg
+source activate /p/cscratch/acme/bin/acme
+python /p/cscratch/acme/bin/acme_workflow/workflow.py -c /path/to/your/run.cfg
 ```
 
 In interactive mode, if the terminal is closed or you log out, it will stop the process (but the runs managed by SLURM will continue). See below for headless mode instructions.
 
     python workflow.py -c run.cfg
 
-![initial run](initial_run.png)
+![initial run](http://imgur.com/ZGuJUCk)
 
 Once globus has transfered the first year_set of data, it will start running the post processing jobs.
 
-![run in progress](../doc/run_in_process.png)
+![run in progress](http://imgur.com/URU4OVY)
 
 
 ### headless mode
@@ -62,4 +66,4 @@ This run can continue after you close the termincal and log off the computer. Wh
 less run_state.txt
 ```
 
-![run_state](run_state.png)
+![run_state](http://imgur.com/zS8f57g)

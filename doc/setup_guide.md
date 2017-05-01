@@ -44,11 +44,11 @@ In interactive mode, if the terminal is closed or you log out, it will stop the 
 
     python workflow.py -c run.cfg
 
-![initial run](initial_run.png?raw=true)
+![initial run](http://imgur.com/ZGuJUCk)
 
 Once globus has transfered the first year_set of data, it will start running the post processing jobs.
 
-![run in progress](run_in_process.png?raw=true)
+![run in progress](http://imgur.com/URU4OVY)
 
 
 ### headless mode
@@ -63,7 +63,7 @@ This run can continue after you close the termincal and log off the computer. Wh
 less run_state.txt
 ```
 
-![run_state](run_state.png?raw=true)
+![run_state](http://imgur.com/zS8f57g)
 
 #### The model run directory on the compute machine.
 
