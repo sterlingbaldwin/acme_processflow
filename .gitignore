@@ -2,4 +2,4 @@
 tmp
 config\.json
 \.vscode/
-ftp-sync\\.json
+\.remote-sync\.json
