@@ -43,6 +43,7 @@ parser.add_argument('-r', '--dry-run', help='Do all setup, but dont submit jobs'
 parser.add_argument('-l', '--log', help='Path to logging output file')
 parser.add_argument('-u', '--no-cleanup', help='Don\'t perform pre or post run cleanup. This will leave all run scripts in place', action='store_true')
 parser.add_argument('-m', '--no-monitor', help='Don\'t run the remote monitor or move any files over globus', action='store_true')
+parser.add_argument('-V', '--viewer', help='Turn on generation for output_viewer style web pages', action='store_true')
 
 def setup(parser):
     """
@@ -109,6 +110,12 @@ def setup(parser):
         print "Turning off remote monitoring"
     else:
         config['global']['no_monitor'] = False
+    
+    if args.viewer:
+        print 'Turning on output_viewer mode'
+        config['global']['viewer'] = True
+    else:
+        config['global']['viewer'] = False
 
     # setup config for file type directories
     for key, val in config.get('global').get('output_patterns').items():
@@ -125,6 +132,8 @@ def setup(parser):
             config['global']['atm_dir'] = new_dir
         elif val == 'mpaso.rst.0':
             config['global']['mpas_rst_dir'] = new_dir
+        elif val == 'rpointer':
+            config['global']['rpt_dir'] = new_dir
         elif val == 'mpas-o_in':
             config['global']['mpas_o-in_dir'] = new_dir
         elif val == 'mpas-cice_in':
@@ -136,6 +145,15 @@ def setup(parser):
         os.makedirs(config['global']['output_path'])
     if not os.path.exists(config['global']['data_cache_path']):
         os.makedirs(config['global']['data_cache_path'])
+
+    # setup run_scipts_path
+    config['global']['run_scripts_path'] = os.path.join(
+        config['global']['output_path'],
+        'run_scripts')
+    # setup tmp_path
+    config['global']['tmp_path'] = os.path.join(
+        config['global']['output_path'],
+        'tmp')
 
     # setup logging
     if args.log:
@@ -159,7 +177,7 @@ def add_jobs(year_set):
     """
     # each required job is a key, the value is if its in the job list already or not
     # this is here in case the jobs have already been added
-    run_coupled = False
+    run_coupled = 'coupled_diag' not in config.get('global').get('set_jobs', True)
     patterns = config.get('global').get('output_patterns')
     if not patterns.get('STREAMS') or \
        not patterns.get('MPAS_AM') or \
@@ -167,12 +185,11 @@ def add_jobs(year_set):
        not patterns.get('MPAS_CICE_IN'):
         run_coupled = True
     required_jobs = {
-        'climo': False,
-        'timeseries': False,
-        'uvcmetrics': True,
-        'upload_diagnostic_output': True,
+        'climo': 'ncclimo' not in config.get('global').get('set_jobs', True),
+        'timeseries': 'timeseries' not in config.get('global').get('set_jobs', True),
+        'uvcmetrics': 'uvcmetrics' not in config.get('global').get('set_jobs', True),
         'coupled_diagnostic': run_coupled,
-        'amwg_diagnostic': False
+        'amwg_diagnostic': 'amwg' not in config.get('global').get('set_jobs', True)
     }
     year_set_str = 'year_set_{}'.format(year_set.set_number)
     dataset_name = '{time}_{set}_{start}_{end}'.format(
@@ -182,7 +199,10 @@ def add_jobs(year_set):
         end=year_set.set_end_year)
 
     # create a temp directory full of just symlinks to the regridded output we need for this diagnostic job
-    diag_temp_dir = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'tmp', 'diag', year_set_str)
+    diag_temp_dir = os.path.join(
+        config.get('global').get('tmp_path'),
+        'diag',
+        year_set_str)
     if not os.path.exists(diag_temp_dir):
         os.makedirs(diag_temp_dir)
 
@@ -197,7 +217,7 @@ def add_jobs(year_set):
             key_list.append('{0}-{1}'.format(year, month))
 
     climo_file_list = [file_name_list['ATM'].get(x) for x in key_list if file_name_list['ATM'].get(x)]
-    climo_temp_dir = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'tmp', 'climo', year_set_str)
+    climo_temp_dir = os.path.join(config['global']['tmp_path'], 'climo', year_set_str)
     create_symlink_dir(
         src_dir=config.get('global').get('atm_dir'),
         src_list=climo_file_list,
@@ -221,6 +241,7 @@ def add_jobs(year_set):
 
         # create the configuration object for the climo job
         climo_config = {
+            'run_scripts_path': config.get('global').get('run_scripts_path'),
             'start_year': year_set.set_start_year,
             'end_year': year_set.set_end_year,
             'caseId': config.get('global').get('experiment'),
@@ -251,6 +272,7 @@ def add_jobs(year_set):
         # create temp directory of symlinks to history files
         # we can reuse the input directory for the climo generation
         timeseries_config = {
+            'run_scripts_path': config.get('global').get('run_scripts_path'),
             'annual_mode': 'sdd',
             'caseId': config.get('global').get('experiment'),
             'year_set': year_set.set_number,
@@ -281,6 +303,9 @@ def add_jobs(year_set):
 
         c_config = config.get('coupled_diags')
         coupled_diag_config = {
+            'rpt_dir': g_config.get('rpt_dir'),
+            'mpas_regions_file': g_config.get('mpas_regions_file'),
+            'run_scripts_path': config.get('global').get('run_scripts_path'),
             'output_base_dir': coupled_project_dir,
             'mpas_am_dir': g_config.get('mpas_dir'),
             'mpas_cice_dir': g_config.get('mpas_cice_dir'),
@@ -342,11 +367,12 @@ def add_jobs(year_set):
             config.get('global').get('img_host_server'),
             config.get('amwg').get('host_prefix'))
 
-        amwg_temp_dir = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'tmp', 'amwg', year_set_str)
+        amwg_temp_dir = os.path.join(config['global']['tmp_path'], 'amwg', year_set_str)
         if not os.path.exists(diag_temp_dir):
             os.makedirs(diag_temp_dir)
-        template_path = os.path.join(os.path.dirname(__file__), 'resources', 'amwg_template.csh')
+        template_path = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'resources', 'amwg_template.csh')
         amwg_config = {
+            'run_scripts_path': config.get('global').get('run_scripts_path'),
             'run_id': config.get('global').get('run_id'),
             'host_directory': config.get('amwg').get('host_directory'),
             'host_prefix': host_prefix,
@@ -432,7 +458,13 @@ def monitor_check(monitor, config, file_list, event_list):
             file_key = 'mpas-o_in'
         elif file_type == 'STREAMS':
             file_key = 'streams.cice' if 'cice' in new_file['filename'] else 'streams.ocean'
-
+        elif file_type == 'RPT':
+            if 'ocn' in new_file['filename']:
+                file_key = 'rpointer.ocn'
+            elif 'atm' in new_file['filename']:
+                file_key = 'rpointer.atm'
+            else:
+                continue
         try:
             status = file_list[file_type][file_key]
         except KeyError:
@@ -506,6 +538,8 @@ def monitor_check(monitor, config, file_list, event_list):
             file_key = 'mpas-o_in'
         elif item_type == 'MPAS_RST':
             file_key = '0002-01-01'
+        elif item_type == 'RPT':
+                file_key = 'rpointer.ocn' if 'ocn' in item_name else 'rpointer.atm'
         elif item_type == 'STREAMS':
             file_key == 'streams.cice' if 'cice' in item_name else 'streams.ocean'
         file_list[item_type][file_key] = SetStatus.IN_TRANSIT
@@ -571,6 +605,8 @@ def handle_transfer(transfer_job, f_list, event, event_list):
                 file_key = 'mpas-o_in'
             elif item_type == 'STREAMS':
                 file_key == 'streams.cice' if 'cice' in item_name else 'streams.ocean'
+            elif item_type == 'RPT':
+                file_key = 'rpointer.ocn' if 'ocn' in item_name else 'rpointer.atm'
             file_list[item_type][file_key] = SetStatus.COMPLETED
 
 def is_all_done():
@@ -590,8 +626,7 @@ def cleanup():
         return
     logging.info('Cleaning up temp directories')
     try:
-        cwd = os.path.abspath(os.path.dirname(__file__))
-        tmp_path = os.path.join(cwd, 'tmp')
+        tmp_path = config.get('global').get('tmp_path')
         if os.path.exists(tmp_path):
             rmtree(tmp_path)
     except Exception as e:
@@ -599,11 +634,15 @@ def cleanup():
         print_message('Error removing temp directories')
 
     try:
-        archive_path = os.path.join(cwd, 'script_archive', time.strftime("%d-%m-%Y-%I:%M"))
+        archive_path = os.path.join(
+            config.get('global').get('output_path'),
+            'script_archive',
+            time.strftime("%Y-%m-%d-%I-%M"))
         if not os.path.exists(archive_path):
             os.makedirs(archive_path)
-        run_script_path = os.path.join(cwd, 'run_scripts')
-        move(run_script_path, archive_path)
+        run_script_path = config.get('global').get('run_scripts_path')
+        if os.path.exists(run_script_path):
+            move(run_script_path, archive_path)
     except Exception as e:
         logging.error(format_debug(e))
         logging.error('Error archiving run_scripts directory')
@@ -663,6 +702,7 @@ def display(stdscr, event, config):
             if len(job_sets) == 0:
                 sleep(1)
                 continue
+            pad.clrtobot()
             y = 0
             x = 0
             for year_set in job_sets:
@@ -902,15 +942,11 @@ if __name__ == "__main__":
     # check that all netCDF files exist
     path_exists(config)
     # cleanup any temp directories from previous runs
-    rs = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'run_scripts')
-    if os.path.exists(rs):
-        if os.listdir(rs):
-            if not config.get('global').get('no_cleanup'):
-                cleanup()
-                if not os.path.exists(rs):
-                    os.mkdir(rs)
-    else:
-        os.mkdir(rs)
+    cleanup()
+    if not os.path.exists(config['global']['run_scripts_path']):
+        os.makedirs(config['global']['run_scripts_path'])
+    if not os.path.exists(config['global']['tmp_path']):
+        os.makedirs(config['global']['tmp_path'])
 
     if config.get('global').get('ui', False):
         try:
@@ -967,6 +1003,9 @@ if __name__ == "__main__":
             file_list[key]['mpas-cice_in'] = SetStatus.NO_DATA
         elif key == 'MPAS_O_IN':
             file_list[key]['mpas-o_in'] = SetStatus.NO_DATA
+        elif key == 'RPT':
+            file_list[key]['rpointer.ocn'] = SetStatus.NO_DATA
+            file_list[key]['rpointer.atm'] = SetStatus.NO_DATA
         elif key == 'MPAS_RST':
             for year in range(2, number_of_sim_years + 1):
                 file_key = '{year}-1'.format(year=year)
