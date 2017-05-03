@@ -1,15 +1,13 @@
-import paramiko
+# pylint: disable=C0103
+# pylint: disable=C0111
+# pylint: disable=C0301
 import logging
-
-from time import sleep
-from util import print_debug
-from util import print_message
-from util import format_debug
-from getpass import getpass
+import json
+import re
 from pprint import pformat
 
-from paramiko import PasswordRequiredException
-from paramiko import SSHException
+from globus_cli.services.transfer import get_client
+from globus_cli.commands.ls import _get_ls_res as get_ls
 
 
 class Monitor(object):
@@ -24,90 +22,53 @@ class Monitor(object):
         if not config:
             print "No configuration for monitoring system"
             return None
-        self.remote_host = config.get('remote_host')
-        if not self.remote_host:
-            print "No remote host specified"
+        self.source_endpoint = config.get('source_endpoint')
+        if not self.source_endpoint:
             return None
         self.remote_dir = config.get('remote_dir')
         if not self.remote_dir:
-            print "No remote directory specified"
             return None
         self.username = config.get('username')
         if not self.username:
-            print "No username given"
             return None
         self.patterns = config.get('patterns')
         if not self.patterns:
-            print "No search pattern given"
             return None
-        self.password = config.get('password', None)
-        self.keyfile = config.get('keyfile', None)
+        self.password = config.get('password')
+        if not self.password:
+            return None
         self.client = None
         self.known_files = []
         self.new_files = []
 
     def connect(self):
         """
-            Connects to the remote host over ssh
+        Activates the remote endpoint with globus credentials
+
+        return False if error, True on success
         """
-        self.client = paramiko.SSHClient()
-        self.client.load_system_host_keys()
-        self.client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        if self.keyfile and self.password:
-            try:
-                self.client.connect(
-                    port=22,
-                    hostname=self.remote_host,
-                    username=self.username,
-                    password=self.password)
-            except Exception as e:
-                print "Unable to connect to host with given username/password"
-                print_debug(e)
-                return -1
-        elif self.keyfile:
-            try:
-                key = paramiko.RSAKey.from_private_key_file(self.keyfile)
-                self.client.connect(
-                    port=22,
-                    hostname=self.remote_host,
-                    username=self.username,
-                    pkey=key)
-            except PasswordRequiredException as pwe:
-                for attempt in range(3):
-                    success = False
-                    try:
-                        keypass = getpass("Enter private key password: ")
-                        key = paramiko.RSAKey.from_private_key_file(self.keyfile, password=keypass)
-                        success = True
-                    except SSHException as e:
-                        print_message('Unable to unlock key file, retry')
-                if not success:
-                    print_message('To many unlock attempts, exiting')
-                    return -1
-                self.client.connect(
-                    port=22,
-                    hostname=self.remote_host,
-                    username=self.username,
-                    pkey=key)
-            except Exception as e:
-                print "Unable to connect to remote host with given private key"
-                print_debug(e)
-                return -1
-        elif self.password:
-            try:
-                self.client.connect(
-                    port=22,
-                    hostname=self.remote_host,
-                    username=self.username,
-                    password=self.password)
-            except Exception as e:
-                logging.error(format_debug(e))
-                raise
-                return -1
+        self.client = get_client()
+        result = self.client.endpoint_autoactivate(self.source_endpoint, if_expires_in=2880)
+        if result['code'] == "AutoActivationFailed":
+            reqs = json.loads(result.text)
+            myproxy_hostname = None
+            for r in reqs['DATA']:
+                if r['type'] == 'myproxy' and r['name'] == 'hostname':
+                    myproxy_hostname = r['value']
+                if r['name'] == 'hostname':
+                    r['value'] = myproxy_hostname
+                elif r['name'] == 'username':
+                    r['value'] = self.username
+                elif r['name'] == 'passphrase':
+                    r['value'] = self.password
+                elif r['name'] == 'lifetime_in_hours':
+                    r['value'] = '168'
+            result = self.client.endpoint_activate(self.source_endpoint, requirements_data=reqs)
+            if result['code'] != 'Activated.MyProxyCredential':
+                return (False, result['message'])
         else:
-            print "no password or keyfile"
-            return -1
-        return 0
+            return (True, result['message'])
+        return (False, result['message'])
 
     def set_known_files(self, files):
         """
@@ -122,43 +83,6 @@ class Monitor(object):
         """
         return self.known_files
 
-    def get_remote_file_info(self, filepath):
-        cmd = 'ls -la {}'.format(filepath)
-        _, stdout, _ = self.client.exec_command(cmd)
-        info = stdout.read()
-        info = info.split()
-        return info[4], ' '.join(info[5:7])
-
-    def get_remote_file_info_batch(self, filelist):
-        if len(filelist) < 1000:
-            cmd = 'ls -la {}'.format(' '.join(filelist))
-            _, stdout, _ = self.client.exec_command(cmd)
-            info = stdout.read()
-            info = info.split('\n')
-            out = []
-            for line in info:
-                lineinfo = line.split()
-                if not lineinfo or len(lineinfo) < 8:
-                    continue
-                out.append((lineinfo[4], ' '.join(lineinfo[5:8]), lineinfo[-1]))
-        else:
-            start_index = 0
-            end_index = 1000
-            out = []
-            while start_index < len(filelist):
-                cmd = 'ls -la {}'.format(' '.join(filelist[start_index: end_index]))
-                _, stdout, _ = self.client.exec_command(cmd)
-                info = stdout.read()
-                info = info.split('\n')
-                for line in info:
-                    lineinfo = line.split()
-                    if not lineinfo or len(lineinfo) < 8:
-                        continue
-                    out.append((lineinfo[4], ' '.join(lineinfo[5:8]), lineinfo[-1]))
-                start_index += 1000
-                end_index += 1000
-        return out
-
     def check(self):
         """
         Checks to remote_dir for any files that arent in the known files list
@@ -167,35 +91,33 @@ class Monitor(object):
         #     path=self.remote_dir,
         #     pattern=self.pattern)
         self.new_files = []
-        for pattern in self.patterns:
-            if isinstance(pattern, str) or isinstance(pattern, unicode):
-                name = '-name "*{}*"'.format(pattern)
-            else:
-                name = '-name *"' + '"* -or -name *"'.join(pattern) + '*"'
-            cmd = 'find {dir} {name}'.format(
-                name=name,
-                dir=self.remote_dir)
-            _, stdout, stderr = self.client.exec_command(cmd)
-            files = stdout.read()
-            files.strip()
-            files = files.split()
-            fileinfo = self.get_remote_file_info_batch(files)
-            for info in fileinfo:
-                try:
-                    (item for item in self.known_files if item.get('filename') == info[2]).next()
-                except StopIteration:
-                    new_file = {
-                        'size': info[0],
-                        'date': info[1],
-                        'filename': info[2]
-                    }
-                    self.known_files.append(new_file)
+        result = self.client.endpoint_autoactivate(self.source_endpoint, if_expires_in=2880)
+        if result['code'] == "AutoActivationFailed":
+            if not self.connect():
+                logging.error('Unable to connect to globus endpoint')
+                return None
 
-    def remove_new_file(self, file):
+        res = get_ls(
+            self.client,
+            self.remote_dir,
+            self.source_endpoint,
+            False, 0, False)
+        for f in res:
+            for p in self.patterns:
+                if not re.search(pattern=p, string=f['name']):
+                    continue
+                self.new_files.append({
+                    'filename': f['name'],
+                    'date': f['last_modified'],
+                    'size': f['size']
+                })
+                break
+
+    def remove_new_file(self, rfile):
         """
         Removes a files from the new_files listls -l
         """
-        if file in self.new_files:
+        if rfile in self.new_files:
             self.new_files.remove(file)
 
     def get_new_files(self):

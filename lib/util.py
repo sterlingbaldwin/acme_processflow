@@ -11,6 +11,9 @@ import threading
 from pprint import pformat
 from shutil import copytree, rmtree
 
+from globus_cli.commands.login import do_link_login_flow, check_logged_in
+from globus_cli.services.transfer import get_client
+
 from YearSet import SetStatus
 from YearSet import YearSet
 from jobs.JobStatus import JobStatus
@@ -23,6 +26,33 @@ def year_from_filename(filename):
         return year
     else:
         return 0
+
+def setup_globus(endpoints):
+    """
+    Check globus login status and login as nessisary, then
+    iterate over a list of endpoints and activate them all
+    
+    params:
+       endpoints: list of strings containing globus endpoint UUIDs
+    
+    return:
+       True if successful, False otherwise
+    """
+    if not check_logged_in():
+        do_link_login_flow()
+        if not check_logged_in():
+            print 'Login failure'
+            return False
+    
+    client = get_client()
+    for endpoint in endpoints:
+        r = client.endpoint_autoactivate(endpoint, if_expires_in=3600)
+        while r["code"] == "AutoActivationFailed":
+            print 'Endpoint requires manual activation, please open the following URL in a browser to activate the endpoint:'
+            print "https://www.globus.org/app/endpoints/{endpoint}/activate".format(endpoint=endpoint)
+            raw_input("Press ENTER after activating the endpoint")
+            r = client.endpoint_autoactivate(endpoint, if_expires_in=3600)
+    return True
 
 def get_climo_output_files(input_path, set_start_year, set_end_year):
     contents = os.listdir(input_path)
@@ -647,8 +677,8 @@ def file_list_cmp(a, b):
             return 0
 
 def raw_file_cmp(a, b):
-    a = a['filename'].split('/')[-1]
-    b = b['filename'].split('/')[-1]
+    a = str(a['filename'].split('/')[-1])
+    b = str(b['filename'].split('/')[-1])
     if not filter(str.isdigit, a) or not filter(str.isdigit, b):
         return a > b
     a_index = a.find('-')
@@ -718,5 +748,3 @@ def check_slurm_job_submission(expected_name):
                     return found_job, job_id
         sleep(1)
     return found_job, job_id
-
-from jobs.UploadDiagnosticOutput import UploadDiagnosticOutput

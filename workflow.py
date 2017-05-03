@@ -8,7 +8,6 @@ import os
 import threading
 import logging
 import time
-import pickle
 import curses
 import ConfigParser
 
@@ -17,9 +16,6 @@ from shutil import move
 from getpass import getpass
 from time import sleep
 from pprint import pformat
-
-import paramiko
-from paramiko.ssh_exception import BadAuthenticationType
 
 from jobs.Transfer import Transfer
 from jobs.Ncclimo import Climo
@@ -35,15 +31,20 @@ from lib.mailer import Mailer
 from lib.util import *
 
 parser = argparse.ArgumentParser()
-parser.add_argument('-c', '--config', help='Path to configuration file')
-parser.add_argument('-v', '--debug', help='Run in debug mode', action='store_true')
-parser.add_argument('-d', '--daemon', help='Run in daemon mode', action='store_true')
-parser.add_argument('-n', '--no-ui', help='Turn off the GUI', action='store_true')
-parser.add_argument('-r', '--dry-run', help='Do all setup, but dont submit jobs', action='store_true')
-parser.add_argument('-l', '--log', help='Path to logging output file')
-parser.add_argument('-u', '--no-cleanup', help='Don\'t perform pre or post run cleanup. This will leave all run scripts in place', action='store_true')
-parser.add_argument('-m', '--no-monitor', help='Don\'t run the remote monitor or move any files over globus', action='store_true')
-parser.add_argument('-V', '--viewer', help='Turn on generation for output_viewer style web pages', action='store_true')
+parser.add_argument('-c', '--config', help='Path to configuration file.')
+parser.add_argument('-v', '--debug', help='Run in debug mode.', action='store_true')
+parser.add_argument('-d', '--daemon', help='Run in daemon mode.', action='store_true')
+parser.add_argument('-n', '--no-ui', help='Turn off the GUI.', action='store_true')
+parser.add_argument('-r', '--dry-run', help='Do all setup, but dont submit jobs.', action='store_true')
+parser.add_argument('-l', '--log', help='Path to logging output file.')
+parser.add_argument('-u', '--no-cleanup', help='Don\'t perform pre or post run cleanup. This will leave all run scripts in place.', action='store_true')
+parser.add_argument('-m', '--no-monitor', help='Don\'t run the remote monitor or move any files over globus.', action='store_true')
+parser.add_argument('-V', '--viewer', help='Turn on generation for output_viewer style web pages.', action='store_true')
+parser.add_argument('-s', '--size', help='The maximume size in gigabytes of a single transfer, defaults to 100. Must be larger then the largest single file.')
+
+if not os.environ.get('NCARG_ROOT'):
+    print 'No NCARG_ROOT found in environment variables, is NCL installed on the machine? Check /usr/local/src/NCL-6.3.0/'
+    sys.exit()
 
 def setup(parser):
     """
@@ -76,7 +77,7 @@ def setup(parser):
                 for option in confParse.options(section):
                     opt = confParse.get(section, option)
                     if not opt:
-                        if 'pass' in option:
+                        if 'pass' in option and not args.no_monitor:
                             opt = getpass('>> ' + option + ': ')
                         else:
                             opt = raw_input('>> ' + option + ': ')
@@ -110,6 +111,11 @@ def setup(parser):
         print "Turning off remote monitoring"
     else:
         config['global']['no_monitor'] = False
+    
+    if args.size:
+        config['transfer']['size'] = args.size
+    else:
+        config['transfer']['size'] = 100
     
     if args.viewer:
         print 'Turning on output_viewer mode'
@@ -169,6 +175,10 @@ def setup(parser):
         filemode='w',
         level=logging.DEBUG)
 
+    endpoints = [config['transfer']['source_endpoint'], config['transfer']['destination_endpoint']]
+    if not setup_globus(endpoints):
+        return -1
+    print 'Globus setup complete'
     return config
 
 def add_jobs(year_set):
@@ -396,27 +406,9 @@ def add_jobs(year_set):
         logging.info(msg)
         year_set.add_job(amwg_diag)
 
-    # init the upload job
-    # if not required_jobs['upload_diagnostic_output']:
-    #     # uvcmetrics diag upload
-    #     upload_config = {
-    #         'year_set': year_set.set_number,
-    #         'start_year': year_set.set_start_year,
-    #         'end_year': year_set.set_end_year,
-    #         'path_to_diagnostic': os.path.join(diag_output_path, 'amwg'),
-    #         'username': config.get('upload_diagnostic').get('diag_viewer_username'),
-    #         'password': config.get('upload_diagnostic').get('diag_viewer_password'),
-    #         'server': config.get('upload_diagnostic').get('diag_viewer_server'),
-    #         'depends_on': ['uvcmetrics'] # set the upload job to wait for the diag job to finish
-    #     }
-    #     upload_1 = UploadDiagnosticOutput(upload_config)
-    #     msg = 'Adding Upload job to the job list: {}'.format(str(upload_1))
-    #     logging.info(msg)
-    #     year_set.add_job(upload_1)
-
     return year_set
 
-def monitor_check(monitor, config, file_list, event_list):
+def monitor_check(monitor, config, file_list, event_list, display_event):
     """
     Check the remote directory for new files that match the given pattern,
     if there are any new files, create new transfer jobs. If they're in a new job_set,
@@ -482,15 +474,16 @@ def monitor_check(monitor, config, file_list, event_list):
             if not int(os.path.getsize(local_path)) == int(new_file['size']):
                 os.remove(local_path)
                 checked_new_files.append(new_file)
-        if not status == SetStatus.DATA_READY and not status == SetStatus.IN_TRANSIT:
+        if status == SetStatus.NO_DATA:
             checked_new_files.append(new_file)
 
     # if there are any new files
     if not checked_new_files:
-        print 'no new files'
+        # print 'no new files'
         return
     else:
-        print pformat(checked_new_files)
+        # print pformat(checked_new_files)
+        pass
 
     # find which year set the data belongs to
     frequencies = config.get('global').get('set_frequency')
@@ -510,6 +503,7 @@ def monitor_check(monitor, config, file_list, event_list):
     m_config = config.get('monitor')
 
     transfer_config = {
+        'size': t_config.get('size'),
         'file_list': checked_new_files,
         'globus_username': t_config.get('globus_username'),
         'globus_password': t_config.get('globus_password'),
@@ -525,6 +519,21 @@ def monitor_check(monitor, config, file_list, event_list):
         'pattern': config.get('global').get('output_patterns'),
         'ncclimo_path': config.get('ncclimo').get('ncclimo_path')
     }
+
+    # Check if the user is logged in, and all endpoints are active
+    endpoints = [config['transfer']['source_endpoint'], config['transfer']['destination_endpoint']]
+    client = get_client()
+    for endpoint in endpoints:
+        r = client.endpoint_autoactivate(endpoint, if_expires_in=3600)
+        if r["code"] == "AutoActivationFailed":
+            display_event.set()
+            sleep(3)
+            while not setup_globus(endpoints):
+                sleep(1)
+            display_event.clear()
+            diaplay_thread = threading.Thread(target=start_display, args=(config, display_event))
+            diaplay_thread.start()
+            
     transfer = Transfer(transfer_config, event_list)
 
     for item in transfer.config.get('file_list'):
@@ -607,7 +616,7 @@ def handle_transfer(transfer_job, f_list, event, event_list):
                 file_key == 'streams.cice' if 'cice' in item_name else 'streams.ocean'
             elif item_type == 'RPT':
                 file_key = 'rpointer.ocn' if 'ocn' in item_name else 'rpointer.atm'
-            file_list[item_type][file_key] = SetStatus.COMPLETED
+            file_list[item_type][file_key] = SetStatus.DATA_READY
 
 def is_all_done():
     """
@@ -1063,24 +1072,18 @@ if __name__ == "__main__":
             'patterns': patterns,
             'file_list': file_list
         }
-        if config.get('monitor').get('compute_password'):
-            monitor_config['password'] = config.get('monitor').get('compute_password')
-        elif config.get('monitor').get('compute_keyfile'):
-            monitor_config['keyfile'] = config.get('monitor').get('compute_keyfile')
-        else:
-            logging.error('No password or keyfile path given for compute resource, please add to your config and try again')
-            sys.exit(1)
 
         monitor = Monitor(monitor_config)
         if not monitor:
-            print 'error setting up monitor'
+            line = 'error setting up monitor'
+            event_list = push_event(event_list, line)
             sys.exit()
 
-        line = 'Attempting connection to {}'.format(config.get('monitor').get('compute_host'))
+        line = 'Attempting connection to {}'.format(config.get('monitor').get('source_endpoint'))
         event_list = push_event(event_list, line)
 
         status, message = monitor.connect()
-        print message
+        event_list = push_event(event_list, message)
         if not status:
             line = "Unable to connect to globus service, exiting"
             logging.error(line)
@@ -1108,7 +1111,7 @@ if __name__ == "__main__":
                not all_data and \
                not config.get('global').get('no_monitor', False) and \
                loop_count >= 6:
-                monitor_check(monitor, config, file_list, event_list)
+                monitor_check(monitor, config, file_list, event_list, display_event)
                 loop_count = 0
             all_data = check_for_inplace_data(
                 file_list=file_list,
