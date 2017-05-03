@@ -26,7 +26,7 @@ compute_username = YOUR_EDISON_USERNAME
 compute_password = YOUR_EDISON_PASSWORD (optional)
 
 [transfer]
-source_path
+source_path = PATH_TO_YOUR_DATA
 processing_username = YOU_ACME1_USERNAME
 processing_password = YOUR_ACME1_PASSWORD (optional)
 globus_username = YOUR_GLOBUS_USERNAME
