@@ -54,23 +54,26 @@ are some additional tools you'll need. These include the following:
 
 # Usage<a name="usage"></a>
 
-    usage: workflow.py [-h] [-c CONFIG] [-v] [-d] [-s STATE] [-n] [-r] [-l LOG]
-                       [-u] [-m]
+        usage: workflow.py [-h] [-c CONFIG] [-v] [-d] [-n] [-r] [-l LOG] [-u] [-m]
+                        [-V] [-s SIZE]
 
-    optional arguments:
-      -h, --help            show this help message and exit
-      -c CONFIG, --config CONFIG
-                            Path to configuration file
-      -v, --debug           Run in debug mode
-      -s STATE, --state STATE
-                            Path to a json state file
-      -n, --no-ui           Turn off the GUI
-      -r, --dry-run         Do all setup, but dont submit jobs
-      -l LOG, --log LOG     Path to logging output file
-      -u, --no-cleanup      Don't perform pre or post run cleanup. This will leave
-                            all run scripts in place
-      -m, --no-monitor      Don't run the remote monitor or move any files over
-                            globus
+        optional arguments:
+        -h, --help            show this help message and exit
+        -c CONFIG, --config CONFIG
+                                Path to configuration file.
+        -v, --debug           Run in debug mode.
+        -d, --daemon          Run in daemon mode.
+        -n, --no-ui           Turn off the GUI.
+        -r, --dry-run         Do all setup, but dont submit jobs.
+        -l LOG, --log LOG     Path to logging output file.
+        -u, --no-cleanup      Don't perform pre or post run cleanup. This will leave
+                                all run scripts in place.
+        -m, --no-monitor      Don't run the remote monitor or move any files over
+                                globus.
+        -V, --viewer          Turn on generation for output_viewer style web pages.
+        -s SIZE, --size SIZE  The maximume size in gigabytes of a single transfer,
+                                defaults to 100. Must be larger then the largest
+                                single file.
 
 *NOTE*
 When running in GUI mode, resizing the window is discouraged. Although there is some checking
