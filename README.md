@@ -7,7 +7,7 @@ A workflow tool for the ACME project
 2. [Usage](#usage)
 3. [Configuration](#config)
 4. [Quick Start](doc/quick_start_guide.md)
-
+5. [Configuration Guide](doc/config_guide.md)
 
 
 
