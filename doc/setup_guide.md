@@ -20,21 +20,37 @@ simulation_end_year = SOMENUMBER
 set_frequency = [LIST, OF, NUMBERS]
 run_id = YOUR_RUN_ID
 
-[monitor]
-compute_username = YOUR_EDISON_USERNAME
-compute_password = YOUR_EDISON_PASSWORD (optional)
-
 [transfer]
-source_path
-processing_username = YOU_ACME1_USERNAME
-processing_password = YOUR_ACME1_PASSWORD (optional)
-globus_username = YOUR_GLOBUS_USERNAME
-globus_password = YOUR_GLOBUS_PASSWORD (optional)
+source_path = PATH_TO_REMOTE_DATA
+source_endpoint = A_GLOBUS_ENDPOINT_ID
+destination_endpoint = A_GLOBUS_ENDPOINT_ID
 ```
 
-Once these are set, only the data_cache_path, output_path, and run_id need to be changed for each subsequent run.
-
 For each run, the contents of output_path will be overwritten.
+
+#### output_path
+This is the local path to store processed output
+
+#### data_cache_path
+This is the local path to store unprocessed model data
+
+#### simulation_end_year
+The highest year number to expect
+
+#### set_frequency
+A list of lengths of processing sets. E.g set_frequency = [5, 10] will run the processing jobs for every 5 years, and every 10 years. If run on 10 years of data, it will create 3 job sets, 1-5, 6-10, 1-10
+
+#### run_id
+An arbitrary identifyer for each post processing run. This should be updated for each run or it will over write the html output of previous runs.
+
+#### source_path
+The path on the source_endpoint to look for model output.
+
+#### source_endpoint
+A globus endpoind UUID, the default is edison.nersc.gov
+
+#### destination_endpoint
+The globus endpoint UUID for the machine doing the post-processing. The default is acme1.llnl.gov.
 
 ### Running
 

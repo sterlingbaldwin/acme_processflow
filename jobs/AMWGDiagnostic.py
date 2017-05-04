@@ -245,7 +245,7 @@ class AMWGDiagnostic(object):
             dst=self.config.get('test_path_climo'))
 
         for item in os.listdir(self.config.get('test_path_climo')):
-            start_search = re.search(r'\_\d\d\d\d', item)
+            start_search = re.search(r'_\d\d\d\d\d\d_', item)
             s_index = start_search.start()
             os.rename(
                 os.path.join(self.config.get('test_path_climo'), item),

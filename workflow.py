@@ -8,7 +8,6 @@ import os
 import threading
 import logging
 import time
-import pickle
 import curses
 import ConfigParser
 
@@ -18,15 +17,9 @@ from getpass import getpass
 from time import sleep
 from pprint import pformat
 
-import paramiko
-from paramiko.ssh_exception import BadAuthenticationType
-
-# from jobs.Uvcmetrics import Uvcmetrics
 from jobs.Transfer import Transfer
 from jobs.Ncclimo import Climo
-# from jobs.UploadDiagnosticOutput import UploadDiagnosticOutput
 from jobs.Timeseries import Timeseries
-# from jobs.Publication import Publication
 from jobs.AMWGDiagnostic import AMWGDiagnostic
 from jobs.CoupledDiagnostic import CoupledDiagnostic
 from jobs.JobStatus import JobStatus
@@ -38,15 +31,20 @@ from lib.mailer import Mailer
 from lib.util import *
 
 parser = argparse.ArgumentParser()
-parser.add_argument('-c', '--config', help='Path to configuration file')
-parser.add_argument('-v', '--debug', help='Run in debug mode', action='store_true')
-parser.add_argument('-d', '--daemon', help='Run in daemon mode', action='store_true')
-parser.add_argument('-n', '--no-ui', help='Turn off the GUI', action='store_true')
-parser.add_argument('-r', '--dry-run', help='Do all setup, but dont submit jobs', action='store_true')
-parser.add_argument('-l', '--log', help='Path to logging output file')
-parser.add_argument('-u', '--no-cleanup', help='Don\'t perform pre or post run cleanup. This will leave all run scripts in place', action='store_true')
-parser.add_argument('-m', '--no-monitor', help='Don\'t run the remote monitor or move any files over globus', action='store_true')
-parser.add_argument('-V', '--viewer', help='Turn on generation for output_viewer style web pages', action='store_true')
+parser.add_argument('-c', '--config', help='Path to configuration file.')
+parser.add_argument('-v', '--debug', help='Run in debug mode.', action='store_true')
+parser.add_argument('-d', '--daemon', help='Run in daemon mode.', action='store_true')
+parser.add_argument('-n', '--no-ui', help='Turn off the GUI.', action='store_true')
+parser.add_argument('-r', '--dry-run', help='Do all setup, but dont submit jobs.', action='store_true')
+parser.add_argument('-l', '--log', help='Path to logging output file.')
+parser.add_argument('-u', '--no-cleanup', help='Don\'t perform pre or post run cleanup. This will leave all run scripts in place.', action='store_true')
+parser.add_argument('-m', '--no-monitor', help='Don\'t run the remote monitor or move any files over globus.', action='store_true')
+parser.add_argument('-V', '--viewer', help='Turn on generation for output_viewer style web pages.', action='store_true')
+parser.add_argument('-s', '--size', help='The maximume size in gigabytes of a single transfer, defaults to 100. Must be larger then the largest single file.')
+
+if not os.environ.get('NCARG_ROOT'):
+    print 'No NCARG_ROOT found in environment variables, is NCL installed on the machine? Check /usr/local/src/NCL-6.3.0/'
+    sys.exit()
 
 def setup(parser):
     """
@@ -79,7 +77,7 @@ def setup(parser):
                 for option in confParse.options(section):
                     opt = confParse.get(section, option)
                     if not opt:
-                        if 'pass' in option:
+                        if 'pass' in option and not args.no_monitor:
                             opt = getpass('>> ' + option + ': ')
                         else:
                             opt = raw_input('>> ' + option + ': ')
@@ -92,7 +90,6 @@ def setup(parser):
             print_debug(e)
             return -1
 
-    # Set command line arguments as flags in the config
     if args.no_ui:
         config['global']['ui'] = False
     else:
@@ -107,7 +104,6 @@ def setup(parser):
     if args.no_cleanup:
         config['global']['no_cleanup'] = True
     else:
-        print 'Turning off output cleanup'
         config['global']['no_cleanup'] = False
 
     if args.no_monitor:
@@ -115,7 +111,12 @@ def setup(parser):
         print "Turning off remote monitoring"
     else:
         config['global']['no_monitor'] = False
-
+    
+    if args.size:
+        config['transfer']['size'] = args.size
+    else:
+        config['transfer']['size'] = 100
+    
     if args.viewer:
         print 'Turning on output_viewer mode'
         config['global']['viewer'] = True
@@ -131,14 +132,14 @@ def setup(parser):
             os.makedirs(new_dir)
         if val == 'mpaso.hist.am.timeSeriesStatsMonthly':
             config['global']['mpas_dir'] = new_dir
-        elif val == 'rpointer':
-            config['global']['rpt_dir'] = new_dir
         elif val == 'mpascice.hist.am.timeSeriesStatsMonthly':
             config['global']['mpas_cice_dir'] = new_dir
         elif val == 'cam.h0':
             config['global']['atm_dir'] = new_dir
         elif val == 'mpaso.rst.0':
             config['global']['mpas_rst_dir'] = new_dir
+        elif val == 'rpointer':
+            config['global']['rpt_dir'] = new_dir
         elif val == 'mpas-o_in':
             config['global']['mpas_o-in_dir'] = new_dir
         elif val == 'mpas-cice_in':
@@ -146,7 +147,6 @@ def setup(parser):
         elif 'stream' in val:
             config['global']['streams_dir'] = new_dir
 
-    # create root input and output directories
     if not os.path.exists(config['global']['output_path']):
         os.makedirs(config['global']['output_path'])
     if not os.path.exists(config['global']['data_cache_path']):
@@ -175,6 +175,10 @@ def setup(parser):
         filemode='w',
         level=logging.DEBUG)
 
+    endpoints = [config['transfer']['source_endpoint'], config['transfer']['destination_endpoint']]
+    if not setup_globus(endpoints):
+        return -1
+    print 'Globus setup complete'
     return config
 
 def add_jobs(year_set):
@@ -190,10 +194,6 @@ def add_jobs(year_set):
        not patterns.get('MPAS_O_IN') or \
        not patterns.get('MPAS_CICE_IN'):
         run_coupled = True
-
-    # if its False it will be run, if its True it will not be run
-    # this is because its a test of if the job has already been added, thus
-    # False means it hasnt been added yet, True means its already there
     required_jobs = {
         'climo': 'ncclimo' not in config.get('global').get('set_jobs', True),
         'timeseries': 'timeseries' not in config.get('global').get('set_jobs', True),
@@ -408,7 +408,7 @@ def add_jobs(year_set):
 
     return year_set
 
-def monitor_check(monitor, config, file_list, event_list):
+def monitor_check(monitor, config, file_list, event_list, display_event):
     """
     Check the remote directory for new files that match the given pattern,
     if there are any new files, create new transfer jobs. If they're in a new job_set,
@@ -426,7 +426,7 @@ def monitor_check(monitor, config, file_list, event_list):
         return
     event_list = push_event(event_list, "Running check for remote files")
     monitor.check()
-    new_files = monitor.known_files
+    new_files = monitor.new_files
     patterns = config.get('global').get('output_patterns')
     for file_info in new_files:
         for folder, file_type in patterns.items():
@@ -457,10 +457,7 @@ def monitor_check(monitor, config, file_list, event_list):
                 file_key = 'rpointer.atm'
             else:
                 continue
-
         try:
-            if file_type == 'RPT':
-                print file_list[file_type][file_key]
             status = file_list[file_type][file_key]
         except KeyError:
             continue
@@ -477,13 +474,16 @@ def monitor_check(monitor, config, file_list, event_list):
             if not int(os.path.getsize(local_path)) == int(new_file['size']):
                 os.remove(local_path)
                 checked_new_files.append(new_file)
-        if not status == SetStatus.DATA_READY and not status == SetStatus.IN_TRANSIT:
+        if status == SetStatus.NO_DATA:
             checked_new_files.append(new_file)
 
     # if there are any new files
     if not checked_new_files:
-        print 'no news files'
+        # print 'no new files'
         return
+    else:
+        # print pformat(checked_new_files)
+        pass
 
     # find which year set the data belongs to
     frequencies = config.get('global').get('set_frequency')
@@ -503,6 +503,7 @@ def monitor_check(monitor, config, file_list, event_list):
     m_config = config.get('monitor')
 
     transfer_config = {
+        'size': t_config.get('size'),
         'file_list': checked_new_files,
         'globus_username': t_config.get('globus_username'),
         'globus_password': t_config.get('globus_password'),
@@ -518,6 +519,21 @@ def monitor_check(monitor, config, file_list, event_list):
         'pattern': config.get('global').get('output_patterns'),
         'ncclimo_path': config.get('ncclimo').get('ncclimo_path')
     }
+
+    # Check if the user is logged in, and all endpoints are active
+    endpoints = [config['transfer']['source_endpoint'], config['transfer']['destination_endpoint']]
+    client = get_client()
+    for endpoint in endpoints:
+        r = client.endpoint_autoactivate(endpoint, if_expires_in=3600)
+        if r["code"] == "AutoActivationFailed":
+            display_event.set()
+            sleep(3)
+            while not setup_globus(endpoints):
+                sleep(1)
+            display_event.clear()
+            diaplay_thread = threading.Thread(target=start_display, args=(config, display_event))
+            diaplay_thread.start()
+            
     transfer = Transfer(transfer_config, event_list)
 
     for item in transfer.config.get('file_list'):
@@ -531,6 +547,8 @@ def monitor_check(monitor, config, file_list, event_list):
             file_key = 'mpas-o_in'
         elif item_type == 'MPAS_RST':
             file_key = '0002-01-01'
+        elif item_type == 'RPT':
+                file_key = 'rpointer.ocn' if 'ocn' in item_name else 'rpointer.atm'
         elif item_type == 'STREAMS':
             file_key == 'streams.cice' if 'cice' in item_name else 'streams.ocean'
         file_list[item_type][file_key] = SetStatus.IN_TRANSIT
@@ -594,11 +612,11 @@ def handle_transfer(transfer_job, f_list, event, event_list):
                 file_key = 'mpas-cice_in'
             elif item_type == 'MPAS_O':
                 file_key = 'mpas-o_in'
-            elif item_type == 'RPT':
-                file_key = 'rpointer.ocn' if 'ocn' in item_name else 'rpointer.atm'
             elif item_type == 'STREAMS':
                 file_key == 'streams.cice' if 'cice' in item_name else 'streams.ocean'
-            file_list[item_type][file_key] = SetStatus.COMPLETED
+            elif item_type == 'RPT':
+                file_key = 'rpointer.ocn' if 'ocn' in item_name else 'rpointer.atm'
+            file_list[item_type][file_key] = SetStatus.DATA_READY
 
 def is_all_done():
     """
@@ -724,7 +742,15 @@ def display(stdscr, event, config):
                     pad.refresh(0, 0, 3, 5, hmax, wmax)
                 pad.clrtoeol()
                 y += 1
-
+                # if xy_check(x, y, hmax, wmax) == -1:
+                #     sleep(1)
+                #     break
+                # if y >= (hmax/3):
+                #     last_y = y
+                #     y = 0
+                #     x += (wmax/2)
+                #     if x >= wmax:
+                #         break
                 if year_set.status == SetStatus.COMPLETED \
                     or year_set.status == SetStatus.NO_DATA \
                     or year_set.status == SetStatus.PARTIAL_DATA:
@@ -751,13 +777,22 @@ def display(stdscr, event, config):
                         sleep(0.01)
                         pad.refresh(0, 0, 3, 5, hmax, wmax)
                     y += 1
+                # if y >= (hmax/3):
+                #     last_y = y
+                #     y = 0
+                #     x += (wmax/2)
+                #     if x >= wmax:
+                #         break
 
             x = 0
             if last_y:
                 y = last_y
+            # pad.refresh(0, 0, 3, 5, hmax, wmax)
             pad.clrtobot()
             y += 1
-
+            # if xy_check(x, y, hmax, wmax) == -1:
+            #     sleep(1)
+            #     continue
             for line in event_list[-10:]:
                 if 'Transfer' in line:
                     continue
@@ -774,6 +809,7 @@ def display(stdscr, event, config):
                 if initializing:
                     sleep(0.01)
                     pad.refresh(0, 0, 3, 5, hmax, wmax)
+                #pad.refresh(0, 0, 3, 5, hmax, wmax)
                 y += 1
                 if xy_check(x, y, hmax, wmax) == -1:
                     sleep(1)
@@ -790,6 +826,45 @@ def display(stdscr, event, config):
             current_year = 1
             year_ready = True
             partial_data = False
+            # for line in sorted(file_list, cmp=file_list_cmp):
+            #     index = line.find('-')
+            #     year = int(line[:index])
+            #     month = int(line[index + 1:])
+            #     if month == 1:
+            #         year_ready = True
+            #         partial_data = False
+            #     if file_list[line] != SetStatus.DATA_READY:
+            #         year_ready = False
+            #     else:
+            #         partial_data = True
+            #     if month == 12:
+            #         if year_ready:
+            #             status = SetStatus.DATA_READY
+            #         else:
+            #             if partial_data:
+            #                 status = SetStatus.PARTIAL_DATA
+            #             else:
+            #                 status = SetStatus.NO_DATA
+            #         file_display_list.append('Year {year} - {status}'.format(
+            #             year=year,
+            #             status=status))
+
+            # line_length = len(file_display_list[0])
+            # num_cols = wmax/line_length
+            # for line in file_display_list:
+            #     if x + len(line) >= wmax:
+            #         diff = wmax - (x + len(line))
+            #         line = line[:diff]
+            #     pad.addstr(y, x, line, curses.color_pair(4))
+            #     pad.clrtoeol()
+            #     y += 1
+            #     if y >= (hmax-10):
+            #         y = file_start_y
+            #         x += line_length + 5
+            #         if x >= wmax:
+            #             break
+            #     if y > file_end_y:
+            #         file_end_y = y
 
             y = file_end_y + 1
             x = 0
@@ -875,8 +950,7 @@ if __name__ == "__main__":
 
     # check that all netCDF files exist
     path_exists(config)
-
-    # remove any old tmp directories
+    # cleanup any temp directories from previous runs
     cleanup()
     if not os.path.exists(config['global']['run_scripts_path']):
         os.makedirs(config['global']['run_scripts_path'])
@@ -992,32 +1066,26 @@ if __name__ == "__main__":
         output_pattern = config.get('global').get('output_patterns')
         patterns = [v for k, v in config.get('global').get('output_patterns').items()]
         monitor_config = {
-            'remote_host': config.get('monitor').get('compute_host'),
+            'source_endpoint': config.get('transfer').get('source_endpoint'),
             'remote_dir': config.get('transfer').get('source_path'),
             'username': config.get('monitor').get('compute_username'),
             'patterns': patterns,
             'file_list': file_list
         }
-        if config.get('monitor').get('compute_password'):
-            monitor_config['password'] = config.get('monitor').get('compute_password')
-        elif config.get('monitor').get('compute_keyfile'):
-            monitor_config['keyfile'] = config.get('monitor').get('compute_keyfile')
-        else:
-            logging.error('No password or keyfile path given for compute resource, please add to your config and try again')
-            sys.exit(1)
 
         monitor = Monitor(monitor_config)
         if not monitor:
-            print 'error setting up monitor'
+            line = 'error setting up monitor'
+            event_list = push_event(event_list, line)
             sys.exit()
 
-        line = 'Attempting connection to {}'.format(config.get('monitor').get('compute_host'))
+        line = 'Attempting connection to {}'.format(config.get('monitor').get('source_endpoint'))
         event_list = push_event(event_list, line)
 
-        try:
-            monitor.connect()
-        except paramiko.ssh_exception.BadAuthenticationType as e:
-            line = 'Connection failed due to incorrect password, exiting'
+        status, message = monitor.connect()
+        event_list = push_event(event_list, message)
+        if not status:
+            line = "Unable to connect to globus service, exiting"
             logging.error(line)
             event_list = push_event(event_list, line)
             sleep(4)
@@ -1043,7 +1111,7 @@ if __name__ == "__main__":
                not all_data and \
                not config.get('global').get('no_monitor', False) and \
                loop_count >= 6:
-                monitor_check(monitor, config, file_list, event_list)
+                monitor_check(monitor, config, file_list, event_list, display_event)
                 loop_count = 0
             all_data = check_for_inplace_data(
                 file_list=file_list,
@@ -1069,7 +1137,6 @@ if __name__ == "__main__":
                 if not config.get('global').get('no-cleanup', False):
                     cleanup()
                 message = ' ---- All processing complete ----'
-                event_list = push_event(event_list, message)
                 emailaddr = config.get('global').get('email')
                 if emailaddr:
                     try:
@@ -1087,16 +1154,12 @@ You can view your diagnostic output here:\n'''.format(
                             msg=msg)
                     except Exception as e:
                         logging.error(format_debug(e))
-                    else:
-                        event_list = push_event(event_list, 'Sending email to {}'.format(emailaddr))
+                event_list = push_event(event_list, message)
                 sleep(5)
                 display_event.set()
                 sleep(2)
                 print_message(message, 'ok')
                 logging.info("## All processes complete")
-                for t in thread_list:
-                    thread_kill_event.set()
-                    t.join()
                 sys.exit(0)
             sleep(10)
             loop_count += 1
