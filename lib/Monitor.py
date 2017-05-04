@@ -9,6 +9,7 @@ from pprint import pformat
 from globus_cli.services.transfer import get_client
 from globus_cli.commands.ls import _get_ls_res as get_ls
 
+from util import setup_globus
 
 class Monitor(object):
     """
@@ -97,11 +98,17 @@ class Monitor(object):
                 logging.error('Unable to connect to globus endpoint')
                 return None
 
-        res = get_ls(
-            self.client,
-            self.remote_dir,
-            self.source_endpoint,
-            False, 0, False)
+        while True:
+            try:
+                res = get_ls(
+                    self.client,
+                    self.remote_dir,
+                    self.source_endpoint,
+                    False, 0, False)
+            except:
+                sleep(1)
+            else:
+                break
         for f in res:
             for p in self.patterns:
                 if not re.search(pattern=p, string=f['name']):

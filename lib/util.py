@@ -44,6 +44,9 @@ def setup_globus(endpoints):
             print 'Login failure'
             return False
     
+    if not endpoints:
+        return True
+
     client = get_client()
     for endpoint in endpoints:
         r = client.endpoint_autoactivate(endpoint, if_expires_in=3600)

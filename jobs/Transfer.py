@@ -184,10 +184,10 @@ class Transfer(object):
         start_file = self.config.get('file_list')[0]
         end_file = self.config.get('file_list')[-1]
         if not 'mpas-' in start_file:
-            index = start_file['filename'].find('-')
+            index = start_file['filename'].rfind('-')
             start_file = start_file['filename'][index - 4: index + 3]
         if not 'mpas-' in end_file:
-            index = end_file['filename'].find('-')
+            index = end_file['filename'].rfind('-')
             end_file = end_file['filename'][index - 4: index + 3]
 
         start_end_str = '{start} to {end}'.format(
