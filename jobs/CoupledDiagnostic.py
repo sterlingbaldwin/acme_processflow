@@ -52,6 +52,7 @@ class CoupledDiagnostic(object):
             'ref_archive_dir': '',
             'mpas_meshfile': '',
             'mpas_remapfile': '',
+            'mpas_cice_in_dir': '',
             'pop_remapfile': '',
             'remap_files_dir': '',
             'GPCP_regrid_wgt_file': '',
@@ -65,7 +66,8 @@ class CoupledDiagnostic(object):
             'obs_sstdir': '',
             'dataset_name': '',
             'output_base_dir': '',
-            'run_scripts_path': ''
+            'run_scripts_path': '',
+            'mpas_rst_dir': ''
         }
         self.slurm_args = {
             'num_cores': '-n 16', # 16 cores
@@ -209,6 +211,8 @@ class CoupledDiagnostic(object):
         extras = ['mpas_am_dir', 'mpas_cice_in_dir', 'mpas_o_dir', 'streams_dir', 'mpas_rst_dir', 'rpt_dir']
         for extra in extras:
             path = self.config.get(extra)
+            if not path or not os.path.exists(path):
+                continue
             src_list = os.listdir(path)
             if not src_list:
                 return False
