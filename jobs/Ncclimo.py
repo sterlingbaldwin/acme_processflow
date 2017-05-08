@@ -245,18 +245,35 @@ class Climo(object):
         """
         Post execution validation, also run before execution to determine if the output already extists
         """
-        if os.path.exists(self.config.get('climo_output_directory')):
-            set_start_year = self.config.get('start_year')
-            set_end_year = self.config.get('end_year')
-            contents = os.listdir(self.config.get('climo_output_directory'))
-
-            file_list = get_climo_output_files(
-                input_path=self.config.get('climo_output_directory'),
-                set_start_year=self.config.get('start_year'),
-                set_end_year=self.config.get('end_year'))
-            if len(file_list) >= 12:
-                return True
-            else:
-                return False
-        else:
+        set_start_year = self.config.get('start_year')
+        set_end_year = self.config.get('end_year')
+        climo_dir = self.config.get('climo_output_directory')
+        regrid_dir = self.config.get('regrid_output_directory')
+        if not set_start_year or \
+           not set_end_year or \
+           not climo_dir or \
+           not regrid_dir:
+            self.status = JobStatus.INVALID
             return False
+
+        # First check the climo directory
+        if not os.path.exists(climo_dir):
+            return False
+        file_list = get_climo_output_files(
+            input_path=climo_dir,
+            set_start_year=set_start_year,
+            set_end_year=set_end_year)
+        if len(file_list) < 12:
+            return False
+
+        # Second check the regrid directory
+        if not os.path.exists(regrid_dir):
+            return False
+        file_list = get_climo_output_files(
+            input_path=regrid_dir,
+            set_start_year=set_start_year,
+            set_end_year=set_end_year)
+        if len(file_list) < 17:
+            return False
+        
+        return True
