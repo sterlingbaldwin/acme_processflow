@@ -43,10 +43,14 @@ parser.add_argument('-V', '--viewer', help='Turn on generation for output_viewer
 parser.add_argument('-s', '--size', help='The maximume size in gigabytes of a single transfer, defaults to 100. Must be larger then the largest single file.')
 
 if not os.environ.get('NCARG_ROOT'):
-    print 'No NCARG_ROOT found in environment variables, is NCL installed on the machine? Check /usr/local/src/NCL-6.3.0/'
-    sys.exit()
+    ncar_path = '/usr/local/src/NCL-6.3.0/'
+    if os.path.exists(ncar_path):
+        os.environ['NCARG_ROOT'] = ncar_path
+    else:
+        print 'No NCARG_ROOT found in environment variables, is NCL installed on the machine?'
+        sys.exit()
 
-def setup(parser):
+def setup(parser, event_list, display_event):
     """
     Setup the config, file_list, and job_sets variables from either the config file passed from the parser
     of from the previously saved state
@@ -90,11 +94,29 @@ def setup(parser):
             print_debug(e)
             return -1
 
+    endpoints = [config['transfer']['source_endpoint'], config['transfer']['destination_endpoint']]
     if args.no_ui:
         config['global']['ui'] = False
+        addr = config.get('global').get('email')
+        if not addr:
+            print 'When running in headless mode, you must enter an email address.'
+            sys.exit()
+        setup_globus(
+            endpoints=endpoints,
+            no_ui=True,
+            src=config.get('global').get('email'),
+            dst=config.get('global').get('email'),
+            event_list=event_list)
     else:
         debug = False
         config['global']['ui'] = True
+        msg = '## activating endpoints {}'.format(' '.join(endpoints))
+        logging.info(msg)
+        if not setup_globus(
+            endpoints=endpoints,
+            display_event=display_event):
+            return -1
+        print 'Globus setup complete'
 
     if args.dry_run:
         config['global']['dry_run'] = True
@@ -174,11 +196,7 @@ def setup(parser):
         filename=log_path,
         filemode='w',
         level=logging.DEBUG)
-
-    endpoints = [config['transfer']['source_endpoint'], config['transfer']['destination_endpoint']]
-    if not setup_globus(endpoints):
-        return -1
-    print 'Globus setup complete'
+    
     return config
 
 def add_jobs(year_set):
@@ -505,19 +523,16 @@ def monitor_check(monitor, config, file_list, event_list, display_event):
     transfer_config = {
         'size': t_config.get('size'),
         'file_list': checked_new_files,
-        'globus_username': t_config.get('globus_username'),
-        'globus_password': t_config.get('globus_password'),
-        'source_username': m_config.get('compute_username'),
-        'source_password': m_config.get('compute_password'),
-        'destination_username': t_config.get('processing_username'),
-        'destination_password': t_config.get('processing_password'),
         'source_endpoint': t_config.get('source_endpoint'),
         'destination_endpoint': t_config.get('destination_endpoint'),
         'source_path': t_config.get('source_path'),
         'destination_path': g_config.get('data_cache_path') + '/',
         'recursive': 'False',
         'pattern': config.get('global').get('output_patterns'),
-        'ncclimo_path': config.get('ncclimo').get('ncclimo_path')
+        'ncclimo_path': config.get('ncclimo').get('ncclimo_path'),
+        'src_email': config.get('global').get('email'),
+        'display_event': display_event,
+        'no_ui': config.get('global').get('ui')
     }
 
     # Check if the user is logged in, and all endpoints are active
@@ -608,9 +623,9 @@ def handle_transfer(transfer_job, f_list, event, event_list):
             item_type = item['type']
             if item_type in ['ATM', 'MPAS_AM', 'MPAS_RST']:
                 file_key = filename_to_file_list_key(item_name)
-            elif item_type == 'MPAS_CICE':
+            elif item_type == 'MPAS_CICE_IN':
                 file_key = 'mpas-cice_in'
-            elif item_type == 'MPAS_O':
+            elif item_type == 'MPAS_O_IN':
                 file_key = 'mpas-o_in'
             elif item_type == 'STREAMS':
                 file_key == 'streams.cice' if 'cice' in item_name else 'streams.ocean'
@@ -674,6 +689,7 @@ def display(stdscr, event, config):
     """
 
     initializing = True
+    # blockPrint()
     height, width = stdscr.getmaxyx()
     hmax = height - 3
     wmax = width - 5
@@ -896,6 +912,7 @@ def display(stdscr, event, config):
             pad.clrtobot()
             y += 1
             if event and event.is_set():
+                # enablePrint()
                 return
             pad.refresh(0, 0, 3, 5, hmax, wmax)
             initializing = False
@@ -935,10 +952,11 @@ if __name__ == "__main__":
     active_transfers = 0
     # A flag to tell if we have all the data locally
     all_data = False
-    # Read in parameters from config
-    config = setup(parser)
     # A list of strings for holding display info
     event_list = []
+    # Read in parameters from config
+    config = setup(parser, event_list, display_event)
+    
     # A list of files that have been transfered
     transfer_list = []
 
@@ -1070,9 +1088,16 @@ if __name__ == "__main__":
             'remote_dir': config.get('transfer').get('source_path'),
             'username': config.get('monitor').get('compute_username'),
             'patterns': patterns,
-            'file_list': file_list
+            'file_list': file_list,
+            'event_list': event_list,
+            'display_event': display_event
         }
-
+        if not config.get('global').get('ui'):
+            addr = config.get('global').get('email')
+            monitor_config['no_ui'] = True
+            monitor_config['src'] = addr
+            monitor_config['dst'] = addr
+        logging.info('Setting up monitor with config {}'.format(pformat(monitor_config)))
         monitor = Monitor(monitor_config)
         if not monitor:
             line = 'error setting up monitor'
@@ -1095,6 +1120,7 @@ if __name__ == "__main__":
                 t.join()
             sleep(1)
             print line
+            print message
             sleep(1)
             sys.exit(1)
         else:
