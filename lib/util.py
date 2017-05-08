@@ -1,15 +1,16 @@
-from time import sleep
-from time import strftime
 import logging
-from subprocess import Popen, PIPE
 import subprocess
 import sys
 import traceback
 import re
 import os
 import threading
+import socket
 from pprint import pformat
 from shutil import copytree, rmtree
+from subprocess import Popen, PIPE
+from time import sleep
+from time import strftime
 
 from globus_cli.commands.login import do_link_login_flow, check_logged_in
 from globus_cli.services.transfer import get_client
@@ -17,6 +18,7 @@ from globus_cli.services.transfer import get_client
 from YearSet import SetStatus
 from YearSet import YearSet
 from jobs.JobStatus import JobStatus
+from mailer import Mailer
 
 def year_from_filename(filename):
     pattern = r'\.\d\d\d\d-'
@@ -27,34 +29,96 @@ def year_from_filename(filename):
     else:
         return 0
 
-def setup_globus(endpoints):
+def setup_globus(endpoints, no_ui=False, **kwargs):
     """
     Check globus login status and login as nessisary, then
     iterate over a list of endpoints and activate them all
     
     params:
        endpoints: list of strings containing globus endpoint UUIDs
-    
+       no_ui: a boolean flag, true if running without the UI
+
+       kwargs:
+        event_list: the display event list to push user notifications
+        display_event: the thread event for the ui to turn off the ui for grabbing input for globus
+        src: an email address to send notifications to if running in no_ui mode
+        dst: a destination email address
     return:
        True if successful, False otherwise
     """
-    if not check_logged_in():
-        do_link_login_flow()
-        if not check_logged_in():
-            print 'Login failure'
-            return False
-    
-    if not endpoints:
-        return True
+    message_sent = False
+    display_event = kwargs.get('display_event')
+    if not no_ui and not display_event:
+        logging.error('Attempting to connect in ui mode, but no display_event given')
+        return False
 
+    # First go through the globus login process
+    while not check_logged_in():
+        # if in no_ui mode, send an email to the user with a link to log in
+        if no_ui:
+            if not kwargs.get('src') or not kwargs.get('dst'):
+                logging.error('No source or destination given to setup_globus')
+                return False
+            if kwargs.get('event_list'):
+                line = 'Waiting on user to log into globus, email sent to {addr}'.format(
+                    addr=kwargs['src'])
+                kwargs['event_list'] = push_event(kwargs['event_list'], line)
+            if not message_sent:
+                mailer = Mailer(
+                    src=kwargs['src'],
+                    dst=kwargs['dst'])
+                status = 'Globus login needed'
+                message = 'Your automated post processing job requires you log into globus. Please ssh into {host} activate the environment and run {cmd}\n\n'.format(
+                    host=socket.gethostname(),
+                    cmd='"globus login"')
+                message_sent = mailer.send(
+                    status=status,
+                    msg=message)
+            sleep(30)
+        # if in ui mode, set the display_event and ask for user input
+        else:
+            if not no_ui:
+                display_event.set()
+            do_link_login_flow()
+
+    if not endpoints:
+        if not no_ui:
+            display_event.clear()
+        return True
+    if isinstance(endpoints, str):
+        endpoints = [endpoints]
+    message_sent = False
+    activated = False
+    email_msg = ''
     client = get_client()
-    for endpoint in endpoints:
-        r = client.endpoint_autoactivate(endpoint, if_expires_in=3600)
-        while r["code"] == "AutoActivationFailed":
-            print 'Endpoint requires manual activation, please open the following URL in a browser to activate the endpoint:'
-            print "https://www.globus.org/app/endpoints/{endpoint}/activate".format(endpoint=endpoint)
-            raw_input("Press ENTER after activating the endpoint")
+    while not activated: 
+        for endpoint in endpoints:
+            msg = '## activating endpoint {}'.format(endpoint)
+            logging.info(msg)
             r = client.endpoint_autoactivate(endpoint, if_expires_in=3600)
+            logging.info('## ' + r['code'])
+            if r["code"] == "AutoActivationFailed":
+                logging.info('## endpoint autoactivation failed, going to manual')
+                message = 'Endpoint requires manual activation, please open the following URL in a browser to activate the endpoint:\n'
+                message += "https://www.globus.org/app/endpoints/{endpoint}/activate".format(endpoint=endpoint)
+                if no_ui:
+                    email_msg += message
+                else:
+                    print message
+                    raw_input("Press ENTER after activating the endpoint")
+                r = client.endpoint_autoactivate(endpoint, if_expires_in=3600)
+                if not r["code"] == "AutoActivationFailed":
+                    activated = True
+            else:
+                activated = True
+        if not activated:
+            if not message_sent:
+                message_sent = mailer.send(
+                    status='Endpoint activation required',
+                    msg=email_msg)
+            sleep(30)
+    if not no_ui:
+        display_event.clear()
     return True
 
 def get_climo_output_files(input_path, set_start_year, set_end_year):
