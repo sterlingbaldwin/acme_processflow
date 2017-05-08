@@ -7,7 +7,7 @@ For a new run all you will need is to setup your runs configuration file. Make a
 wget https://raw.githubusercontent.com/sterlingbaldwin/acme_workflow/master/run.cfg
 ```
 
-
+## Setup Run Config
 Once you have the file, open it in your favorite editor. There are are 12 values that must be changed before you're ready to run. You can find an explanation of each of them [here](setup_guide.md)
 
 The keys you need to change before running the first time are:
@@ -18,6 +18,7 @@ data_cache_path = /p/cscratch/acme/<YOUR_USERNAME>/input
 simulation_end_year = SOMENUMBER
 set_frequency = [LIST, OF, NUMBERS]
 run_id = YOUR_RUN_ID
+email = youremail@llnl.gov
 
 [transfer]
 source_path = PATH_TO_REMOTE_DATA
@@ -31,7 +32,7 @@ destination_endpoint = A_GLOBUS_ENDPOINT_ID
 ```
 [global]
 ...
-output_patterns = {"STREAMS":"streams", "ATM":"cam.h0", "MPAS_AM": "mpaso.hist.am.timeSeriesStatsMonthly", "MPAS_CICE": "mpascice.hist.am.timeSeriesStatsMonthly", "MPAS_RST": "mpaso.rst.0", "MPAS_O_IN": "mpas-o_in", "MPAS_CICE_IN": "mpas-cice_in"}
+output_patterns = {"STREAMS":"streams", "ATM":"cam.h0", "MPAS_AM": "mpaso.hist.am.timeSeriesStatsMonthly", "MPAS_CICE": "mpascice.hist.am.timeSeriesStatsMonthly", "MPAS_RST": "mpaso.rst.0", "MPAS_O_IN": "mpas-o_in", "MPAS_CICE_IN": "mpas-cice_in", "RPT": "rpointer"}}
 ...
 set_jobs = ["ncclimo", "timeseries", "amwg", "coupled_diag"]
 ```
@@ -46,8 +47,7 @@ output_patterns = {"ATM":"cam.h0"}
 set_jobs = ["ncclimo", "timeseries", "amwg"]
 ```
 
-
-
+### Config Explanation
 
 #### output_path
 This is the local path to store processed output
@@ -73,12 +73,18 @@ A globus endpoind UUID, the default is edison.nersc.gov
 #### destination_endpoint
 The globus endpoint UUID for the machine doing the post-processing. The default is acme1.llnl.gov.
 
-### Running
+#### email
+The email address you would like notified when the run completes.
 
-Running on acme1 and aims4 is very easy. Simply activate the conda environment provided, and run the script.
+## Running
+
+Running on acme1 and aims4 is very easy. Simply activate the conda environment provided, and run the script. 
+
+The run.cfg can exist where ever you like, use the -c flag followed by the path to the config. Once you start the run, you will need to authenticate with Globus for the file transfers. You can find a walk through of the [globus authentication process here](globus_authentication_walkthrough.md)
+
 ```
 source activate /p/cscratch/acme/bin/acme
-python /p/cscratch/acme/bin/acme_workflow/workflow.py -c /path/to/your/run.cfg
+python /p/cscratch/acme/bin/acme_workflow/workflow.py -c run.cfg
 ```
 
 In interactive mode, if the terminal is closed or you log out, it will stop the process (but the runs managed by SLURM will continue). See below for headless mode instructions.
@@ -92,16 +98,12 @@ Once globus has transfered the first year_set of data, it will start running the
 ![run in progress](http://imgur.com/URU4OVY.png)
 
 
-### headless mode
-Uninterupted run in headless mode that wont stop if you close the terminal, writing to a custom log location, with no cleanup after completion
+#### headless mode
+A run in headless mode wont stop if you close the terminal. The run will continue until it finishes, at which point it will send an email to you with the results. If there is an error, you can stop the run with the command ```kill PID``` where PID is the process id.
 ```
 nohup python workflow.py -c run.cfg --no-ui &
 ```
 
 This run can continue after you close the termincal and log off the computer. While running in headless mode, you can check run_state.txt for the run status. This file can be found in your output directory.
-
-```
-less run_state.txt
-```
 
 ![run_state](http://imgur.com/zS8f57g.png)
