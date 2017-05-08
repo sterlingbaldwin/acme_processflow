@@ -21,6 +21,7 @@ from lib.util import filename_to_year_set
 from lib.util import format_debug
 from lib.util import push_event
 from lib.util import raw_file_cmp
+from lib.util import setup_globus
 from jobs.JobStatus import JobStatus
 
 class Transfer(object):
@@ -40,17 +41,13 @@ class Transfer(object):
             'size': '',
             'file_list': '',
             'recursive': '',
-            'globus_username': '',
-            'globus_password': '',
             'source_endpoint': '',
             'destination_endpoint': '',
-            'source_username': '',
-            'source_password': '',
-            'destination_username': '',
-            'destination_password': '',
             'source_path': '',
             'destination_path': '',
-            'pattern': '',
+            'src_email': '',
+            'display_event': '',
+            'no_ui': ''
         }
         self.max_size = 100
         self.prevalidate(config)
@@ -140,30 +137,11 @@ class Transfer(object):
         return 0
 
     def postvalidate(self):
-        print 'transfer postvalidate'
+        """
+        TODO: validate that all files were moved correctly
+        """
+        pass
 
-    def activate_endpoint(self, api_client, endpoint, username, password):
-        result = api_client.endpoint_autoactivate(endpoint, if_expires_in=2880)
-        if result['code'] == "AutoActivationFailed":
-            reqs = json.loads(result.text)
-            myproxy_hostname = None
-            for r in reqs['DATA']:
-                if r['type'] == 'myproxy' and r['name'] == 'hostname':
-                    myproxy_hostname = r['value']
-                if r['name'] == 'hostname':
-                    r['value'] = myproxy_hostname
-                elif r['name'] == 'username':
-                    r['value'] = username
-                elif r['name'] == 'passphrase':
-                    r['value'] = passphrase
-                elif r['name'] == 'lifetime_in_hours':
-                    r['value'] = '168'
-            try:
-                result = api_client.endpoint_activate(endpoint, reqs)
-            except:
-                raise
-            if result['code'] == "AutoActivationFailed":
-                logging.error("Could not activate the endpoint: %s. Error: %s - %s", endpoint, result["code"], result["message"])
 
     def get_destination_path(self, srcpath, dstpath, recursive):
         '''
@@ -183,16 +161,24 @@ class Transfer(object):
         """
         start_file = self.config.get('file_list')[0]
         end_file = self.config.get('file_list')[-1]
+        allowed_chars = [str(i) for i in range(10)]
+        allowed_chars.append('-')
         if not 'mpas-' in start_file:
             index = start_file['filename'].rfind('-')
-            start_file = start_file['filename'][index - 4: index + 3]
+            while start_file['filename'][index] in allowed_chars and index > 0:
+                index -= 1
+            start_file_name = start_file['filename'][index+1: -3]
         if not 'mpas-' in end_file:
             index = end_file['filename'].rfind('-')
-            end_file = end_file['filename'][index - 4: index + 3]
+            while end_file['filename'][index] in allowed_chars and index > 0:
+                index -= 1
+            end_file_name = end_file['filename'][index+1: -3]
 
-        start_end_str = '{start} to {end}'.format(
-            start=start_file,
-            end=end_file)
+        start_end_str = '{stype}:{start} to {etype}:{end}'.format(
+            start=start_file_name,
+            end=end_file_name,
+            stype=start_file['type'],
+            etype=end_file['type'])
         message = 'Transfer {0} in progress ['.format(start_end_str)
         for i in range(1, 100, 5):
             if i < percent_complete:
@@ -219,6 +205,8 @@ class Transfer(object):
 
     def execute(self, event, event_list):
         # reject if job isnt valid
+        self.prevalidate()
+
         if self.status != JobStatus.VALID:
             logging.error('Transfer job in invalid state')
             logging.error(str(self))
@@ -235,24 +223,16 @@ class Transfer(object):
             dst=dstendpoint)
         logging.info(message)
 
-        # Create a transfer submission
+        # Log into globus and activate endpoints
+        endpoints = [srcendpoint, dstendpoint]
+        setup_globus(
+            endpoints=endpoints,
+            event_list=self.event_list,
+            no_ui=self.config.get('no_ui', False),
+            src=self.config.get('src'),
+            dst=self.config.get('src'),
+            display_event=self.config.get('display_event'))
         client = get_client()
-        source_user = self.config.get('source_username')
-        source_pass = self.config.get('source_password')
-        try:
-            self.activate_endpoint(client, srcendpoint, source_user, source_pass)
-        except Exception as e:
-            logging.error('Error activating source endpoing, attempt %s', int(i) + 1)
-            logging.error(format_debug(e))
-
-        dst_user = self.config.get('destination_username')
-        dst_pass = self.config.get('destination_password')
-        try:
-            self.activate_endpoint(client, dstendpoint, dst_user, dst_pass)
-        except Exception as e:
-            logging.error('Error activating destination endpoing')
-            logging.error(format_debug(e))
-
         try:
             transfer_task = TransferData(
                 client,
@@ -297,7 +277,7 @@ class Transfer(object):
             self.status = JobStatus.FAILED
             return
 
-        # Check a status of the transfer every minute (60 secs)
+        # Check a status of the transfer every 10 secs
         number_transfered = -1
         while True:
             try:
@@ -332,7 +312,7 @@ class Transfer(object):
                     return
             except Exception as e:
                 logging.error(format_debug(e))
-                client.task_cancel(task_id)
+                client.cancel_task(task_id)
                 self.error_cleanup()
                 return
-            time.sleep(5)
+            time.sleep(10)
