@@ -17,7 +17,7 @@ Once you have entered your credentials and logged in, you will be given a random
 
 ![globus token in the terminal](Globus_login_token_complete.png)
 
-### Note activation
+### Node activation
 
 Once you have logged into globus, each data node will need to be activated with your account. This activation can last for days, but periodically needs to be re run. If the node needs to be activated you will be prompted, if your credentials are still cached on the node this step will be skipped.
 
