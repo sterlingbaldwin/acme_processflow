@@ -332,7 +332,7 @@ def add_jobs(year_set):
         c_config = config.get('coupled_diags')
         coupled_diag_config = {
             'rpt_dir': g_config.get('rpt_dir'),
-            'mpas_regions_file': g_config.get('mpas_regions_file'),
+            'mpaso_regions_file': c_config.get('mpaso_regions_file'),
             'run_scripts_path': config.get('global').get('run_scripts_path'),
             'output_base_dir': coupled_project_dir,
             'mpas_am_dir': g_config.get('mpas_dir'),
@@ -666,6 +666,8 @@ def cleanup():
             os.makedirs(archive_path)
         run_script_path = config.get('global').get('run_scripts_path')
         if os.path.exists(run_script_path):
+            while os.path.exists(archive_path):
+                archive_path = archive_path[:-1] + str(int(archive_path[-1]) + 1)
             move(run_script_path, archive_path)
     except Exception as e:
         logging.error(format_debug(e))

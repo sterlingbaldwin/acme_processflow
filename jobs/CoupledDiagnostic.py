@@ -8,7 +8,7 @@ from uuid import uuid4
 from pprint import pformat
 from subprocess import Popen, PIPE
 from time import sleep
-
+from random import randint
 from cdp.cdp_viewer import OutputViewer
 
 from lib.util import render
@@ -28,7 +28,7 @@ class CoupledDiagnostic(object):
         """
         self.event_list = event_list
         self.inputs = {
-            'mpas_regions_file': '',
+            'mpaso_regions_file': '',
             'web_dir': '',
             'mpas_am_dir': '',
             'rpt_dir': '',
@@ -408,6 +408,9 @@ class CoupledDiagnostic(object):
         prev_dir = os.getcwd()
         os.chdir(self.config.get('coupled_diags_home'))
 
+        # This is here as a stop gap measure to try and dodge the bullet outlined
+        # here https://github.com/ACME-Climate/PreAndPostProcessingScripts/issues/32
+        sleep(randint(3, 5))
         while not started:
             while True:
                 try:
