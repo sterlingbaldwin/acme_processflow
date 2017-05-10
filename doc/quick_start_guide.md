@@ -10,7 +10,7 @@ wget https://raw.githubusercontent.com/sterlingbaldwin/acme_workflow/master/run.
 ```
 
 ## Setup Run Config
-Once you have the file, open it in your favorite editor. There are are 9 values that must be changed before you're ready to run. You can find an explanation of each of them [here](setup_guide.md), or [below](#config)
+Once you have the file, open it in your favorite editor. There are are 9 values that must be changed before you're ready to run. You can find an explanation of each of them [here](setup_guide.md), or [below](#config-explanation)
 
 The keys you need to change before running the first time are:
 ```
