@@ -8,7 +8,7 @@ from uuid import uuid4
 from subprocess import Popen, PIPE
 from pprint import pformat
 from time import sleep
-import time
+from datetime import datetime
 # job modules
 from JobStatus import JobStatus
 # output_viewer modules
@@ -50,6 +50,8 @@ class AMWGDiagnostic(object):
         """
         self.event_list = event_list
         self.status = JobStatus.INVALID
+        self.start_time = None
+        self.end_time = None
         self.inputs = {
             'host_directory': '',
             'host_prefix': '',
@@ -211,39 +213,52 @@ class AMWGDiagnostic(object):
         else:
             return False
 
-    def execute(self, batch='slurm'):
+    def execute(self, batch='slurm', debug=False):
         """
         Perform the actual work
         """
+        if debug:
+            print "starting amwg job"
         # First check if the job has already been completed
         if self.postvalidate():
             self.status = JobStatus.COMPLETED
             message = 'AMWG job already computed, skipping'
             self.event_list = push_event(self.event_list, message)
+            logging.info(message)
             return 0
-
-
+        if debug:
+            print 'amwg not done yet, setting up for computing'
+            print pformat(self.config)
+        self.start_time = datetime.now()
         # setup the output directory
         run_dir = self.config.get('run_directory')
         if not os.path.exists(run_dir):
             os.makedirs(run_dir)
         # render the csh script
-        template_out = os.path.join(run_dir, 'amwg.csh')
+        template_out = os.path.join(
+            run_dir,
+            'amwg.csh')
         render(
             variables=self.config,
             input_path=self.config.get('template_path'),
             output_path=template_out)
+        if debug:
+            print 'run script rendering complete'
         # get the list of climo files for this diagnostic
         file_list = get_climo_output_files(
             input_path=self.config.get('regrided_climo_path'),
             set_start_year=self.config.get('start_year'),
             set_end_year=self.config.get('end_year'))
+        if debug:
+            print 'gathering climo files from {}'.format(self.config.get('regrided_climo_path'))
+            print pformat(file_list)
         # create the directory of symlinks
         create_symlink_dir(
             src_dir=self.config.get('regrided_climo_path'),
             src_list=file_list,
             dst=self.config.get('test_path_climo'))
-
+        if debug:
+            print 'symlinks created'
         for item in os.listdir(self.config.get('test_path_climo')):
             start_search = re.search(r'_\d\d\d\d\d\d_', item)
             s_index = start_search.start()
@@ -257,7 +272,8 @@ class AMWGDiagnostic(object):
             end=self.config.get('end_year'),
             uuid=self.uuid[:5])
         run_script = os.path.join(self.config.get('run_scripts_path'), expected_name)
-
+        if debug:
+            print 'run_script: {}'.format(run_script)
         self.slurm_args['error_file'] = '-e {error_file}'.format(error_file=run_script + '.err')
         self.slurm_args['output_file'] = '-o {output_file}'.format(output_file=run_script + '.out')
 
@@ -288,15 +304,11 @@ class AMWGDiagnostic(object):
                 os.chdir(prev_dir)
                 self.status = JobStatus.SUBMITTED
                 self.job_id = job_id
-                message = '## {type} id: {id} changed state to {state}'.format(
-                    type=self.get_type(),
-                    id=self.job_id,
-                    state=self.status)
-                logging.info(message)
                 message = '{type} id: {id} changed state to {state}'.format(
                     type=self.get_type(),
                     id=self.job_id,
                     state=self.status)
+                logging.info('## ' + message)
                 self.event_list = push_event(self.event_list, message)
 
         return self.job_id

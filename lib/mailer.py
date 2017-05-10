@@ -50,3 +50,4 @@ class Mailer(object):
 
         self.smtp.sendmail(self.src, self.dst, message.as_string())
         self.smtp.quit()
+        return True

@@ -5,11 +5,14 @@ import logging
 import json
 import re
 from pprint import pformat
+from time import sleep
 
 from globus_cli.services.transfer import get_client
 from globus_cli.commands.ls import _get_ls_res as get_ls
 
 from util import setup_globus
+from util import push_event
+
 
 class Monitor(object):
     """
@@ -17,8 +20,8 @@ class Monitor(object):
     """
     def __init__(self, config=None):
         """
-            Initializes the monitoring system,
-            inputs: remote_host, remote_dir, username, password (optional), keyfile (optional)
+        Initializes the monitoring system,
+        inputs: remote_host, remote_dir, username, password (optional), keyfile (optional)
         """
         if not config:
             print "No configuration for monitoring system"
@@ -29,15 +32,14 @@ class Monitor(object):
         self.remote_dir = config.get('remote_dir')
         if not self.remote_dir:
             return None
-        self.username = config.get('username')
-        if not self.username:
-            return None
         self.patterns = config.get('patterns')
         if not self.patterns:
             return None
-        self.password = config.get('password')
-        if not self.password:
-            return None
+        self.no_ui = config.get('no_ui', False)
+        self.src = config.get('src')
+        self.dst = config.get('dst')
+        self.event_list = config.get('event_list')
+        self.display_event = config.get('display_event')
         self.client = None
         self.known_files = []
         self.new_files = []
@@ -48,28 +50,20 @@ class Monitor(object):
 
         return False if error, True on success
         """
+        self.event_list = push_event(self.event_list, 'attempting connection')
+        setup_globus(
+            endpoints=self.source_endpoint,
+            no_ui=self.no_ui,
+            src=self.src,
+            dst=self.dst,
+            event_list=self.event_list,
+            display_event=self.display_event)
         self.client = get_client()
         result = self.client.endpoint_autoactivate(self.source_endpoint, if_expires_in=2880)
         if result['code'] == "AutoActivationFailed":
-            reqs = json.loads(result.text)
-            myproxy_hostname = None
-            for r in reqs['DATA']:
-                if r['type'] == 'myproxy' and r['name'] == 'hostname':
-                    myproxy_hostname = r['value']
-                if r['name'] == 'hostname':
-                    r['value'] = myproxy_hostname
-                elif r['name'] == 'username':
-                    r['value'] = self.username
-                elif r['name'] == 'passphrase':
-                    r['value'] = self.password
-                elif r['name'] == 'lifetime_in_hours':
-                    r['value'] = '168'
-            result = self.client.endpoint_activate(self.source_endpoint, requirements_data=reqs)
-            if result['code'] != 'Activated.MyProxyCredential':
-                return (False, result['message'])
+            return (False, result['message'])
         else:
             return (True, result['message'])
-        return (False, result['message'])
 
     def set_known_files(self, files):
         """
@@ -88,16 +82,12 @@ class Monitor(object):
         """
         Checks to remote_dir for any files that arent in the known files list
         """
-        # cmd = 'ls {path} | grep {pattern}'.format(
-        #     path=self.remote_dir,
-        #     pattern=self.pattern)
+        status, message = self.connect()
+        if not status:
+            logging.error('Unable to connect to globus endpoint: %s', message)
+            return False
         self.new_files = []
-        result = self.client.endpoint_autoactivate(self.source_endpoint, if_expires_in=2880)
-        if result['code'] == "AutoActivationFailed":
-            if not self.connect():
-                logging.error('Unable to connect to globus endpoint')
-                return None
-
+        fail_count = 0
         while True:
             try:
                 res = get_ls(
@@ -106,7 +96,11 @@ class Monitor(object):
                     self.source_endpoint,
                     False, 0, False)
             except:
-                sleep(1)
+                fail_count += 1
+                if fail_count > 10:
+                    logging.error('Unable to get remote directory contents after 10 tries')
+                    return False
+                sleep(2)
             else:
                 break
         for f in res:

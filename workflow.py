@@ -16,6 +16,7 @@ from shutil import move
 from getpass import getpass
 from time import sleep
 from pprint import pformat
+from datetime import datetime
 
 from jobs.Transfer import Transfer
 from jobs.Ncclimo import Climo
@@ -43,10 +44,14 @@ parser.add_argument('-V', '--viewer', help='Turn on generation for output_viewer
 parser.add_argument('-s', '--size', help='The maximume size in gigabytes of a single transfer, defaults to 100. Must be larger then the largest single file.')
 
 if not os.environ.get('NCARG_ROOT'):
-    print 'No NCARG_ROOT found in environment variables, is NCL installed on the machine? Check /usr/local/src/NCL-6.3.0/'
-    sys.exit()
+    ncar_path = '/usr/local/src/NCL-6.3.0/'
+    if os.path.exists(ncar_path):
+        os.environ['NCARG_ROOT'] = ncar_path
+    else:
+        print 'No NCARG_ROOT found in environment variables, is NCL installed on the machine?'
+        sys.exit()
 
-def setup(parser):
+def setup(parser, event_list, display_event):
     """
     Setup the config, file_list, and job_sets variables from either the config file passed from the parser
     of from the previously saved state
@@ -90,11 +95,29 @@ def setup(parser):
             print_debug(e)
             return -1
 
+    endpoints = [config['transfer']['source_endpoint'], config['transfer']['destination_endpoint']]
     if args.no_ui:
         config['global']['ui'] = False
+        addr = config.get('global').get('email')
+        if not addr:
+            print 'When running in headless mode, you must enter an email address.'
+            sys.exit()
+        setup_globus(
+            endpoints=endpoints,
+            no_ui=True,
+            src=config.get('global').get('email'),
+            dst=config.get('global').get('email'),
+            event_list=event_list)
     else:
         debug = False
         config['global']['ui'] = True
+        msg = '## activating endpoints {}'.format(' '.join(endpoints))
+        logging.info(msg)
+        if not setup_globus(
+            endpoints=endpoints,
+            display_event=display_event):
+            return -1
+        print 'Globus setup complete'
 
     if args.dry_run:
         config['global']['dry_run'] = True
@@ -174,11 +197,7 @@ def setup(parser):
         filename=log_path,
         filemode='w',
         level=logging.DEBUG)
-
-    endpoints = [config['transfer']['source_endpoint'], config['transfer']['destination_endpoint']]
-    if not setup_globus(endpoints):
-        return -1
-    print 'Globus setup complete'
+    
     return config
 
 def add_jobs(year_set):
@@ -314,7 +333,7 @@ def add_jobs(year_set):
         c_config = config.get('coupled_diags')
         coupled_diag_config = {
             'rpt_dir': g_config.get('rpt_dir'),
-            'mpas_regions_file': g_config.get('mpas_regions_file'),
+            'mpaso_regions_file': c_config.get('mpaso_regions_file'),
             'run_scripts_path': config.get('global').get('run_scripts_path'),
             'output_base_dir': coupled_project_dir,
             'mpas_am_dir': g_config.get('mpas_dir'),
@@ -505,19 +524,16 @@ def monitor_check(monitor, config, file_list, event_list, display_event):
     transfer_config = {
         'size': t_config.get('size'),
         'file_list': checked_new_files,
-        'globus_username': t_config.get('globus_username'),
-        'globus_password': t_config.get('globus_password'),
-        'source_username': m_config.get('compute_username'),
-        'source_password': m_config.get('compute_password'),
-        'destination_username': t_config.get('processing_username'),
-        'destination_password': t_config.get('processing_password'),
         'source_endpoint': t_config.get('source_endpoint'),
         'destination_endpoint': t_config.get('destination_endpoint'),
         'source_path': t_config.get('source_path'),
         'destination_path': g_config.get('data_cache_path') + '/',
         'recursive': 'False',
         'pattern': config.get('global').get('output_patterns'),
-        'ncclimo_path': config.get('ncclimo').get('ncclimo_path')
+        'ncclimo_path': config.get('ncclimo').get('ncclimo_path'),
+        'src_email': config.get('global').get('email'),
+        'display_event': display_event,
+        'no_ui': config.get('global').get('ui')
     }
 
     # Check if the user is logged in, and all endpoints are active
@@ -553,16 +569,20 @@ def monitor_check(monitor, config, file_list, event_list, display_event):
             file_key == 'streams.cice' if 'cice' in item_name else 'streams.ocean'
         file_list[item_type][file_key] = SetStatus.IN_TRANSIT
 
-    start_file = transfer.config.get('file_list')[0]['filename']
-    end_file = transfer.config.get('file_list')[-1]['filename']
-    index = start_file.find('-')
-    start_readable = start_file[index - 4: index + 3]
-    index = end_file.find('-')
-    end_readable = end_file[index - 4: index + 3]
-    message = 'Found {0} new remote files, creating transfer job from {1} to {2}'.format(
+    start_file_name = transfer.config.get('file_list')[0]['filename']
+    stype = transfer.config.get('file_list')[0]['type']
+    end_file_name = transfer.config.get('file_list')[-1]['filename']
+    etype = transfer.config.get('file_list')[-1]['type']
+    index = start_file_name.find('-')
+    start_readable = start_file_name[index - 4: index + 3]
+    index = end_file_name.find('-')
+    end_readable = end_file_name[index - 4: index + 3]
+    message = 'Found {0} new remote files, creating transfer job from {stype}:{1} to {etype}:{2}'.format(
         len(checked_new_files),
         start_readable,
-        end_readable)
+        end_readable,
+        stype=stype,
+        etype=etype)
     event_list = push_event(event_list, message)
     logging.info('## ' + message)
 
@@ -608,9 +628,9 @@ def handle_transfer(transfer_job, f_list, event, event_list):
             item_type = item['type']
             if item_type in ['ATM', 'MPAS_AM', 'MPAS_RST']:
                 file_key = filename_to_file_list_key(item_name)
-            elif item_type == 'MPAS_CICE':
+            elif item_type == 'MPAS_CICE_IN':
                 file_key = 'mpas-cice_in'
-            elif item_type == 'MPAS_O':
+            elif item_type == 'MPAS_O_IN':
                 file_key = 'mpas-o_in'
             elif item_type == 'STREAMS':
                 file_key == 'streams.cice' if 'cice' in item_name else 'streams.ocean'
@@ -651,6 +671,8 @@ def cleanup():
             os.makedirs(archive_path)
         run_script_path = config.get('global').get('run_scripts_path')
         if os.path.exists(run_script_path):
+            while os.path.exists(archive_path):
+                archive_path = archive_path[:-1] + str(int(archive_path[-1]) + 1)
             move(run_script_path, archive_path)
     except Exception as e:
         logging.error(format_debug(e))
@@ -673,6 +695,7 @@ def display(stdscr, event, config):
     Display current execution status via curses
     """
 
+    # setup variables
     initializing = True
     height, width = stdscr.getmaxyx()
     hmax = height - 3
@@ -681,6 +704,7 @@ def display(stdscr, event, config):
     spin_index = 0
     spin_len = 4
     try:
+        # setup curses
         stdscr.nodelay(True)
         curses.curs_set(0)
         curses.init_pair(1, curses.COLOR_BLACK, curses.COLOR_WHITE)
@@ -696,18 +720,8 @@ def display(stdscr, event, config):
         pad = curses.newpad(hmax, wmax)
         last_y = 0
         while True:
-            c = stdscr.getch()
-            if c == curses.KEY_RESIZE:
-                height, width = stdscr.getmaxyx()
-                hmax = height - 3
-                wmax = width - 5
-                pad.resize(hmax, wmax)
-            elif c == ord('w'):
-                config['global']['ui'] = False
-                pad.clear()
-                del pad
-                curses.endwin()
-                return
+            now = datetime.now()
+            # sleep until there are jobs
             if len(job_sets) == 0:
                 sleep(1)
                 continue
@@ -719,38 +733,30 @@ def display(stdscr, event, config):
                     num=year_set.set_number,
                     start=year_set.set_start_year,
                     end=year_set.set_end_year)
-                #pad.addstr(y, x, line, curses.color_pair(1))
                 write_line(pad, line, x, y, curses.color_pair(1))
                 pad.clrtoeol()
                 y += 1
-                # if xy_check(x, y, hmax, wmax) == -1:
-                #     sleep(1)
-                #     break
+
                 color_pair = curses.color_pair(4)
                 if year_set.status == SetStatus.COMPLETED:
+                    # set color to green
                     color_pair = curses.color_pair(5)
                 elif year_set.status == SetStatus.FAILED:
+                    # set color to red
                     color_pair = curses.color_pair(3)
                 elif year_set.status == SetStatus.RUNNING:
+                    # set color to purple
                     color_pair = curses.color_pair(6)
                 line = 'status: {status}'.format(
                     status=year_set.status)
-                #pad.addstr(y, x, line, color_pair)
                 write_line(pad, line, x, y, color_pair)
                 if initializing:
                     sleep(0.01)
                     pad.refresh(0, 0, 3, 5, hmax, wmax)
                 pad.clrtoeol()
                 y += 1
-                # if xy_check(x, y, hmax, wmax) == -1:
-                #     sleep(1)
-                #     break
-                # if y >= (hmax/3):
-                #     last_y = y
-                #     y = 0
-                #     x += (wmax/2)
-                #     if x >= wmax:
-                #         break
+
+                # if the job_set is done collapse it
                 if year_set.status == SetStatus.COMPLETED \
                     or year_set.status == SetStatus.NO_DATA \
                     or year_set.status == SetStatus.PARTIAL_DATA:
@@ -759,7 +765,6 @@ def display(stdscr, event, config):
                     line = '  >   {type} -- {id} '.format(
                         type=job.get_type(),
                         id=job.job_id)
-                    # pad.addstr(y, x, line, curses.color_pair(4))
                     write_line(pad, line, x, y, curses.color_pair(4))
                     color_pair = curses.color_pair(4)
                     if job.status == JobStatus.COMPLETED:
@@ -770,29 +775,36 @@ def display(stdscr, event, config):
                         color_pair = curses.color_pair(6)
                     elif job.status == JobStatus.SUBMITTED or job.status == JobStatus.PENDING:
                         color_pair = curses.color_pair(7)
-                    line = '{status}'.format(status=job.status)
+                    # if the job is running, print elapsed time
+                    if job.status == JobStatus.RUNNING:
+                        delta = now - job.start_time
+                        deltastr = strfdelta(delta, "{H}:{M}:{S}")
+                        #deltastr = str(delta)
+                        line = '{status} elapsed time: {time}'.format(
+                            status=job.status,
+                            time=deltastr)
+                    # if job has ended, print total time
+                    elif job.status in [JobStatus.COMPLETED, JobStatus.FAILED] \
+                         and job.end_time \
+                         and job.start_time:
+                        delta = job.end_time - job.start_time
+                        line = '{status} elapsed time: {time}'.format(
+                            status=job.status,
+                            time=strfdelta(delta, "{H}:{M}:{S}"))
+                    else:
+                        line = '{status}'.format(status=job.status)
                     pad.addstr(line, color_pair)
                     pad.clrtoeol()
                     if initializing:
                         sleep(0.01)
                         pad.refresh(0, 0, 3, 5, hmax, wmax)
                     y += 1
-                # if y >= (hmax/3):
-                #     last_y = y
-                #     y = 0
-                #     x += (wmax/2)
-                #     if x >= wmax:
-                #         break
 
             x = 0
             if last_y:
                 y = last_y
-            # pad.refresh(0, 0, 3, 5, hmax, wmax)
             pad.clrtobot()
             y += 1
-            # if xy_check(x, y, hmax, wmax) == -1:
-            #     sleep(1)
-            #     continue
             for line in event_list[-10:]:
                 if 'Transfer' in line:
                     continue
@@ -809,7 +821,6 @@ def display(stdscr, event, config):
                 if initializing:
                     sleep(0.01)
                     pad.refresh(0, 0, 3, 5, hmax, wmax)
-                #pad.refresh(0, 0, 3, 5, hmax, wmax)
                 y += 1
                 if xy_check(x, y, hmax, wmax) == -1:
                     sleep(1)
@@ -826,45 +837,6 @@ def display(stdscr, event, config):
             current_year = 1
             year_ready = True
             partial_data = False
-            # for line in sorted(file_list, cmp=file_list_cmp):
-            #     index = line.find('-')
-            #     year = int(line[:index])
-            #     month = int(line[index + 1:])
-            #     if month == 1:
-            #         year_ready = True
-            #         partial_data = False
-            #     if file_list[line] != SetStatus.DATA_READY:
-            #         year_ready = False
-            #     else:
-            #         partial_data = True
-            #     if month == 12:
-            #         if year_ready:
-            #             status = SetStatus.DATA_READY
-            #         else:
-            #             if partial_data:
-            #                 status = SetStatus.PARTIAL_DATA
-            #             else:
-            #                 status = SetStatus.NO_DATA
-            #         file_display_list.append('Year {year} - {status}'.format(
-            #             year=year,
-            #             status=status))
-
-            # line_length = len(file_display_list[0])
-            # num_cols = wmax/line_length
-            # for line in file_display_list:
-            #     if x + len(line) >= wmax:
-            #         diff = wmax - (x + len(line))
-            #         line = line[:diff]
-            #     pad.addstr(y, x, line, curses.color_pair(4))
-            #     pad.clrtoeol()
-            #     y += 1
-            #     if y >= (hmax-10):
-            #         y = file_start_y
-            #         x += line_length + 5
-            #         if x >= wmax:
-            #             break
-            #     if y > file_end_y:
-            #         file_end_y = y
 
             y = file_end_y + 1
             x = 0
@@ -896,6 +868,7 @@ def display(stdscr, event, config):
             pad.clrtobot()
             y += 1
             if event and event.is_set():
+                # enablePrint()
                 return
             pad.refresh(0, 0, 3, 5, hmax, wmax)
             initializing = False
@@ -935,10 +908,11 @@ if __name__ == "__main__":
     active_transfers = 0
     # A flag to tell if we have all the data locally
     all_data = False
-    # Read in parameters from config
-    config = setup(parser)
     # A list of strings for holding display info
     event_list = []
+    # Read in parameters from config
+    config = setup(parser, event_list, display_event)
+    
     # A list of files that have been transfered
     transfer_list = []
 
@@ -1070,9 +1044,16 @@ if __name__ == "__main__":
             'remote_dir': config.get('transfer').get('source_path'),
             'username': config.get('monitor').get('compute_username'),
             'patterns': patterns,
-            'file_list': file_list
+            'file_list': file_list,
+            'event_list': event_list,
+            'display_event': display_event
         }
-
+        if not config.get('global').get('ui'):
+            addr = config.get('global').get('email')
+            monitor_config['no_ui'] = True
+            monitor_config['src'] = addr
+            monitor_config['dst'] = addr
+        logging.info('Setting up monitor with config {}'.format(pformat(monitor_config)))
         monitor = Monitor(monitor_config)
         if not monitor:
             line = 'error setting up monitor'
@@ -1095,6 +1076,7 @@ if __name__ == "__main__":
                 t.join()
             sleep(1)
             print line
+            print message
             sleep(1)
             sys.exit(1)
         else:
