@@ -11,6 +11,7 @@ from uuid import uuid4
 from pprint import pformat
 from subprocess import Popen, PIPE
 from time import sleep
+from datetime import datetime
 
 from lib.util import print_debug
 from lib.util import print_message
@@ -34,6 +35,8 @@ class Climo(object):
         self.yearset = config.get('yearset', 0)
         self.job_id = 0
         self.depends_on = []
+        self.start_time = None
+        self.end_time = None
         self.outputs = {
             'status': self.status,
             'climos': '',
@@ -79,6 +82,7 @@ class Climo(object):
             self.event_list = push_event(self.event_list, message)
             return 0
 
+        self.start_time = datetime.now()
         # ncclimo = 'ncclimo'
         cmd = [
             'ncclimo',

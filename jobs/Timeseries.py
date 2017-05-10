@@ -11,6 +11,7 @@ from uuid import uuid4
 from pprint import pformat
 from subprocess import Popen, PIPE
 from time import sleep
+from datetime import datetime
 
 from lib.util import print_debug
 from lib.util import print_message
@@ -34,6 +35,8 @@ class Timeseries(object):
         self.year_set = config.get('year_set', 0)
         self.job_id = 0
         self.depends_on = []
+        self.start_time = None
+        self.end_time = None
         self.outputs = {
             'status': self.status,
             'climos': '',
@@ -73,7 +76,8 @@ class Timeseries(object):
             self.status = JobStatus.COMPLETED
             self.event_list = push_event(self.event_list, 'Timeseries already computed, skipping')
             return 0
-
+        
+        self.start_time = datetime.now()
         input_dir = self.config.get('input_directory')
         file_list = [os.path.join(input_dir, item) for item in os.listdir(input_dir)]
         cmd = [

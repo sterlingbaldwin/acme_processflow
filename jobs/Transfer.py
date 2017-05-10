@@ -22,6 +22,7 @@ from lib.util import format_debug
 from lib.util import push_event
 from lib.util import raw_file_cmp
 from lib.util import setup_globus
+from lib.util import strfdelta
 from jobs.JobStatus import JobStatus
 
 class Transfer(object):
@@ -37,6 +38,8 @@ class Transfer(object):
             "status": self.status
         }
         self.uuid = uuid4().hex
+        self.start_time = None
+        self.end_time = None
         self.inputs = {
             'size': '',
             'file_list': '',
@@ -159,6 +162,8 @@ class Transfer(object):
         """
         Updates the event_list with a nicely formated percent completion
         """
+
+        # First we need to parse through and find the years of the start and end
         start_file = self.config.get('file_list')[0]
         end_file = self.config.get('file_list')[-1]
         allowed_chars = [str(i) for i in range(10)]
@@ -174,18 +179,23 @@ class Transfer(object):
                 index -= 1
             end_file_name = end_file['filename'][index+1: -3]
 
+        # Start the display string assembly
         start_end_str = '{stype}:{start} to {etype}:{end}'.format(
             start=start_file_name,
             end=end_file_name,
             stype=start_file['type'],
             etype=end_file['type'])
         message = 'Transfer {0} in progress ['.format(start_end_str)
+
+        # now get the percent completion and elapsed time
         for i in range(1, 100, 5):
             if i < percent_complete:
                 message += '*'
             else:
                 message += '_'
-        message += '] {0:.2f}%'.format(percent_complete)
+        message += '] {percent:.2f}%'.format(percent=percent_complete)
+        
+        # finaly check if the event has already been pushed into the event_list
         replaced = False
         for index, event in enumerate(event_list):
             if start_end_str in event:
@@ -206,7 +216,6 @@ class Transfer(object):
     def execute(self, event, event_list):
         # reject if job isnt valid
         self.prevalidate()
-
         if self.status != JobStatus.VALID:
             logging.error('Transfer job in invalid state')
             logging.error(str(self))
@@ -215,6 +224,7 @@ class Transfer(object):
             self.status = JobStatus.INVALID
             logging.error('Transfer failed, not logged into globus')
             return
+        self.start_time = datetime.now()
         # Get source and destination UUIDs
         srcendpoint = self.config.get('source_endpoint')
         dstendpoint = self.config.get('destination_endpoint')

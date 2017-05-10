@@ -11,6 +11,7 @@ from shutil import copytree, rmtree
 from subprocess import Popen, PIPE
 from time import sleep
 from time import strftime
+from datetime import datetime
 
 from globus_cli.commands.login import do_link_login_flow, check_logged_in
 from globus_cli.services.transfer import get_client
@@ -19,6 +20,20 @@ from YearSet import SetStatus
 from YearSet import YearSet
 from jobs.JobStatus import JobStatus
 from mailer import Mailer
+from string import Formatter
+
+def strfdelta(tdelta, fmt):
+    f = Formatter()
+    d = {}
+    l = {'D': 86400, 'H': 3600, 'M': 60, 'S': 1}
+    k = map( lambda x: x[1], list(f.parse(fmt)))
+    rem = int(tdelta.total_seconds())
+
+    for i in ('D', 'H', 'M', 'S'):
+        if i in k and i in l.keys():
+            d[i], rem = divmod(rem, l[i])
+
+    return f.format(fmt, **d)
 
 def year_from_filename(filename):
     pattern = r'\.\d\d\d\d-'
@@ -307,6 +322,7 @@ def monitor_job(job, job_set, event=None, debug=False, batch_type='slurm', uploa
     Monitor the slurm job, and update the status to 'complete' when it finishes
     This function should only be called from within a thread
     """
+    job.start_time = datetime.now()
     job_id = job.execute(batch='slurm')
     if job_id == 0:
         job.set_status(JobStatus.COMPLETED)
@@ -373,8 +389,10 @@ def monitor_job(job, job_set, event=None, debug=False, batch_type='slurm', uploa
             elif job_status == 'PENDING':
                 status = JobStatus.PENDING
             elif job_status == 'FAILED':
+                job.end_time = datetime.now()
                 status = JobStatus.FAILED
             elif job_status == 'COMPLETED':
+                job.end_time = datetime.now()
                 status = JobStatus.COMPLETED
 
             if status and status != job.status:

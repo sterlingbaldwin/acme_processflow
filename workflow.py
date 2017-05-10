@@ -16,6 +16,7 @@ from shutil import move
 from getpass import getpass
 from time import sleep
 from pprint import pformat
+from datetime import datetime
 
 from jobs.Transfer import Transfer
 from jobs.Ncclimo import Climo
@@ -568,16 +569,20 @@ def monitor_check(monitor, config, file_list, event_list, display_event):
             file_key == 'streams.cice' if 'cice' in item_name else 'streams.ocean'
         file_list[item_type][file_key] = SetStatus.IN_TRANSIT
 
-    start_file = transfer.config.get('file_list')[0]['filename']
-    end_file = transfer.config.get('file_list')[-1]['filename']
-    index = start_file.find('-')
-    start_readable = start_file[index - 4: index + 3]
-    index = end_file.find('-')
-    end_readable = end_file[index - 4: index + 3]
-    message = 'Found {0} new remote files, creating transfer job from {1} to {2}'.format(
+    start_file_name = transfer.config.get('file_list')[0]['filename']
+    stype = transfer.config.get('file_list')[0]['type']
+    end_file_name = transfer.config.get('file_list')[-1]['filename']
+    etype = transfer.config.get('file_list')[-1]['type']
+    index = start_file_name.find('-')
+    start_readable = start_file_name[index - 4: index + 3]
+    index = end_file_name.find('-')
+    end_readable = end_file_name[index - 4: index + 3]
+    message = 'Found {0} new remote files, creating transfer job from {stype}:{1} to {etype}:{2}'.format(
         len(checked_new_files),
         start_readable,
-        end_readable)
+        end_readable,
+        stype=stype,
+        etype=etype)
     event_list = push_event(event_list, message)
     logging.info('## ' + message)
 
@@ -690,8 +695,8 @@ def display(stdscr, event, config):
     Display current execution status via curses
     """
 
+    # setup variables
     initializing = True
-    # blockPrint()
     height, width = stdscr.getmaxyx()
     hmax = height - 3
     wmax = width - 5
@@ -699,6 +704,7 @@ def display(stdscr, event, config):
     spin_index = 0
     spin_len = 4
     try:
+        # setup curses
         stdscr.nodelay(True)
         curses.curs_set(0)
         curses.init_pair(1, curses.COLOR_BLACK, curses.COLOR_WHITE)
@@ -714,18 +720,8 @@ def display(stdscr, event, config):
         pad = curses.newpad(hmax, wmax)
         last_y = 0
         while True:
-            c = stdscr.getch()
-            if c == curses.KEY_RESIZE:
-                height, width = stdscr.getmaxyx()
-                hmax = height - 3
-                wmax = width - 5
-                pad.resize(hmax, wmax)
-            elif c == ord('w'):
-                config['global']['ui'] = False
-                pad.clear()
-                del pad
-                curses.endwin()
-                return
+            now = datetime.now()
+            # sleep until there are jobs
             if len(job_sets) == 0:
                 sleep(1)
                 continue
@@ -737,38 +733,30 @@ def display(stdscr, event, config):
                     num=year_set.set_number,
                     start=year_set.set_start_year,
                     end=year_set.set_end_year)
-                #pad.addstr(y, x, line, curses.color_pair(1))
                 write_line(pad, line, x, y, curses.color_pair(1))
                 pad.clrtoeol()
                 y += 1
-                # if xy_check(x, y, hmax, wmax) == -1:
-                #     sleep(1)
-                #     break
+
                 color_pair = curses.color_pair(4)
                 if year_set.status == SetStatus.COMPLETED:
+                    # set color to green
                     color_pair = curses.color_pair(5)
                 elif year_set.status == SetStatus.FAILED:
+                    # set color to red
                     color_pair = curses.color_pair(3)
                 elif year_set.status == SetStatus.RUNNING:
+                    # set color to purple
                     color_pair = curses.color_pair(6)
                 line = 'status: {status}'.format(
                     status=year_set.status)
-                #pad.addstr(y, x, line, color_pair)
                 write_line(pad, line, x, y, color_pair)
                 if initializing:
                     sleep(0.01)
                     pad.refresh(0, 0, 3, 5, hmax, wmax)
                 pad.clrtoeol()
                 y += 1
-                # if xy_check(x, y, hmax, wmax) == -1:
-                #     sleep(1)
-                #     break
-                # if y >= (hmax/3):
-                #     last_y = y
-                #     y = 0
-                #     x += (wmax/2)
-                #     if x >= wmax:
-                #         break
+
+                # if the job_set is done collapse it
                 if year_set.status == SetStatus.COMPLETED \
                     or year_set.status == SetStatus.NO_DATA \
                     or year_set.status == SetStatus.PARTIAL_DATA:
@@ -777,7 +765,6 @@ def display(stdscr, event, config):
                     line = '  >   {type} -- {id} '.format(
                         type=job.get_type(),
                         id=job.job_id)
-                    # pad.addstr(y, x, line, curses.color_pair(4))
                     write_line(pad, line, x, y, curses.color_pair(4))
                     color_pair = curses.color_pair(4)
                     if job.status == JobStatus.COMPLETED:
@@ -788,29 +775,36 @@ def display(stdscr, event, config):
                         color_pair = curses.color_pair(6)
                     elif job.status == JobStatus.SUBMITTED or job.status == JobStatus.PENDING:
                         color_pair = curses.color_pair(7)
-                    line = '{status}'.format(status=job.status)
+                    # if the job is running, print elapsed time
+                    if job.status == JobStatus.RUNNING:
+                        delta = now - job.start_time
+                        deltastr = strfdelta(delta, "{H}:{M}:{S}")
+                        #deltastr = str(delta)
+                        line = '{status} elapsed time: {time}'.format(
+                            status=job.status,
+                            time=deltastr)
+                    # if job has ended, print total time
+                    elif job.status in [JobStatus.COMPLETED, JobStatus.FAILED] \
+                         and job.end_time \
+                         and job.start_time:
+                        delta = job.end_time - job.start_time
+                        line = '{status} elapsed time: {time}'.format(
+                            status=job.status,
+                            time=strfdelta(delta, "{H}:{M}:{S}"))
+                    else:
+                        line = '{status}'.format(status=job.status)
                     pad.addstr(line, color_pair)
                     pad.clrtoeol()
                     if initializing:
                         sleep(0.01)
                         pad.refresh(0, 0, 3, 5, hmax, wmax)
                     y += 1
-                # if y >= (hmax/3):
-                #     last_y = y
-                #     y = 0
-                #     x += (wmax/2)
-                #     if x >= wmax:
-                #         break
 
             x = 0
             if last_y:
                 y = last_y
-            # pad.refresh(0, 0, 3, 5, hmax, wmax)
             pad.clrtobot()
             y += 1
-            # if xy_check(x, y, hmax, wmax) == -1:
-            #     sleep(1)
-            #     continue
             for line in event_list[-10:]:
                 if 'Transfer' in line:
                     continue
@@ -827,7 +821,6 @@ def display(stdscr, event, config):
                 if initializing:
                     sleep(0.01)
                     pad.refresh(0, 0, 3, 5, hmax, wmax)
-                #pad.refresh(0, 0, 3, 5, hmax, wmax)
                 y += 1
                 if xy_check(x, y, hmax, wmax) == -1:
                     sleep(1)
@@ -844,45 +837,6 @@ def display(stdscr, event, config):
             current_year = 1
             year_ready = True
             partial_data = False
-            # for line in sorted(file_list, cmp=file_list_cmp):
-            #     index = line.find('-')
-            #     year = int(line[:index])
-            #     month = int(line[index + 1:])
-            #     if month == 1:
-            #         year_ready = True
-            #         partial_data = False
-            #     if file_list[line] != SetStatus.DATA_READY:
-            #         year_ready = False
-            #     else:
-            #         partial_data = True
-            #     if month == 12:
-            #         if year_ready:
-            #             status = SetStatus.DATA_READY
-            #         else:
-            #             if partial_data:
-            #                 status = SetStatus.PARTIAL_DATA
-            #             else:
-            #                 status = SetStatus.NO_DATA
-            #         file_display_list.append('Year {year} - {status}'.format(
-            #             year=year,
-            #             status=status))
-
-            # line_length = len(file_display_list[0])
-            # num_cols = wmax/line_length
-            # for line in file_display_list:
-            #     if x + len(line) >= wmax:
-            #         diff = wmax - (x + len(line))
-            #         line = line[:diff]
-            #     pad.addstr(y, x, line, curses.color_pair(4))
-            #     pad.clrtoeol()
-            #     y += 1
-            #     if y >= (hmax-10):
-            #         y = file_start_y
-            #         x += line_length + 5
-            #         if x >= wmax:
-            #             break
-            #     if y > file_end_y:
-            #         file_end_y = y
 
             y = file_end_y + 1
             x = 0

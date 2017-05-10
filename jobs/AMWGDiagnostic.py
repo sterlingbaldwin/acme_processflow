@@ -8,7 +8,7 @@ from uuid import uuid4
 from subprocess import Popen, PIPE
 from pprint import pformat
 from time import sleep
-import time
+from datetime import datetime
 # job modules
 from JobStatus import JobStatus
 # output_viewer modules
@@ -50,6 +50,8 @@ class AMWGDiagnostic(object):
         """
         self.event_list = event_list
         self.status = JobStatus.INVALID
+        self.start_time = None
+        self.end_time = None
         self.inputs = {
             'host_directory': '',
             'host_prefix': '',
@@ -227,6 +229,7 @@ class AMWGDiagnostic(object):
         if debug:
             print 'amwg not done yet, setting up for computing'
             print pformat(self.config)
+        self.start_time = datetime.now()
         # setup the output directory
         run_dir = self.config.get('run_directory')
         if not os.path.exists(run_dir):
