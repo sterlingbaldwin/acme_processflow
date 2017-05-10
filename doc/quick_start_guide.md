@@ -2,13 +2,15 @@
 
 Use this guide if you're already an acme1 or aims4 user.
 
-For a new run all you will need is to setup your runs configuration file. Make a copy of the sample config file
+For a new run you'll need to create an input directory and setup your runs configuration file. Make a copy of the sample config file.
 ```
+mkdir /p/cscratch/acme/<YOUR_USER_NAME>/input
+cd /p/cscratch/acme/<YOUR_USER_NAME>/input
 wget https://raw.githubusercontent.com/sterlingbaldwin/acme_workflow/master/run.cfg
 ```
 
 ## Setup Run Config
-Once you have the file, open it in your favorite editor. There are are 12 values that must be changed before you're ready to run. You can find an explanation of each of them [here](setup_guide.md)
+Once you have the file, open it in your favorite editor. There are are 9 values that must be changed before you're ready to run. You can find an explanation of each of them [here](setup_guide.md), or [below](#config)
 
 The keys you need to change before running the first time are:
 ```
@@ -47,7 +49,7 @@ output_patterns = {"ATM":"cam.h0"}
 set_jobs = ["ncclimo", "timeseries", "amwg"]
 ```
 
-### Config Explanation
+### Config Explanation<a name="config"></a>
 
 #### output_path
 This is the local path to store processed output
