@@ -9,6 +9,8 @@ from pprint import pformat
 from subprocess import Popen, PIPE
 from time import sleep
 from random import randint
+from datetime import datetime
+
 from cdp.cdp_viewer import OutputViewer
 
 from lib.util import render
@@ -86,6 +88,8 @@ class CoupledDiagnostic(object):
             'LWCF',
             'TAU'
         ]
+        self.start_time = None
+        self.end_time = None
         self.config = {}
         self.status = JobStatus.INVALID
         self.type = 'coupled_diagnostic'
@@ -360,19 +364,10 @@ class CoupledDiagnostic(object):
             message = 'Coupled_diag job already computed, skipping'
             self.event_list = push_event(self.event_list, message)
             return 0
+        self.start_time = datetime.now()
         # create symlinks to the input data
         if not self.setup_input_directory():
             return -1
-        # self.config['test_archive_dir'] = os.path.join(
-        #     os.path.abspath(os.path.dirname(__file__)),
-        #     '..',
-        #     self.config.get('test_archive_dir'),
-        #     self.config.get('test_casename'),
-        #     'run')
-        # self.config['test_archive_dir'] = os.path.join(
-        #     os.path.abspath(os.path.dirname(__file__)),
-        #     '..',
-        #     self.config.get('test_archive_dir'))
 
         # render the run_AIMS.csh script
         render(
@@ -390,8 +385,13 @@ class CoupledDiagnostic(object):
             uuid=self.uuid[:5])
 
         run_script = os.path.join(self.config.get('run_scripts_path'), expected_name)
-        self.slurm_args['error_file'] = '-e {err}'.format(err=run_script + '.err')
-        self.slurm_args['out_file'] = '-o {out}'.format(out=run_script + '.out')
+        self.slurm_args['error_file'] = '-e {err}'.format(
+            err=run_script + '.err')
+        self.slurm_args['out_file'] = '-o {out}'.format(
+            out=run_script + '.out')
+        self.slurm_args['working_dir'] = '--workdir {dir}'.format(
+            dir=self.config.get('coupled_diags_home'))
+
         with open(run_script, 'w') as batchfile:
             batchfile.write('#!/bin/bash\n')
             slurm_args = ['#SBATCH {}'.format(self.slurm_args[s]) for s in self.slurm_args]
@@ -399,18 +399,14 @@ class CoupledDiagnostic(object):
             batchfile.write(slurm_prefix)
             batchfile.write(cmd)
 
-        # slurm_cmd = ['sbatch', run_script, '--oversubscribe']
         slurm_cmd = ['sbatch', run_script, '--oversubscribe']
         started = False
         retry_count = 0
 
-        # handle coupled diags crazyness
-        prev_dir = os.getcwd()
-        os.chdir(self.config.get('coupled_diags_home'))
 
         # This is here as a stop gap measure to try and dodge the bullet outlined
         # here https://github.com/ACME-Climate/PreAndPostProcessingScripts/issues/32
-        sleep(randint(3, 5))
+        sleep(randint(0, 5))
         while not started:
             while True:
                 try:
@@ -422,7 +418,6 @@ class CoupledDiagnostic(object):
             output, err = self.proc.communicate()
             started, job_id = check_slurm_job_submission(expected_name)
             if started:
-                os.chdir(prev_dir)
                 self.job_id = job_id
                 message = "## {job} id: {id} changed status to {status}".format(
                     job=self.type,
