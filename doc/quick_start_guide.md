@@ -10,7 +10,7 @@ wget https://raw.githubusercontent.com/sterlingbaldwin/acme_workflow/master/run.
 ```
 
 ## Setup Run Config
-Once you have the file, open it in your favorite editor. There are are 9 values that must be changed before you're ready to run. You can find an explanation of each of them [here](setup_guide.md), or [below](#config)
+Once you have the file, open run.cfg in your favorite editor. There are are 9 values that must be changed before you're ready to run. You can find an explanation of each of them [here](setup_guide.md), or [below](#config)
 
 The keys you need to change before running the first time are:
 ```
@@ -91,7 +91,7 @@ python /p/cscratch/acme/bin/acme_workflow/workflow.py -c run.cfg
 
 In interactive mode, if the terminal is closed or you log out, it will stop the process (but the runs managed by SLURM will continue). See below for headless mode instructions.
 
-    python workflow.py -c run.cfg
+    python /p/cscratch/acme/bin/acme_workflow/workflow.py -c run.cfg
 
 ![initial run](http://imgur.com/ZGuJUCk.png)
 
@@ -103,7 +103,7 @@ Once globus has transfered the first year_set of data, it will start running the
 #### headless mode
 A run in headless mode wont stop if you close the terminal. The run will continue until it finishes, at which point it will send an email to you with the results. If there is an error, you can stop the run with the command ```kill PID``` where PID is the process id.
 ```
-nohup python workflow.py -c run.cfg --no-ui &
+nohup python /p/cscratch/acme/bin/acme_workflow/workflow.py -c run.cfg --no-ui &
 ```
 
 This run can continue after you close the termincal and log off the computer. While running in headless mode, you can check run_state.txt for the run status. This file can be found in your output directory.
