@@ -70,7 +70,7 @@ An arbitrary identifyer for each post processing run. This should be updated for
 The path on the source_endpoint to look for model output.
 
 #### source_endpoint
-A globus endpoind UUID, the default is edison.nersc.gov
+A globus endpoind UUID, the default is edison.nersc.gov. You can find globus endpoints by [going here](https://www.globus.org/app/endpoints) and using the globus search features.
 
 #### destination_endpoint
 The globus endpoint UUID for the machine doing the post-processing. The default is acme1.llnl.gov.
