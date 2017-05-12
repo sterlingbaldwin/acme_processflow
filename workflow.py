@@ -1,6 +1,7 @@
 # pylint: disable=C0103
 # pylint: disable=C0111
 # pylint: disable=C0301
+
 import argparse
 import json
 import sys
@@ -24,13 +25,16 @@ from jobs.Timeseries import Timeseries
 from jobs.AMWGDiagnostic import AMWGDiagnostic
 from jobs.CoupledDiagnostic import CoupledDiagnostic
 from jobs.JobStatus import JobStatus
+
 from lib.Monitor import Monitor
 from lib.YearSet import YearSet
 from lib.YearSet import SetStatus
 from lib.mailer import Mailer
-
+from lib.events import Event
+from lib.events import Event_list
 from lib.util import *
 
+# setup argument parser
 parser = argparse.ArgumentParser()
 parser.add_argument('-c', '--config', help='Path to configuration file.')
 parser.add_argument('-v', '--debug', help='Run in debug mode.', action='store_true')
@@ -43,6 +47,7 @@ parser.add_argument('-m', '--no-monitor', help='Don\'t run the remote monitor or
 parser.add_argument('-V', '--viewer', help='Turn on generation for output_viewer style web pages.', action='store_true')
 parser.add_argument('-s', '--size', help='The maximume size in gigabytes of a single transfer, defaults to 100. Must be larger then the largest single file.')
 
+# check for NCL
 if not os.environ.get('NCARG_ROOT'):
     ncar_path = '/usr/local/src/NCL-6.3.0/'
     if os.path.exists(ncar_path):
@@ -51,17 +56,18 @@ if not os.environ.get('NCARG_ROOT'):
         print 'No NCARG_ROOT found in environment variables, is NCL installed on the machine?'
         sys.exit()
 
-def setup(parser, event_list, display_event):
+# create global Event_list
+event_list = Event_list()
+
+def setup(parser, display_event):
     """
-    Setup the config, file_list, and job_sets variables from either the config file passed from the parser
-    of from the previously saved state
+    Parse the commandline arguments, and setup the master config dict
+
+    Parameters:
+        parser (argparse.ArgumentParser): The parser object
+        display_event (Threadding_event): The event to turn the display on and off
     """
     global debug
-    global config
-    global file_list
-    global job_sets
-    global from_saved_state
-
     args = parser.parse_args()
 
     if args.debug:
@@ -73,27 +79,27 @@ def setup(parser, event_list, display_event):
     if not args.config:
         parser.print_help()
         sys.exit()
-    else:
-        try:
-            confParse = ConfigParser.ConfigParser()
-            confParse.read(args.config)
-            for section in confParse.sections():
-                config[section] = {}
-                for option in confParse.options(section):
-                    opt = confParse.get(section, option)
-                    if not opt:
-                        if 'pass' in option and not args.no_monitor:
-                            opt = getpass('>> ' + option + ': ')
-                        else:
-                            opt = raw_input('>> ' + option + ': ')
-                    if opt.startswith('[') or opt.startswith('{'):
-                        opt = json.loads(opt)
-                    config[section][option] = opt
-        except Exception as e:
-            msg = 'Unable to read config file, is it properly formatted json?'
-            print_message(msg)
-            print_debug(e)
-            return -1
+    
+    try:
+        confParse = ConfigParser.ConfigParser()
+        confParse.read(args.config)
+        for section in confParse.sections():
+            config[section] = {}
+            for option in confParse.options(section):
+                opt = confParse.get(section, option)
+                if not opt:
+                    if 'pass' in option and not args.no_monitor:
+                        opt = getpass('>> ' + option + ': ')
+                    else:
+                        opt = raw_input('>> ' + option + ': ')
+                if opt.startswith('[') or opt.startswith('{'):
+                    opt = json.loads(opt)
+                config[section][option] = opt
+    except Exception as e:
+        msg = 'Unable to read config file, is it properly formatted json?'
+        print_message(msg)
+        print_debug(e)
+        return -1
 
     endpoints = [config['transfer']['source_endpoint'], config['transfer']['destination_endpoint']]
     if args.no_ui:
@@ -203,6 +209,9 @@ def setup(parser, event_list, display_event):
 def add_jobs(year_set):
     """
     Initializes and adds all the jobs to the year_set
+
+    Parameters:
+        year_set (YearSet): The YearSet to populate with jobs
     """
     # each required job is a key, the value is if its in the job list already or not
     # this is here in case the jobs have already been added
@@ -443,7 +452,7 @@ def monitor_check(monitor, config, file_list, event_list, display_event):
     # hold off on starting any new ones until they complete
     if active_transfers >= 2:
         return
-    event_list = push_event(event_list, "Running check for remote files")
+    event_list.push(message="Running check for remote files")
     monitor.check()
     new_files = monitor.new_files
     patterns = config.get('global').get('output_patterns')
@@ -458,7 +467,9 @@ def monitor_check(monitor, config, file_list, event_list, display_event):
     for new_file in new_files:
         file_type = new_file.get('type')
         if not file_type:
-            event_list = push_event(event_list, "Failed accessing remote directory, do you have access permissions?")
+            message = "File {0} has no file_type, possible permission issue".format(
+                new_file['filename'])
+            event_list.push(message=message)
             continue
         file_key = ""
         if file_type in ['ATM', 'MPAS_AM', 'MPAS_CICE', 'MPAS_RST']:
@@ -538,20 +549,17 @@ def monitor_check(monitor, config, file_list, event_list, display_event):
 
     # Check if the user is logged in, and all endpoints are active
     endpoints = [config['transfer']['source_endpoint'], config['transfer']['destination_endpoint']]
-    client = get_client()
-    for endpoint in endpoints:
-        r = client.endpoint_autoactivate(endpoint, if_expires_in=3600)
-        if r["code"] == "AutoActivationFailed":
-            display_event.set()
-            sleep(3)
-            while not setup_globus(endpoints):
-                sleep(1)
-            display_event.clear()
-            diaplay_thread = threading.Thread(target=start_display, args=(config, display_event))
-            diaplay_thread.start()
+    setup_globus(
+        endpoints=endpoints,
+        no_ui=config.get('global').get('ui'),
+        src=config.get('global').get('email'),
+        dst=config.get('global').get('email'),
+        event_list=event_list)
             
     transfer = Transfer(transfer_config, event_list)
 
+    # After the transfer has filterd out what items its actually going to transfer
+    # update the file_list 
     for item in transfer.config.get('file_list'):
         item_name = item['filename'].split('/').pop()
         item_type = item['type']
@@ -569,6 +577,7 @@ def monitor_check(monitor, config, file_list, event_list, display_event):
             file_key == 'streams.cice' if 'cice' in item_name else 'streams.ocean'
         file_list[item_type][file_key] = SetStatus.IN_TRANSIT
 
+    # create the message to display the transfer info
     start_file_name = transfer.config.get('file_list')[0]['filename']
     stype = transfer.config.get('file_list')[0]['type']
     end_file_name = transfer.config.get('file_list')[-1]['filename']
@@ -577,19 +586,29 @@ def monitor_check(monitor, config, file_list, event_list, display_event):
     start_readable = start_file_name[index - 4: index + 3]
     index = end_file_name.find('-')
     end_readable = end_file_name[index - 4: index + 3]
-    message = 'Found {0} new remote files, creating transfer job from {stype}:{1} to {etype}:{2}'.format(
-        len(checked_new_files),
-        start_readable,
-        end_readable,
+    message = 'Found {numfiles} new remote files, moving data from {stype}:{sname} to {etype}:{ename}'.format(
+        numfiles=len(checked_new_files),
+        sname=start_readable,
+        ename=end_readable,
         stype=stype,
         etype=etype)
-    event_list = push_event(event_list, message)
+    event_list.push(
+        message=message,
+        data=transfer)
+    message = "Starting file transfer with file_list: {file_list}".format(
+        file_list=pformat(transfer.file_list))
     logging.info('## ' + message)
 
     if not config.get('global').get('dry_run', False):
         while True:
             try:
-                thread = threading.Thread(target=handle_transfer, args=(transfer, checked_new_files, thread_kill_event, event_list))
+                thread = threading.Thread(
+                    target=handle_transfer,
+                    args=(
+                        transfer,
+                        checked_new_files,
+                        thread_kill_event,
+                        event_list))
             except:
                 sleep(1)
             else:
@@ -603,14 +622,13 @@ def handle_transfer(transfer_job, f_list, event, event_list):
     Wrapper around the transfer.execute() method, ment to be run inside a thread
 
     inputs:
-        transfer_job: the transfer job to execute and monitor
-        f_list: the list of files being transfered
-        event: a thread event to handle shutting down from keyboard exception, not used in this case
-            but it needs to be there for any threads handlers
+        transfer_job (TransferJob): the transfer job to execute and monitor
+        f_list (list): the list of files being transfered
+        event: a thread event to handle shutting down from keyboard exception
     """
     active_transfers += 1
     # start the transfer job
-    transfer_job.execute(event, event_list)
+    transfer_job.execute(event)
     # the transfer is complete, so we can decrement the active_transfers counter
     active_transfers -= 1
 
@@ -618,7 +636,7 @@ def handle_transfer(transfer_job, f_list, event, event_list):
         print_message("File transfer failed")
         message = "## Transfer {uuid} has failed".format(uuid=transfer_job.uuid)
         logging.error(message)
-        event_list = push_event(event_list, 'Tranfer failed')
+        event_list.push(message='Tranfer failed')
         return
     else:
         message = "## Transfer {uuid} has completed".format(uuid=transfer_job.uuid)
@@ -805,18 +823,19 @@ def display(stdscr, event, config):
                 y = last_y
             pad.clrtobot()
             y += 1
-            for line in event_list[-10:]:
-                if 'Transfer' in line:
+            events = event_list.list
+            for line in events[-10:]:
+                if 'Transfer' in line.message:
                     continue
-                if 'hosted' in line:
+                if 'hosted' in line.message:
                     continue
-                if 'failed' in line or 'FAILED' in line:
+                if 'failed' in line.message or 'FAILED' in line.message:
                     prefix = '[-]  '
                     pad.addstr(y, x, prefix, curses.color_pair(3))
                 else:
                     prefix = '[+]  '
                     pad.addstr(y, x, prefix, curses.color_pair(5))
-                pad.addstr(line, curses.color_pair(4))
+                pad.addstr(line.message, curses.color_pair(4))
                 pad.clrtoeol()
                 if initializing:
                     sleep(0.01)
@@ -844,20 +863,20 @@ def display(stdscr, event, config):
             pad.addstr(y, x, msg, curses.color_pair(4))
             pad.clrtoeol()
             if active_transfers:
-                for line in event_list:
-                    if 'Transfer' in line:
-                        index = line.find('%')
+                for line in events:
+                    if 'Transfer' in line.message:
+                        index = line.message.find('%')
                         if index:
-                            s_index = line.rfind(' ', 0, index)
-                            percent = float(line[s_index: index])
+                            s_index = line.message.rfind(' ', 0, index)
+                            percent = float(line.message[s_index: index])
                             if percent < 100:
                                 y += 1
-                                pad.addstr(y, x, line, curses.color_pair(4))
+                                pad.addstr(y, x, line.message, curses.color_pair(4))
                                 pad.clrtoeol()
-            for line in event_list:
-                if 'hosted' in line:
+            for line in events:
+                if 'hosted' in line.message:
                     y += 1
-                    pad.addstr(y, x, line, curses.color_pair(4))
+                    pad.addstr(y, x, line.message, curses.color_pair(4))
             spin_line = spinner[spin_index]
             spin_index += 1
             if spin_index == spin_len:
@@ -891,32 +910,36 @@ if __name__ == "__main__":
 
     # A list of all the expected files
     file_list = {}
+
     # A list of all the file names
     file_name_list = {}
+
     # Describes the state of each job jet
     job_sets = []
+
     # The master configuration object
     config = {}
+
     # A list of all the threads
     thread_list = []
+
     # An event to kill the threads on terminal exception
     thread_kill_event = threading.Event()
     display_event = threading.Event()
     debug = False
     from_saved_state = False
+
     # The number of active globus transfers
     active_transfers = 0
+
     # A flag to tell if we have all the data locally
     all_data = False
-    # A list of strings for holding display info
-    event_list = []
+
     # Read in parameters from config
-    config = setup(parser, event_list, display_event)
+    config = setup(parser, display_event)
     
     # A list of files that have been transfered
     transfer_list = []
-
-    state = []
 
     if config == -1:
         print "Error in setup, exiting"
@@ -955,7 +978,7 @@ if __name__ == "__main__":
     if not from_saved_state:
         job_sets = []
         line = 'Initializing year sets'
-        event_list = push_event(event_list, line)
+        event_list.push(message=line)
         for freq in frequencies:
             freq = int(freq)
             year_set = number_of_sim_years / freq
@@ -972,7 +995,7 @@ if __name__ == "__main__":
 
     # initialize the file_list
     line = 'Initializing file list'
-    event_list = push_event(event_list, line)
+    event_list.push(message=line)
     for key, val in config.get('global').get('output_patterns').items():
         file_list[key] = {}
         file_name_list[key] = {}
@@ -1014,7 +1037,7 @@ if __name__ == "__main__":
         config.get('global').get('output_path'),
         'run_state.txt')
     if config.get('global').get('dry_run', False):
-        event_list = push_event(event_list, 'Running in dry-run mode')
+        event_list.push(message='Running in dry-run mode')
         write_human_state(event_list, job_sets, state_path)
         if not config.get('global').get('no-ui', False):
             sleep(50)
@@ -1027,11 +1050,11 @@ if __name__ == "__main__":
     if all_data:
         # print_message('All data is local, disabling remote monitor', 'ok')
         line = 'All data is local, disabling remote monitor'
-        event_list = push_event(event_list, line)
+        event_list.push(message=line)
     else:
         # print_message('More data needed, enabling remote monitor', 'ok')
         line = 'More data needed, enabling remote monitor'
-        event_list = push_event(event_list, line)
+        event_list.push(message=line)
 
     # If all the data is local, dont start the monitor
     if all_data or config.get('global').get('no_monitor', False):
@@ -1057,18 +1080,18 @@ if __name__ == "__main__":
         monitor = Monitor(monitor_config)
         if not monitor:
             line = 'error setting up monitor'
-            event_list = push_event(event_list, line)
+            event_list.push(message=line)
             sys.exit()
 
         line = 'Attempting connection to {}'.format(config.get('monitor').get('source_endpoint'))
-        event_list = push_event(event_list, line)
+        event_list.push(message=line)
 
         status, message = monitor.connect()
-        event_list = push_event(event_list, message)
+        event_list.push(message=message)
         if not status:
             line = "Unable to connect to globus service, exiting"
             logging.error(line)
-            event_list = push_event(event_list, line)
+            event_list.push(message=line)
             sleep(4)
             display_event.set()
             for t in thread_list:
@@ -1082,7 +1105,7 @@ if __name__ == "__main__":
         else:
             line = 'Connected'
             logging.info(line)
-            event_list = push_event(event_list, line)
+            event_list.push(message=line)
 
     # Main loop
     try:
@@ -1127,7 +1150,7 @@ Processing job {id} has completed successfully
 
 You can view your diagnostic output here:\n'''.format(
                             id= config.get('global').get('run_id'))
-                        for event in event_list:
+                        for event in event_list.list:
                             if 'hosted' in event:
                                 msg += event + '\n'
                         m = Mailer(src=emailaddr, dst=emailaddr)
@@ -1136,7 +1159,7 @@ You can view your diagnostic output here:\n'''.format(
                             msg=msg)
                     except Exception as e:
                         logging.error(format_debug(e))
-                event_list = push_event(event_list, message)
+                event_list.push(message=message)
                 sleep(5)
                 display_event.set()
                 sleep(2)

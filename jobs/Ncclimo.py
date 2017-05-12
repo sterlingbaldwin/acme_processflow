@@ -16,7 +16,7 @@ from datetime import datetime
 from lib.util import print_debug
 from lib.util import print_message
 from lib.util import check_slurm_job_submission
-from lib.util import push_event
+from lib.events import Event_list
 from lib.util import cmd_exists
 from lib.util import get_climo_output_files
 from JobStatus import JobStatus
@@ -79,7 +79,7 @@ class Climo(object):
         if self.postvalidate():
             self.status = JobStatus.COMPLETED
             message = 'Ncclimo job already computed, skipping'
-            self.event_list = push_event(self.event_list, message)
+            self.event_list.push(message=message)
             return 0
 
         self.start_time = datetime.now()
@@ -174,7 +174,7 @@ class Climo(object):
                         type=self.get_type(),
                         id=self.job_id,
                         state=self.status)
-                    self.event_list = push_event(self.event_list, message)
+                    self.event_list.push(message=message)
 
                 else:
                     logging.warning('Error starting climo job, trying again attempt %s', str(retry_count))
@@ -191,7 +191,7 @@ class Climo(object):
                     type=self.get_type(),
                     id=self.job_id,
                     state=self.status)
-                self.event_list = push_event(self.event_list, message)
+                self.event_list.push(message=message)
                 self.job_id = 0
             return self.job_id
 
@@ -239,7 +239,7 @@ class Climo(object):
             if i not in self.config:
                 all_inputs = False
                 message = 'Argument {} missing for Ncclimo, prevalidation failed'.format(i)
-                self.event_list = push_event(self.event_list, message)
+                self.event_list.push(message=message)
                 break
 
         self.status = JobStatus.VALID if all_inputs else JobStatus.INVALID

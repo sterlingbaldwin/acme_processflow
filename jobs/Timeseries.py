@@ -16,7 +16,7 @@ from datetime import datetime
 from lib.util import print_debug
 from lib.util import print_message
 from lib.util import check_slurm_job_submission
-from lib.util import push_event
+from lib.events import Event_list
 from lib.util import cmd_exists
 from lib.util import get_climo_output_files
 from JobStatus import JobStatus
@@ -74,7 +74,8 @@ class Timeseries(object):
         """
         if self.postvalidate():
             self.status = JobStatus.COMPLETED
-            self.event_list = push_event(self.event_list, 'Timeseries already computed, skipping')
+            message = 'Timeseries already computed, skipping'
+            self.event_list.push(message=message)
             return 0
         
         self.start_time = datetime.now()
@@ -162,7 +163,7 @@ class Timeseries(object):
                         id=self.job_id,
                         state=self.status)
                     logging.info('## ' + message)
-                    self.event_list = push_event(self.event_list, message)
+                    self.event_list.push(message=message)
 
                 else:
                     logging.warning('Error starting climo job, trying again attempt %s', str(retry_count))
@@ -175,7 +176,7 @@ class Timeseries(object):
                     id=self.job_id,
                     state=self.status)
                 logging.info('## ' + message)
-                self.event_list = push_event(self.event_list, message)
+                self.event_list.push(message=message)
                 self.job_id = 0
             return self.job_id
 

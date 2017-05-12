@@ -10,6 +10,10 @@ class Mailer(object):
     def __init__(self, src, dst):
         """
         Initialize the mailer with source = src and destination = dst
+
+        Parameters:
+            src (str): the source email address
+            dst (str): the destination email address
         """
         self.src = src
         self.dst = dst
@@ -20,6 +24,8 @@ class Mailer(object):
     def validate(self):
         """
         Validate the source and destination addresses
+
+        returns True if valid, False otherwise
         """
         if not validate_email(self.dst, check_mx=True, verify=True):
             msg = 'Invalid destination email address {}'.format(self.dst)
@@ -35,6 +41,12 @@ class Mailer(object):
     def send(self, status=None, msg=None):
         """
         Send the email with contents = msg and subject line = status
+
+        Parameters:
+            msg (str): the contents of the email
+            status (str): the subject line of the email
+
+        returns True if succesful, False otherwise
         """
         if not self.validate():
             return False

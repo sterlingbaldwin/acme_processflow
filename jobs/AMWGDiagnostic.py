@@ -22,10 +22,9 @@ from lib.util import print_debug
 from lib.util import print_message
 from lib.util import check_slurm_job_submission
 from lib.util import create_symlink_dir
-from lib.util import push_event
 from lib.util import render
 from lib.util import get_climo_output_files
-
+from lib.events import Event_list
 
 class AMWGDiagnostic(object):
     """
@@ -152,8 +151,7 @@ class AMWGDiagnostic(object):
         Generates the index.json for the DiagnosticViewer
         """
         return
-        self.event_list = push_event(
-            self.event_list, 'Starting index generataion for AMWG diagnostic')
+        self.event_list.push(message='Starting index generataion for AMWG diagnostic')
         contents = [s for s in os.listdir(self.config.get('run_directory')) if s.endswith('png')]
         dataset_name = self.config.get('dataset_name')
         index = OutputIndex('AMWG Diagnostic', version=dataset_name)
@@ -191,9 +189,9 @@ class AMWGDiagnostic(object):
         try:
             index.toJSON(os.path.join(self.config.get('run_directory'), 'index.json'))
         except:
-            self.event_list = push_event(self.event_list, 'Index generation failed')
+            self.event_list.push(message='Index generation failed')
         else:
-            self.event_list = push_event(self.event_list, 'Index generataion complete')
+            self.event_list.push(message='Index generataion complete')
 
     def postvalidate(self):
         """
@@ -223,7 +221,7 @@ class AMWGDiagnostic(object):
         if self.postvalidate():
             self.status = JobStatus.COMPLETED
             message = 'AMWG job already computed, skipping'
-            self.event_list = push_event(self.event_list, message)
+            self.event_list.push(message=message)
             logging.info(message)
             return 0
         if debug:
@@ -309,6 +307,6 @@ class AMWGDiagnostic(object):
                     id=self.job_id,
                     state=self.status)
                 logging.info('## ' + message)
-                self.event_list = push_event(self.event_list, message)
+                self.event_list.push(message=message)
 
         return self.job_id

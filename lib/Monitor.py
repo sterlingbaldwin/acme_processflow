@@ -11,7 +11,7 @@ from globus_cli.services.transfer import get_client
 from globus_cli.commands.ls import _get_ls_res as get_ls
 
 from util import setup_globus
-from util import push_event
+from lib.events import Event_list
 
 
 class Monitor(object):
@@ -21,7 +21,17 @@ class Monitor(object):
     def __init__(self, config=None):
         """
         Initializes the monitoring system,
-        inputs: remote_host, remote_dir, username, password (optional), keyfile (optional)
+        
+        Parameters: 
+            remote_host (str): the hostname of the remote system
+            remote_dir (str): the path on the remote system to look for files
+            source_endpoint (globus UUID): the ID of the data source
+            patterns (list: str): A list of file patterns to look for
+            no_ui (boolean: optional): The current UI mode
+            src (str): An email address source for prompts
+            dst (str): An email address destination for prompts
+            event_list (Event_list): A list of events for pushing updates into
+            display_event (Threadding_event): A Threadding_event to turn off the display for user prompts
         """
         if not config:
             print "No configuration for monitoring system"
@@ -41,8 +51,8 @@ class Monitor(object):
         self.event_list = config.get('event_list')
         self.display_event = config.get('display_event')
         self.client = None
-        self.known_files = []
-        self.new_files = []
+        self._known_files = []
+        self._new_files = []
 
     def connect(self):
         """
@@ -50,7 +60,7 @@ class Monitor(object):
 
         return False if error, True on success
         """
-        self.event_list = push_event(self.event_list, 'attempting connection')
+        self.event_list.push(message='attempting connection')
         setup_globus(
             endpoints=self.source_endpoint,
             no_ui=self.no_ui,
@@ -65,18 +75,13 @@ class Monitor(object):
         else:
             return (True, result['message'])
 
-    def set_known_files(self, files):
-        """
-        Sets the list of known files.
-        inputs: files, a list of filenames
-        """
-        self.known_files = files
+    @property
+    def known_files(self):
+        return self._known_files
 
-    def get_known_files(self):
-        """
-        Returns the list of known files
-        """
-        return self.known_files
+    @known_files.setter
+    def known_files(self, files):
+        self._known_files = files
 
     def check(self):
         """
@@ -113,16 +118,10 @@ class Monitor(object):
                     'size': f['size']
                 })
                 break
+    @property
+    def new_files(self):
+        return self._new_files
 
-    def remove_new_file(self, rfile):
-        """
-        Removes a files from the new_files listls -l
-        """
-        if rfile in self.new_files:
-            self.new_files.remove(file)
-
-    def get_new_files(self):
-        """
-            Returns a list of only the new files that have been added since the last check
-        """
-        return self.new_files
+    @new_files.setter
+    def new_files(self, new_files):
+        self._new_files = new_files

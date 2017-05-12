@@ -49,7 +49,7 @@ def setup_globus(endpoints, no_ui=False, **kwargs):
     Check globus login status and login as nessisary, then
     iterate over a list of endpoints and activate them all
     
-    params:
+    Parameters:
        endpoints: list of strings containing globus endpoint UUIDs
        no_ui: a boolean flag, true if running without the UI
 
@@ -77,7 +77,7 @@ def setup_globus(endpoints, no_ui=False, **kwargs):
             if kwargs.get('event_list'):
                 line = 'Waiting on user to log into globus, email sent to {addr}'.format(
                     addr=kwargs['src'])
-                kwargs['event_list'] = push_event(kwargs['event_list'], line)
+                kwargs['event_list'].push(message=line)
             if not message_sent:
                 mailer = Mailer(
                     src=kwargs['src'],
@@ -282,9 +282,10 @@ def handle_completed_job(job, job_set, event_list):
     Perform post execution tasks
     """
     if not job.postvalidate():
-        event_list = push_event(
-            event_list,
-            '{} completed but doesnt have expected output'.format(job.get_type()))
+        message = '{0} completed but doesnt have expected output'.format(job.get_type())
+        event_list.push(
+            message=message,
+            data=job)
         job.status = JobStatus.FAILED
 
     if job.get_type() == 'coupled_diagnostic':
@@ -336,7 +337,9 @@ def monitor_job(job, job_set, event=None, debug=False, batch_type='slurm', uploa
         message = 'Submitted {0} for year_set {1}'.format(
             job.get_type(),
             job_set.set_number)
-        event_list = push_event(event_list, message)
+        event_list.push(
+            message=message,
+            data=job)
         logging.info('## ' + message)
 
     job.postvalidate()
@@ -398,7 +401,9 @@ def monitor_job(job, job_set, event=None, debug=False, batch_type='slurm', uploa
             if status and status != job.status:
                 if status == JobStatus.FAILED:
                     msg = 'Job {0} has failed'.format(job_id)
-                    event_list = push_event(event_list, msg)
+                    event_list.push(
+                        message=msg,
+                        data=job)
                     if debug:
                         print_message(msg)
 
@@ -408,7 +413,6 @@ def monitor_job(job, job_set, event=None, debug=False, batch_type='slurm', uploa
                     status=status,
                     type=job.get_type())
                 logging.info('##' + message)
-                # event_list = push_event(event_list, message)
 
                 if status == JobStatus.RUNNING and job_set.status != SetStatus.RUNNING:
                     job_set.status = SetStatus.RUNNING
@@ -422,7 +426,9 @@ def setup_local_hosting(job, event_list, img_src, generate=False):
     Sets up the local directory for hosting diagnostic sets
     """
     msg = 'Setting up local hosting for {}'.format(job.get_type())
-    event_list = push_event(event_list, msg)
+    event_list.push(
+        message=msg,
+        data=job)
     outter_dir = os.path.join(
         job.config.get('host_directory'),
         job.config.get('run_id'))
@@ -452,7 +458,9 @@ def setup_local_hosting(job, event_list, img_src, generate=False):
     except Exception as e:
         logging.error(format_debug(e))
         msg = 'Error copying {} to host directory'.format(job.get_type())
-        event_list = push_event(event_list, 'Error copying coupled_diag to host_location')
+        event_list.push(
+            message='Error copying coupled_diag to host_location',
+            data=job)
         return
 
     if generate:
@@ -471,7 +479,9 @@ def setup_local_hosting(job, event_list, img_src, generate=False):
     msg = '{job} hosted at {url}'.format(
         url=host_location,
         job=job.get_type())
-    event_list = push_event(event_list, msg)
+    event_list.push(
+        message=msg,
+        data=job)
 
 def check_for_inplace_data(file_list, file_name_list, job_sets, config):
     """
@@ -564,7 +574,8 @@ def write_human_state(event_list, job_sets, state_path='run_state.txt'):
 
     try:
         with open(state_path, 'w') as outfile:
-            line = "Execution state as of {0}\n".format(datetime.datetime.now().strftime('%d, %b %Y %I:%M'))
+            line = "Execution state as of {0}\n".format(
+                datetime.datetime.now().strftime('%d, %b %Y %I:%M'))
             out_str = line
             out_str += 'Running under process {0}\n\n'.format(os.getpid())
             for year_set in job_sets:
@@ -586,23 +597,23 @@ def write_human_state(event_list, job_sets, state_path='run_state.txt'):
                     out_str += line
                 out_str += '\n'
             out_str += '\n'
-            for line in event_list[-20:]:
-                if 'Transfer' in line:
+            for line in event_list.list[-20:]:
+                if 'Transfer' in line.message:
                     continue
-                if 'hosted' in line:
+                if 'hosted' in line.message:
                     continue
-                out_str += line + '\n'
-            out_str += line + '\n'
+                out_str += line.message + '\n'
+            out_str += line.message + '\n'
 
-            for line in event_list:
-                if 'Transfer' not in line:
+            for line in event_list.list:
+                if 'Transfer' not in line.message:
                     continue
-                out_str += line + '\n'
+                out_str += line.message + '\n'
 
-            for line in event_list:
-                if 'hosted' not in line:
+            for line in event_list.list:
+                if 'hosted' not in line.message:
                     continue
-                out_str += line + '\n'
+                out_str += line.message + '\n'
             outfile.write(out_str)
     except Exception as e:
         logging.error(format_debug(e))
@@ -617,14 +628,6 @@ class colors:
     ENDC = '\033[0m'
     BOLD = '\033[1m'
     UNDERLINE = '\033[4m'
-
-def push_event(event_list, line):
-    line = strftime("%I:%M") + ' ' + line
-    event_list.append(line)
-    # diff = len(event_list) - 5
-    # if diff > 0:
-    #     event_list = event_list[diff:]
-    return event_list
 
 def print_message(message, status='error'):
     if status == 'error':

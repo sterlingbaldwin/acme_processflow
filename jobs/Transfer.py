@@ -19,10 +19,10 @@ from lib.util import print_debug
 from lib.util import print_message
 from lib.util import filename_to_year_set
 from lib.util import format_debug
-from lib.util import push_event
 from lib.util import raw_file_cmp
 from lib.util import setup_globus
 from lib.util import strfdelta
+from lib.events import Event_list
 from jobs.JobStatus import JobStatus
 
 class Transfer(object):
@@ -56,6 +56,14 @@ class Transfer(object):
         self.prevalidate(config)
         self.msg = None
         self.job_id = 0
+    
+    @property
+    def file_list(self):
+        return self.config.get('file_list')
+    
+    @file_list.setter
+    def file_list(self, nfile_list):
+        self.config['file_list'] = nfile_list
 
     def save(self, conf_path):
         """
@@ -158,7 +166,7 @@ class Transfer(object):
                     return dstpath + basename
         return dstpath
 
-    def display_status(self, event_list, percent_complete, task_id):
+    def display_status(self, percent_complete, task_id):
         """
         Updates the event_list with a nicely formated percent completion
         """
@@ -197,13 +205,18 @@ class Transfer(object):
         
         # finaly check if the event has already been pushed into the event_list
         replaced = False
-        for index, event in enumerate(event_list):
-            if start_end_str in event:
-                event_list[index] = time.strftime("%I:%M") + ' ' + message
+        for index, event in enumerate(self.event_list.list):
+            if start_end_str in event.message:
+                msg = '{time} {msg}'.format(
+                    time=time.strftime("%I:%M"),
+                    msg=message)
+                self.event_list.replace(
+                    index=index,
+                    message=msg)
                 replaced = True
                 break
         if not replaced:
-            event_list = push_event(event_list, message)
+            self.event_list.push(message=message)
 
     def error_cleanup(self):
         print_message('Removing partially transfered files')
@@ -213,7 +226,7 @@ class Transfer(object):
             if t_file in destination_contents:
                 os.remove(os.path.join(self.config.get('destination_path'), t_file))
 
-    def execute(self, event, event_list):
+    def execute(self, event):
         # reject if job isnt valid
         self.prevalidate()
         if self.status != JobStatus.VALID:
@@ -301,7 +314,7 @@ class Transfer(object):
                 if status['status'] == 'SUCCEEDED':
                     logging.info('progress %d/%d', status['files_transferred'], status['files'])
                     percent_complete = 100.0
-                    self.display_status(event_list, percent_complete, task_id)
+                    self.display_status(percent_complete, task_id)
                     message = 'Transfer job completed'
                     self.status = JobStatus.COMPLETED
                     return
@@ -314,7 +327,7 @@ class Transfer(object):
                         number_transfered = status['files_transferred']
                         logging.info('progress %d/%d', status['files_transferred'], status['files'])
                         percent_complete = (float(status['files_transferred']) / float(status['files'])) * 100
-                        self.display_status(event_list, percent_complete, task_id)
+                        self.display_status(percent_complete, task_id)
                     self.status = JobStatus.RUNNING
                 if event and event.is_set():
                     client.cancel_task(task_id)

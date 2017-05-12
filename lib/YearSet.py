@@ -17,19 +17,56 @@ class YearSet(object):
         """
         Initialize member variables
 
-        set_number, the identifier for this set
-        start_year, the simulation year this set starts
-        end_year, the simulation yaer this set ends
+        Parameters:
+            set_number (int): the identifier for this set
+            set_start_year (int): the simulation year this set starts
+            set_end_year (int): the simulation year this set ends
         """
-        self.status = SetStatus.NO_DATA
-        self.jobs = []
-        self.set_number = set_number
-        self.set_start_year = start_year
-        self.set_end_year = end_year
-        self.freq = self.set_end_year - self.set_start_year + 1
+        self._status = SetStatus.NO_DATA
+        self._jobs = []
+        self._set_number = set_number
+        self._set_start_year = start_year
+        self._set_end_year = end_year
+        self._freq = self.set_end_year - self.set_start_year + 1
 
     def add_job(self, job):
-        self.jobs.append(job)
+        self._jobs.append(job)
+    
+    @property
+    def jobs(self):
+        return self._jobs
+    
+    @property
+    def status(self):
+        return self._status
+    
+    @status.setter
+    def status(self, status):
+        self._status = status
+    
+    @property
+    def set_number(self):
+        return self._set_number
+    
+    @set_number.setter
+    def set_number(self, num):
+        self._set_number = num
+    
+    @property
+    def set_start_year(self):
+        return self._set_start_year
+    
+    @set_start_year.setter
+    def set_start_year(self, num):
+        self._set_start_year = num
+    
+    @property
+    def set_end_year(self):
+        return self._set_end_year
+    
+    @set_end_year.setter
+    def set_end_year(self, num):
+        self._set_end_year = num
 
     def __str__(self):
         return "status: {status}\nset_number: {num}\nstart_year: {start}\nend_year: {end}\njobs: {jobs}".format(

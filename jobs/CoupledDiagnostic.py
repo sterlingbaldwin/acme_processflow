@@ -19,7 +19,7 @@ from lib.util import print_debug
 from lib.util import check_slurm_job_submission
 from lib.util import cmd_exists
 from lib.util import create_symlink_dir
-from lib.util import push_event
+from lib.events import Event_list
 from JobStatus import JobStatus
 
 
@@ -230,9 +230,8 @@ class CoupledDiagnostic(object):
         """
         Generates the index.json for uploading to the diagnostic viewer
         """
-        self.event_list = push_event(
-            self.event_list,
-            'Starting index generataion for coupled diagnostic')
+        message = 'Starting index generataion for coupled diagnostic'
+        self.event_list.push(message=message)
 
         viewer = OutputViewer(index_name="Coupled Diagnostic")
         viewer.add_page("Coupled Diagnostics Output", ["Description", "ANN", "DJF", "JJA"])
@@ -362,7 +361,7 @@ class CoupledDiagnostic(object):
         if self.postvalidate():
             self.status = JobStatus.COMPLETED
             message = 'Coupled_diag job already computed, skipping'
-            self.event_list = push_event(self.event_list, message)
+            self.event_list.push(message=message)
             return 0
         self.start_time = datetime.now()
         # create symlinks to the input data
