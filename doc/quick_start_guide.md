@@ -6,18 +6,15 @@ Use this guide if you're already an acme1 or aims4 user.
 
 If your user doesnt have anaconda installed, you will need to install anaconda for environment and package management. You can check if you have conda by simply running ```conda``` If the command fails, your user doesnt have conda in your path. If it works, skip the anaconda installation step.
 
-Simply run the installer from the cached copy on the server
+* Simply run the installer from the cached copy on the server
 
     bash /p/cscratch/acme/bin/Anaconda2-4.3.1-Linux-x86_64.sh
-
 
 * The installer will ask you some questions, unless you want to customize it in some way, just type 'yes' and hit enter for all of them.
 
 
 * Start a new bash shell with the new environment variables.
-
-    bash 
-
+```bash```
 
 For a new run you'll need to create an input directory and setup your runs configuration file. Make a copy of the sample config file.
 ```
