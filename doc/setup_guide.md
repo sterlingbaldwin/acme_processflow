@@ -9,6 +9,29 @@ All this information will need to be written to the run configuration file run.c
 
 ## Setup
 
+### Anaconda
+
+If your user doesnt have anaconda installed, you will need to install anaconda for environment and package management. You can check if you have conda by simply running ```conda``` If the command fails, your user doesnt have conda in your path. If it works, skip the anaconda installation step.
+
+* First get the installer.
+
+    wget https://repo.continuum.io/archive/Anaconda2-4.3.1-Linux-x86_64.sh
+
+
+* Once the download is complete, run the script.
+
+    bash Anaconda2-4.3.1-Linux-x86_64.sh
+
+
+* The installer will ask you some questions, unless you want to customize it in some way, just type 'yes' and hit enter for all of them.
+
+
+* Start a new bash shell with the new environment variables.
+
+    bash 
+
+
+
 ### First time setup keys
 
 The keys you need to change before running the first time are:
@@ -60,11 +83,11 @@ In interactive mode, if the terminal is closed or you log out, it will stop the 
 
     python workflow.py -c run.cfg
 
-![initial run](http://imgur.com/ZGuJUCk.png)
+![initial run](images/initial_run.png)
 
 Once globus has transfered the first year_set of data, it will start running the post processing jobs.
 
-![run in progress](http://imgur.com/URU4OVY.png)
+![run in progress](images/run_in_progress.png)
 
 
 ### headless mode
@@ -79,7 +102,7 @@ This run can continue after you close the termincal and log off the computer. Wh
 less run_state.txt
 ```
 
-![run_state](http://imgur.com/zS8f57g.png)
+![run_state](images/run_state.png)
 
 #### The model run directory on the compute machine.
 

@@ -2,6 +2,23 @@
 
 Use this guide if you're already an acme1 or aims4 user.
 
+### Anaconda
+
+If your user doesnt have anaconda installed, you will need to install anaconda for environment and package management. You can check if you have conda by simply running ```conda``` If the command fails, your user doesnt have conda in your path. If it works, skip the anaconda installation step.
+
+Simply run the installer from the cached copy on the server
+
+    bash /p/cscratch/acme/bin/Anaconda2-4.3.1-Linux-x86_64.sh
+
+
+* The installer will ask you some questions, unless you want to customize it in some way, just type 'yes' and hit enter for all of them.
+
+
+* Start a new bash shell with the new environment variables.
+
+    bash 
+
+
 For a new run you'll need to create an input directory and setup your runs configuration file. Make a copy of the sample config file.
 ```
 mkdir /p/cscratch/acme/<YOUR_USER_NAME>/input
@@ -93,19 +110,24 @@ In interactive mode, if the terminal is closed or you log out, it will stop the 
 
     python /p/cscratch/acme/bin/acme_workflow/workflow.py -c run.cfg
 
-![initial run](http://imgur.com/ZGuJUCk.png)
+![initial run](images/initial_run.png)
 
 Once globus has transfered the first year_set of data, it will start running the post processing jobs.
 
-![run in progress](http://imgur.com/URU4OVY.png)
+![run in progress](images/run_in_progress.png)
 
 
 #### headless mode
-A run in headless mode wont stop if you close the terminal. The run will continue until it finishes, at which point it will send an email to you with the results. If there is an error, you can stop the run with the command ```kill PID``` where PID is the process id.
+A run in headless mode wont stop if you close the terminal. The run will continue until it finishes, at which point it will send an email to you with the results. If there is an error, you can stop the run with the command ```kill <PID>``` where PID is the process id.
 ```
 nohup python /p/cscratch/acme/bin/acme_workflow/workflow.py -c run.cfg --no-ui &
 ```
 
 This run can continue after you close the termincal and log off the computer. While running in headless mode, you can check run_state.txt for the run status. This file can be found in your output directory.
 
-![run_state](http://imgur.com/zS8f57g.png)
+```
+cd /p/cscratch/acme/<YOUR_USER_NAME>/output
+less run_state.txt
+```
+
+![run_state](images/run_state.png)
