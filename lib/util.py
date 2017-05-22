@@ -769,20 +769,30 @@ def raw_file_cmp(a, b):
     b = str(b['filename'].split('/')[-1])
     if not filter(str.isdigit, a) or not filter(str.isdigit, b):
         return a > b
-    a_index = a.find('-')
-    b_index = b.find('-')
-    try:
-        a_year = int(a[a_index - 4: a_index])
-    except:
-        print a
-    b_year = int(b[b_index - 4: b_index])
+    expression = '\d\d\d\d-\d\d.*'
+    asearch = re.search(expression, a)
+    if not asearch:
+        return -1
+    bsearch = re.search(expression, b)
+    if not bsearch:
+        return -1
+    a_index = asearch.start()
+    b_index = bsearch.start()
+    a_walk_index = 0
+    while str(a[a_index + a_walk_index]).isdigit():
+        a_walk_index += 1
+    b_walk_index = 0
+    while str(b[b_index + b_walk_index]).isdigit():
+        b_walk_index += 1
+    a_year = int(a[a_index: a_index + a_walk_index])
+    b_year = int(b[b_index: b_index + b_walk_index])
     if a_year > b_year:
         return 1
     elif a_year < b_year:
         return -1
     else:
-        a_month = int(a[a_index + 1: a_index + 3])
-        b_month = int(b[b_index + 1: b_index + 3])
+        a_month = int(a[a_index + a_walk_index + 1: a_walk_index + 3])
+        b_month = int(b[b_index + b_walk_index + 1: b_index + b_walk_index + 3])
         if a_month > b_month:
             return 1
         elif a_month < b_month:
