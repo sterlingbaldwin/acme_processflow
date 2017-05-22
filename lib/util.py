@@ -791,8 +791,11 @@ def raw_file_cmp(a, b):
     elif a_year < b_year:
         return -1
     else:
-        a_month = int(a[a_index + a_walk_index + 1: a_walk_index + 3])
-        b_month = int(b[b_index + b_walk_index + 1: b_index + b_walk_index + 3])
+        month_walk = 1
+        while a[a_index + a_walk_index + month_walk].isdigit():
+            month_walk += 1
+        a_month = int(a[a_index + a_walk_index + 1: a_index + a_walk_index + month_walk])
+        b_month = int(b[b_index + b_walk_index + 1: b_index + b_walk_index + month_walk])
         if a_month > b_month:
             return 1
         elif a_month < b_month:
