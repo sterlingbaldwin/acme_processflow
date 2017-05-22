@@ -702,7 +702,9 @@ def xy_check(x, y, hmax, wmax):
     else:
         return 0
 
-def write_line(pad, line, x, y, color):
+def write_line(pad, line, x=None, y=None, color=None):
+    if not color:
+        color = curses.color_pair(4)
     try:
         pad.addstr(y, x, line, color)
     except:
@@ -738,6 +740,23 @@ def display(stdscr, event, config):
         pad = curses.newpad(hmax, wmax)
         last_y = 0
         while True:
+            # Check if screen was re-sized (True or False)
+            resize = curses.is_term_resized(height, width)
+
+            # Action in loop if resize is True:
+            if resize is True:
+                height, width = stdscr.getmaxyx()
+                hmax = height - 3
+                wmax = width - 5    
+                stdscr.clear()
+                curses.resizeterm(height, width)
+                stdscr.refresh()
+                pad = curses.newpad(hmax, wmax)
+                try:
+                    pad.refresh(0, 0, 3, 5, hmax, wmax)
+                except:
+                    sleep(0.5)
+                    continue
             now = datetime.now()
             # sleep until there are jobs
             if len(job_sets) == 0:
@@ -751,7 +770,10 @@ def display(stdscr, event, config):
                     num=year_set.set_number,
                     start=year_set.set_start_year,
                     end=year_set.set_end_year)
-                write_line(pad, line, x, y, curses.color_pair(1))
+                try:
+                    pad.addstr(y, x, line, curses.color_pair(1))
+                except:
+                    continue
                 pad.clrtoeol()
                 y += 1
 
@@ -767,10 +789,16 @@ def display(stdscr, event, config):
                     color_pair = curses.color_pair(6)
                 line = 'status: {status}'.format(
                     status=year_set.status)
-                write_line(pad, line, x, y, color_pair)
+                try:
+                    pad.addstr(y, x, line, color_pair)
+                except:
+                    continue
                 if initializing:
                     sleep(0.01)
-                    pad.refresh(0, 0, 3, 5, hmax, wmax)
+                    try:
+                        pad.refresh(0, 0, 3, 5, hmax, wmax)
+                    except:
+                        continue
                 pad.clrtoeol()
                 y += 1
 
@@ -783,7 +811,10 @@ def display(stdscr, event, config):
                     line = '  >   {type} -- {id} '.format(
                         type=job.get_type(),
                         id=job.job_id)
-                    write_line(pad, line, x, y, curses.color_pair(4))
+                    try:
+                        pad.addstr(y, x, line, curses.color_pair(4))
+                    except:
+                        continue
                     color_pair = curses.color_pair(4)
                     if job.status == JobStatus.COMPLETED:
                         color_pair = curses.color_pair(5)
@@ -811,7 +842,10 @@ def display(stdscr, event, config):
                             time=strfdelta(delta, "{H}:{M}:{S}"))
                     else:
                         line = '{status}'.format(status=job.status)
-                    pad.addstr(line, color_pair)
+                    try:
+                        pad.addstr(line, color_pair)
+                    except:
+                        continue
                     pad.clrtoeol()
                     if initializing:
                         sleep(0.01)
@@ -831,11 +865,20 @@ def display(stdscr, event, config):
                     continue
                 if 'failed' in line.message or 'FAILED' in line.message:
                     prefix = '[-]  '
-                    pad.addstr(y, x, prefix, curses.color_pair(3))
+                    try:
+                        pad.addstr(y, x, prefix, curses.color_pair(4))
+                    except:
+                        continue
                 else:
                     prefix = '[+]  '
-                    pad.addstr(y, x, prefix, curses.color_pair(5))
-                pad.addstr(line.message, curses.color_pair(4))
+                    try:
+                        pad.addstr(y, x, prefix, curses.color_pair(5))
+                    except:
+                        continue
+                try:
+                    pad.addstr(y, x, line.message, curses.color_pair(4))
+                except:
+                    continue
                 pad.clrtoeol()
                 if initializing:
                     sleep(0.01)
@@ -860,7 +903,10 @@ def display(stdscr, event, config):
             y = file_end_y + 1
             x = 0
             msg = 'Active transfers: {}'.format(active_transfers)
-            pad.addstr(y, x, msg, curses.color_pair(4))
+            try:
+                pad.addstr(y, x, msg, curses.color_pair(4))
+            except:
+                pass
             pad.clrtoeol()
             if active_transfers:
                 for line in events:
@@ -871,25 +917,37 @@ def display(stdscr, event, config):
                             percent = float(line.message[s_index: index])
                             if percent < 100:
                                 y += 1
-                                pad.addstr(y, x, line.message, curses.color_pair(4))
+                                try:
+                                    pad.addstr(y, x, line.message, curses.color_pair(4))
+                                except:
+                                    pass
                                 pad.clrtoeol()
             for line in events:
                 if 'hosted' in line.message:
                     y += 1
-                    pad.addstr(y, x, line.message, curses.color_pair(4))
+                    try:
+                        pad.addstr(y, x, line.message, curses.color_pair(4))
+                    except:
+                        pass
             spin_line = spinner[spin_index]
             spin_index += 1
             if spin_index == spin_len:
                 spin_index = 0
             y += 1
-            pad.addstr(y, x, spin_line, curses.color_pair(4))
+            try:
+                pad.addstr(y, x, spin_line, curses.color_pair(4))
+            except:
+                pass
             pad.clrtoeol()
             pad.clrtobot()
             y += 1
             if event and event.is_set():
                 # enablePrint()
                 return
-            pad.refresh(0, 0, 3, 5, hmax, wmax)
+            try:
+                pad.refresh(0, 0, 3, 5, hmax, wmax)
+            except:
+                pass
             initializing = False
             sleep(1)
 
@@ -1150,9 +1208,11 @@ Processing job {id} has completed successfully
 
 You can view your diagnostic output here:\n'''.format(
                             id= config.get('global').get('run_id'))
-                        for event in event_list.list:
-                            if 'hosted' in event:
-                                msg += event + '\n'
+                        for evt in event_list.list:
+                            if not isinstance(evt, str):
+                                continue
+                            if 'hosted' in evt:
+                                msg += evt + '\n'
                         m = Mailer(src=emailaddr, dst=emailaddr)
                         m.send(
                             status=message,
