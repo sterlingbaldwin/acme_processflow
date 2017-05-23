@@ -94,6 +94,7 @@ def setup_globus(endpoints, no_ui=False, **kwargs):
         else:
             if not no_ui:
                 display_event.set()
+            print '================================================'
             do_link_login_flow()
 
     if not endpoints:

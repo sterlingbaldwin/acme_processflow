@@ -18,7 +18,7 @@ class Monitor(object):
     """
     A class to monitor a remote directory, and pull down any files matching the given regex
     """
-    def __init__(self, config=None):
+    def __init__(self, **kwargs):
         """
         Initializes the monitoring system,
         
@@ -33,23 +33,20 @@ class Monitor(object):
             event_list (Event_list): A list of events for pushing updates into
             display_event (Threadding_event): A Threadding_event to turn off the display for user prompts
         """
-        if not config:
-            print "No configuration for monitoring system"
-            return None
-        self.source_endpoint = config.get('source_endpoint')
+        self.source_endpoint = kwargs.get('source_endpoint')
         if not self.source_endpoint:
             return None
-        self.remote_dir = config.get('remote_dir')
+        self.remote_dir = kwargs.get('remote_dir')
         if not self.remote_dir:
             return None
-        self.patterns = config.get('patterns')
+        self.patterns = kwargs.get('patterns')
         if not self.patterns:
             return None
-        self.no_ui = config.get('no_ui', False)
-        self.src = config.get('src')
-        self.dst = config.get('dst')
-        self.event_list = config.get('event_list')
-        self.display_event = config.get('display_event')
+        self.no_ui = kwargs.get('no_ui', False)
+        self.src = kwargs.get('src')
+        self.dst = kwargs.get('dst')
+        self.event_list = kwargs.get('event_list')
+        self.display_event = kwargs.get('display_event')
         self.client = None
         self._known_files = []
         self._new_files = []

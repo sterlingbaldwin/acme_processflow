@@ -10,7 +10,6 @@ import threading
 import logging
 import time
 import curses
-import ConfigParser
 
 from shutil import rmtree
 from shutil import move
@@ -18,7 +17,7 @@ from getpass import getpass
 from time import sleep
 from pprint import pformat
 from datetime import datetime
-
+from configobj import ConfigObj
 from jobs.Transfer import Transfer
 from jobs.Ncclimo import Climo
 from jobs.Timeseries import Timeseries
@@ -38,13 +37,13 @@ from lib.util import *
 parser = argparse.ArgumentParser()
 parser.add_argument('-c', '--config', help='Path to configuration file.')
 parser.add_argument('-v', '--debug', help='Run in debug mode.', action='store_true')
-parser.add_argument('-d', '--daemon', help='Run in daemon mode.', action='store_true')
+# parser.add_argument('-d', '--daemon', help='Run in daemon mode.', action='store_true')
 parser.add_argument('-n', '--no-ui', help='Turn off the GUI.', action='store_true')
 parser.add_argument('-r', '--dry-run', help='Do all setup, but dont submit jobs.', action='store_true')
 parser.add_argument('-l', '--log', help='Path to logging output file.')
 parser.add_argument('-u', '--no-cleanup', help='Don\'t perform pre or post run cleanup. This will leave all run scripts in place.', action='store_true')
 parser.add_argument('-m', '--no-monitor', help='Don\'t run the remote monitor or move any files over globus.', action='store_true')
-parser.add_argument('-V', '--viewer', help='Turn on generation for output_viewer style web pages.', action='store_true')
+# parser.add_argument('-V', '--viewer', help='Turn on generation for output_viewer style web pages.', action='store_true')
 parser.add_argument('-s', '--size', help='The maximume size in gigabytes of a single transfer, defaults to 100. Must be larger then the largest single file.')
 
 # check for NCL
@@ -53,7 +52,7 @@ if not os.environ.get('NCARG_ROOT'):
     if os.path.exists(ncar_path):
         os.environ['NCARG_ROOT'] = ncar_path
     else:
-        print 'No NCARG_ROOT found in environment variables, is NCL installed on the machine?'
+        print 'No NCARG_ROOT found in environment variables, make sure NCL installed on the machine and add its path to your ~/.bashrc'
         sys.exit()
 
 # create global Event_list
@@ -75,39 +74,24 @@ def setup(parser, display_event):
         print_message('Running in debug mode', 'ok')
 
     # read through the config file and setup the config dict
-    config = {}
     if not args.config:
         parser.print_help()
         sys.exit()
-    
     try:
-        confParse = ConfigParser.ConfigParser()
-        confParse.read(args.config)
-        for section in confParse.sections():
-            config[section] = {}
-            for option in confParse.options(section):
-                opt = confParse.get(section, option)
-                if not opt:
-                    if 'pass' in option and not args.no_monitor:
-                        opt = getpass('>> ' + option + ': ')
-                    else:
-                        opt = raw_input('>> ' + option + ': ')
-                if opt.startswith('[') or opt.startswith('{'):
-                    opt = json.loads(opt)
-                config[section][option] = opt
+        config = ConfigObj(args.config)
     except Exception as e:
-        msg = 'Unable to read config file, is it properly formatted json?'
-        print_message(msg)
         print_debug(e)
-        return -1
+        print "Error parsing config file {}".format(args.config)
+        sys.exit()
 
-    endpoints = [config['transfer']['source_endpoint'], config['transfer']['destination_endpoint']]
+    
+    endpoints = [endpoint for endpoint in config['transfer'].values() ]
     if args.no_ui:
         print 'Running in no-ui mode'
         config['global']['ui'] = False
         addr = config.get('global').get('email')
         if not addr:
-            print 'When running in headless mode, you must enter an email address.'
+            print 'When running in no-ui mode, you must enter an email address.'
             sys.exit()
         setup_globus(
             endpoints=endpoints,
@@ -116,13 +100,13 @@ def setup(parser, display_event):
             dst=config.get('global').get('email'),
             event_list=event_list)
     else:
-        debug = False
         config['global']['ui'] = True
         msg = '## activating endpoints {}'.format(' '.join(endpoints))
         logging.info(msg)
         if not setup_globus(
             endpoints=endpoints,
             display_event=display_event):
+            print "Globus setup error"
             return -1
         print 'Globus setup complete'
 
@@ -147,35 +131,39 @@ def setup(parser, display_event):
     else:
         config['transfer']['size'] = 100
     
-    if args.viewer:
-        print 'Turning on output_viewer mode'
-        config['global']['viewer'] = True
-    else:
-        config['global']['viewer'] = False
+    # if args.viewer:
+    #     print 'Turning on output_viewer mode'
+    #     config['global']['viewer'] = True
+    # else:
+    #     config['global']['viewer'] = False
 
     # setup config for file type directories
-    for key, val in config.get('global').get('output_patterns').items():
+    for key, val in config.get('global').get('patterns').items():
         new_dir = os.path.join(
             config['global']['data_cache_path'],
             key)
         if not os.path.exists(new_dir):
             os.makedirs(new_dir)
-        if val == 'mpaso.hist.am.timeSeriesStatsMonthly':
+        if key == 'MPAS_AM':
             config['global']['mpas_dir'] = new_dir
-        elif val == 'mpascice.hist.am.timeSeriesStatsMonthly':
+        elif key == 'MPAS_CICE':
             config['global']['mpas_cice_dir'] = new_dir
-        elif val == 'cam.h0':
+        elif key == 'ATM':
             config['global']['atm_dir'] = new_dir
-        elif val == 'mpaso.rst.0':
+        elif key == 'MPAS_RST':
             config['global']['mpas_rst_dir'] = new_dir
-        elif val == 'rpointer':
+        elif key == 'RPT':
             config['global']['rpt_dir'] = new_dir
-        elif val == 'mpas-o_in':
+        elif key == 'MPAS_O_IN':
             config['global']['mpas_o-in_dir'] = new_dir
-        elif val == 'mpas-cice_in':
+        elif key == 'MPAS_CICE_IN':
             config['global']['mpas_cice-in_dir'] = new_dir
-        elif 'stream' in val:
+        elif key == 'STREAMS':
             config['global']['streams_dir'] = new_dir
+        else:
+            if not config.get('global').get('other_data'):
+                config['global']['other_data'] = []
+            config['global']['other_data'].append(new_dir)
 
     if not os.path.exists(config['global']['output_path']):
         os.makedirs(config['global']['output_path'])
@@ -186,6 +174,7 @@ def setup(parser, display_event):
     config['global']['run_scripts_path'] = os.path.join(
         config['global']['output_path'],
         'run_scripts')
+
     # setup tmp_path
     config['global']['tmp_path'] = os.path.join(
         config['global']['output_path'],
@@ -1004,6 +993,17 @@ if __name__ == "__main__":
         print "Error in setup, exiting"
         sys.exit(1)
 
+    # for section in config:
+    #     print section
+    #     for item in config[section]:
+    #         if not isinstance(config[section][item], dict):
+    #             print '\t', item, '=', pformat(config[section][item])
+    #         else:
+    #             print '\t', item
+    #             for key, val in config[section][item].items():
+    #                 print '\t\t', key, '=', val
+    # sys.exit()
+
     # check that all netCDF files exist
     path_exists(config)
     # cleanup any temp directories from previous runs
@@ -1123,12 +1123,10 @@ if __name__ == "__main__":
     if all_data or config.get('global').get('no_monitor', False):
         monitor = None
     else:
-        output_pattern = config.get('global').get('output_patterns')
-        patterns = [v for k, v in config.get('global').get('output_patterns').items()]
+        patterns = [v for k, v in config.get('global').get('patterns').items()]
         monitor_config = {
             'source_endpoint': config.get('transfer').get('source_endpoint'),
-            'remote_dir': config.get('transfer').get('source_path'),
-            'username': config.get('monitor').get('compute_username'),
+            'remote_dir': config.get('global').get('source_path'),
             'patterns': patterns,
             'file_list': file_list,
             'event_list': event_list,
@@ -1136,17 +1134,31 @@ if __name__ == "__main__":
         }
         if not config.get('global').get('ui'):
             addr = config.get('global').get('email')
-            monitor_config['no_ui'] = True
-            monitor_config['src'] = addr
-            monitor_config['dst'] = addr
+            src = addr
+            dst = addr
+            ui_mode = False
+        else:
+            ui_mode = True
+            src = None
+            dst = None
+
         logging.info('Setting up monitor with config {}'.format(pformat(monitor_config)))
-        monitor = Monitor(monitor_config)
+        monitor = Monitor(
+            source_endpoint=config.get('transfer').get('source_endpoint'),
+            remote_dir=config.get('global').get('source_path'),
+            patterns=patterns,
+            file_list=file_list,
+            event_list=event_list,
+            display_event=display_event,
+            no_ui=ui_mode,
+            src=src,
+            dst=src)
         if not monitor:
             line = 'error setting up monitor'
             event_list.push(message=line)
             sys.exit()
 
-        line = 'Attempting connection to {}'.format(config.get('monitor').get('source_endpoint'))
+        line = 'Attempting connection to {}'.format(config.get('transfer').get('source_endpoint'))
         event_list.push(message=line)
 
         status, message = monitor.connect()
