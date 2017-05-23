@@ -282,11 +282,13 @@ def handle_completed_job(job, job_set, event_list):
     Perform post execution tasks
     """
     if not job.postvalidate():
-        message = '{0} completed but doesnt have expected output'.format(job.get_type())
+        message = '{0} completed but doesnt have expected output, setting status to failed'.format(job.get_type())
         event_list.push(
             message=message,
             data=job)
         job.status = JobStatus.FAILED
+        job_set.status = SetStatus.FAILED
+        return
 
     if job.get_type() == 'coupled_diagnostic':
         img_dir = 'coupled_diagnostics_{casename}-obs'.format(
@@ -327,25 +329,23 @@ def monitor_job(job, job_set, event=None, debug=False, batch_type='slurm', uploa
     job_id = job.execute(batch='slurm')
     if job_id == 0:
         job.set_status(JobStatus.COMPLETED)
-    else:
-        while job_id == -1:
-            job.set_status(JobStatus.WAITING_ON_INPUT)
-            if thread_sleep(60, event):
-                return
-            job_id = job.execute(batch='slurm')
-        job.set_status(JobStatus.SUBMITTED)
-        message = 'Submitted {0} for year_set {1}'.format(
-            job.get_type(),
-            job_set.set_number)
-        event_list.push(
-            message=message,
-            data=job)
-        logging.info('## ' + message)
-
-    job.postvalidate()
-    if job.status == JobStatus.COMPLETED:
-        handle_completed_job(job, job_set, event_list)
-        return
+        job.postvalidate()
+        if job.status == JobStatus.COMPLETED:
+            handle_completed_job(job, job_set, event_list)
+            return
+    while job_id == -1:
+        job.set_status(JobStatus.WAITING_ON_INPUT)
+        if thread_sleep(60, event):
+            return
+        job_id = job.execute(batch='slurm')
+    job.set_status(JobStatus.SUBMITTED)
+    message = 'Submitted {0} for year_set {1}'.format(
+        job.get_type(),
+        job_set.set_number)
+    event_list.push(
+        message=message,
+        data=job)
+    logging.info('## ' + message)
 
     exit_list = [JobStatus.VALID, JobStatus.SUBMITTED, JobStatus.RUNNING, JobStatus.PENDING]
     none_exit_list = [JobStatus.RUNNING, JobStatus.PENDING, JobStatus.SUBMITTED]
@@ -566,9 +566,15 @@ def format_debug(e):
         lineno=traceback.tb_lineno(sys.exc_info()[2]),
         stack=traceback.print_tb(tb))
 
-def write_human_state(event_list, job_sets, state_path='run_state.txt'):
+def write_human_state(event_list, job_sets, state_path='run_state.txt', ui_mode=True):
     """
     Writes out a human readable representation of the current execution state
+
+    Paremeters
+        event_list (Event_list): The global list of all events
+        job_sets (list: YearSet): The global list of all YearSets
+        state_path (str): The path to where to write the run_state
+        ui_mode (bool): The UI mode, True if the UI is on, False if the UI is off
     """
     import datetime
 
@@ -578,13 +584,14 @@ def write_human_state(event_list, job_sets, state_path='run_state.txt'):
                 datetime.datetime.now().strftime('%d, %b %Y %I:%M'))
             out_str = line
             out_str += 'Running under process {0}\n\n'.format(os.getpid())
+            
             for year_set in job_sets:
                 line = 'Year_set {num}: {start} - {end}\n'.format(
                     num=year_set.set_number,
                     start=year_set.set_start_year,
                     end=year_set.set_end_year)
                 out_str += line
-
+               
                 line = 'status: {status}\n'.format(
                     status=year_set.status)
                 out_str += line
@@ -595,7 +602,9 @@ def write_human_state(event_list, job_sets, state_path='run_state.txt'):
                         id=job.job_id,
                         status=job.status)
                     out_str += line
+                   
                 out_str += '\n'
+              
             out_str += '\n'
             for line in event_list.list[-20:]:
                 if 'Transfer' in line.message:
@@ -603,8 +612,8 @@ def write_human_state(event_list, job_sets, state_path='run_state.txt'):
                 if 'hosted' in line.message:
                     continue
                 out_str += line.message + '\n'
+               
             out_str += line.message + '\n'
-
             for line in event_list.list:
                 if 'Transfer' not in line.message:
                     continue
@@ -615,6 +624,9 @@ def write_human_state(event_list, job_sets, state_path='run_state.txt'):
                     continue
                 out_str += line.message + '\n'
             outfile.write(out_str)
+            if not ui_mode:
+                print out_str
+                print '================================================'
     except Exception as e:
         logging.error(format_debug(e))
         return

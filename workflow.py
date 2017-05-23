@@ -103,6 +103,7 @@ def setup(parser, display_event):
 
     endpoints = [config['transfer']['source_endpoint'], config['transfer']['destination_endpoint']]
     if args.no_ui:
+        print 'Running in no-ui mode'
         config['global']['ui'] = False
         addr = config.get('global').get('email')
         if not addr:
@@ -1096,7 +1097,11 @@ if __name__ == "__main__":
         'run_state.txt')
     if config.get('global').get('dry_run', False):
         event_list.push(message='Running in dry-run mode')
-        write_human_state(event_list, job_sets, state_path)
+        write_human_state(
+            event_list=event_list,
+            job_sets=job_sets,
+            state_path=state_path,
+            ui_mode=config.get('global').get('ui'))
         if not config.get('global').get('no-ui', False):
             sleep(50)
             display_event.set()
@@ -1195,7 +1200,11 @@ if __name__ == "__main__":
                 event=thread_kill_event,
                 upload_config=config.get('upload_diagnostic'),
                 event_list=event_list)
-            write_human_state(event_list, job_sets, state_path)
+            write_human_state(
+                event_list=event_list,
+                job_sets=job_sets,
+                state_path=state_path,
+                ui_mode=config.get('global').get('ui'))
             if is_all_done():
                 if not config.get('global').get('no-cleanup', False):
                     cleanup()
@@ -1209,10 +1218,8 @@ Processing job {id} has completed successfully
 You can view your diagnostic output here:\n'''.format(
                             id= config.get('global').get('run_id'))
                         for evt in event_list.list:
-                            if not isinstance(evt, str):
-                                continue
-                            if 'hosted' in evt:
-                                msg += evt + '\n'
+                            if 'hosted' in evt.message:
+                                msg += evt.message + '\n'
                         m = Mailer(src=emailaddr, dst=emailaddr)
                         m.send(
                             status=message,
