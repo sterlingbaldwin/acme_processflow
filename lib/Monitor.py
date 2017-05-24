@@ -39,7 +39,12 @@ class Monitor(object):
         self.remote_dir = kwargs.get('remote_dir')
         if not self.remote_dir:
             return None
-        self.patterns = kwargs.get('patterns')
+        self.patterns = []
+        for pattern in kwargs.get('patterns'):
+            pattern = pattern.replace('YYYY', '[0-9][0-9][0-9][0-9]')
+            pattern = pattern.replace('MM', '[0-9][0-9]')
+            pattern = pattern.replace('DD', '[0-9][0-9]')
+            self.patterns.append(pattern)
         if not self.patterns:
             return None
         self.no_ui = kwargs.get('no_ui', False)
@@ -50,6 +55,16 @@ class Monitor(object):
         self.client = None
         self._known_files = []
         self._new_files = []
+    
+    def __str__(self):
+        return pformat({
+            "source_endpoint": self.source_endpoint,
+            "remote_dir": self.remote_dir,
+            "patterns": self.patterns,
+            "no_ui": self.no_ui,
+            "email_src": self.src,
+            "email_dst": self.dst
+        })
 
     def connect(self):
         """
