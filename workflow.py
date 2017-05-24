@@ -15,6 +15,7 @@ from shutil import rmtree
 from shutil import move
 from getpass import getpass
 from time import sleep
+from uuid import uuid4
 from pprint import pformat
 from datetime import datetime
 from configobj import ConfigObj
@@ -79,13 +80,22 @@ def setup(parser, display_event):
         sys.exit()
     try:
         config = ConfigObj(args.config)
+        if not isinstance(config['global']['set_frequency'], list):
+            config['global']['set_frequency'] = [config['global']['set_frequency']]
+        new_freqs = []
+        for freq in config['global']['set_frequency']:
+            if not isinstance(freq, int):
+                new_freqs.append(int(freq))
+            else:
+                new_freqs.append(freq)
+        config['global']['set_frequency'] = new_freqs
     except Exception as e:
         print_debug(e)
         print "Error parsing config file {}".format(args.config)
         sys.exit()
 
     
-    endpoints = [endpoint for endpoint in config['transfer'].values() ]
+    endpoints = [endpoint for endpoint in config['transfer'].values()]
     if args.no_ui:
         print 'Running in no-ui mode'
         config['global']['ui'] = False
@@ -105,7 +115,8 @@ def setup(parser, display_event):
         logging.info(msg)
         if not setup_globus(
             endpoints=endpoints,
-            display_event=display_event):
+            display_event=display_event,
+            no_ui=False):
             print "Globus setup error"
             return -1
         print 'Globus setup complete'
@@ -179,6 +190,8 @@ def setup(parser, display_event):
     config['global']['tmp_path'] = os.path.join(
         config['global']['output_path'],
         'tmp')
+    
+    config['global']['run_id'] = uuid4().hex[:5]
 
     # setup logging
     if args.log:
@@ -205,20 +218,29 @@ def add_jobs(year_set):
     """
     # each required job is a key, the value is if its in the job list already or not
     # this is here in case the jobs have already been added
-    run_coupled = 'coupled_diag' not in config.get('global').get('set_jobs', True)
-    patterns = config.get('global').get('output_patterns')
-    if not patterns.get('STREAMS') or \
-       not patterns.get('MPAS_AM') or \
-       not patterns.get('MPAS_O_IN') or \
-       not patterns.get('MPAS_CICE_IN'):
-        run_coupled = True
-    required_jobs = {
-        'climo': 'ncclimo' not in config.get('global').get('set_jobs', True),
-        'timeseries': 'timeseries' not in config.get('global').get('set_jobs', True),
-        'uvcmetrics': 'uvcmetrics' not in config.get('global').get('set_jobs', True),
-        'coupled_diagnostic': run_coupled,
-        'amwg_diagnostic': 'amwg' not in config.get('global').get('set_jobs', True)
-    }
+    required_jobs = {}
+    # print pformat(config.get('global').get('set_jobs').items())
+    for job_type, freqs in config.get('global').get('set_jobs').items():
+        if not freqs:
+            # This job shouldnt be run
+            required_jobs[job_type] = True
+        if isinstance(freqs, str):
+            # there is only one frequency for this job
+            if freqs and int(freqs) == year_set.length:
+                # this job should be run
+                required_jobs[job_type] = False
+            else:
+                required_jobs[job_type] = True
+        else:
+            # this is a list if frequencies
+            for freq in freqs:
+                freq = int(freq)
+                if freq == year_set.length:
+                    required_jobs[job_type] = False
+                    break
+                else:
+                    required_jobs[job_type] = True
+
     year_set_str = 'year_set_{}'.format(year_set.set_number)
     dataset_name = '{time}_{set}_{start}_{end}'.format(
         time=time.strftime("%d-%m-%Y"),
@@ -245,7 +267,10 @@ def add_jobs(year_set):
             key_list.append('{0}-{1}'.format(year, month))
 
     climo_file_list = [file_name_list['ATM'].get(x) for x in key_list if file_name_list['ATM'].get(x)]
-    climo_temp_dir = os.path.join(config['global']['tmp_path'], 'climo', year_set_str)
+    climo_temp_dir = os.path.join(
+        config['global']['tmp_path'],
+        'climo',
+        year_set_str)
     create_symlink_dir(
         src_dir=config.get('global').get('atm_dir'),
         src_list=climo_file_list,
@@ -253,8 +278,8 @@ def add_jobs(year_set):
 
     g_config = config.get('global')
     # first initialize the climo job
-    if not required_jobs['climo']:
-        required_jobs['climo'] = True
+    if not required_jobs['ncclimo']:
+        required_jobs['ncclimo'] = True
         climo_output_dir = os.path.join(
             config.get('global').get('output_path'),
             'climo')
@@ -316,8 +341,8 @@ def add_jobs(year_set):
         logging.info(msg)
         year_set.add_job(timeseries)
 
-    if not required_jobs['coupled_diagnostic']:
-        required_jobs['coupled_diagnostic'] = True
+    if not required_jobs['coupled_diag']:
+        required_jobs['coupled_diag'] = True
         coupled_project_dir = os.path.join(
             config.get('global').get('output_path'),
             'coupled_diags',
@@ -382,8 +407,8 @@ def add_jobs(year_set):
         logging.info(msg)
         year_set.add_job(coupled_diag)
 
-    if not required_jobs['amwg_diagnostic']:
-        required_jobs['amwg_diagnostic'] = True
+    if not required_jobs['amwg']:
+        required_jobs['amwg'] = True
         amwg_project_dir = os.path.join(
             config.get('global').get('output_path'),
             'amwg_diags',
@@ -417,7 +442,7 @@ def add_jobs(year_set):
             'year_set': year_set.set_number,
             'run_directory': amwg_project_dir,
             'template_path': template_path,
-            'depends_on': ['climo']
+            'depends_on': ['ncclimo']
         }
         amwg_diag = AMWGDiagnostic(amwg_config, event_list)
         msg = 'Adding AMWGDiagnostic job to the job list: {}'.format(str(amwg_config))
@@ -445,7 +470,7 @@ def monitor_check(monitor, config, file_list, event_list, display_event):
     event_list.push(message="Running check for remote files")
     monitor.check()
     new_files = monitor.new_files
-    patterns = config.get('global').get('output_patterns')
+    patterns = config.get('global').get('patterns')
     for file_info in new_files:
         for folder, file_type in patterns.items():
             if file_type in file_info['filename']:
@@ -454,6 +479,7 @@ def monitor_check(monitor, config, file_list, event_list, display_event):
 
     checked_new_files = []
 
+    custom_filetype = False
     for new_file in new_files:
         file_type = new_file.get('type')
         if not file_type:
@@ -477,10 +503,19 @@ def monitor_check(monitor, config, file_list, event_list, display_event):
                 file_key = 'rpointer.atm'
             else:
                 continue
-        try:
-            status = file_list[file_type][file_key]
-        except KeyError:
-            continue
+        else:
+            file_key = new_file.get('filename')
+            custom_filetype = True
+
+        if custom_filetype:
+            if not file_list[file_type].get(file_key):
+                file_list[file_type][file_key] = SetStatus.NO_DATA
+                status = SetStatus.NO_DATA
+        else:
+            try:
+                status = file_list[file_type][file_key]
+            except KeyError:
+                continue
         if not status:
             continue
         if status == SetStatus.DATA_READY:
@@ -499,11 +534,41 @@ def monitor_check(monitor, config, file_list, event_list, display_event):
 
     # if there are any new files
     if not checked_new_files:
-        # print 'no new files'
         return
     else:
-        # print pformat(checked_new_files)
         pass
+        #print pformat(checked_new_files)
+    #sys.exit()
+
+    t_config = config.get('transfer')
+    g_config = config.get('global')
+    m_config = config.get('monitor')
+
+    transfer_config = {
+        'size': t_config.get('size'),
+        'file_list': checked_new_files,
+        'source_endpoint': t_config.get('source_endpoint'),
+        'destination_endpoint': t_config.get('destination_endpoint'),
+        'source_path': g_config.get('source_path'),
+        'destination_path': g_config.get('data_cache_path') + '/',
+        'recursive': 'False',
+        'pattern': config.get('global').get('patterns'),
+        'ncclimo_path': config.get('ncclimo').get('ncclimo_path'),
+        'src_email': config.get('global').get('email'),
+        'display_event': display_event,
+        'ui': config.get('global').get('ui')
+    }
+
+    # Check if the user is logged in, and all endpoints are active
+    endpoints = [config['transfer']['source_endpoint'], config['transfer']['destination_endpoint']]
+    setup_globus(
+        endpoints=endpoints,
+        no_ui=not config.get('global').get('ui'),
+        src=config.get('global').get('email'),
+        dst=config.get('global').get('email'),
+        event_list=event_list)
+            
+    transfer = Transfer(transfer_config, event_list)
 
     # find which year set the data belongs to
     frequencies = config.get('global').get('set_frequency')
@@ -517,36 +582,6 @@ def monitor_check(monitor, config, file_list, event_list, display_event):
                     job_set.status = SetStatus.PARTIAL_DATA
                     # Spawn jobs for that yearset
                     job_set = add_jobs(job_set)
-
-    t_config = config.get('transfer')
-    g_config = config.get('global')
-    m_config = config.get('monitor')
-
-    transfer_config = {
-        'size': t_config.get('size'),
-        'file_list': checked_new_files,
-        'source_endpoint': t_config.get('source_endpoint'),
-        'destination_endpoint': t_config.get('destination_endpoint'),
-        'source_path': t_config.get('source_path'),
-        'destination_path': g_config.get('data_cache_path') + '/',
-        'recursive': 'False',
-        'pattern': config.get('global').get('output_patterns'),
-        'ncclimo_path': config.get('ncclimo').get('ncclimo_path'),
-        'src_email': config.get('global').get('email'),
-        'display_event': display_event,
-        'no_ui': config.get('global').get('ui')
-    }
-
-    # Check if the user is logged in, and all endpoints are active
-    endpoints = [config['transfer']['source_endpoint'], config['transfer']['destination_endpoint']]
-    setup_globus(
-        endpoints=endpoints,
-        no_ui=config.get('global').get('ui'),
-        src=config.get('global').get('email'),
-        dst=config.get('global').get('email'),
-        event_list=event_list)
-            
-    transfer = Transfer(transfer_config, event_list)
 
     # After the transfer has filterd out what items its actually going to transfer
     # update the file_list 
@@ -565,6 +600,8 @@ def monitor_check(monitor, config, file_list, event_list, display_event):
                 file_key = 'rpointer.ocn' if 'ocn' in item_name else 'rpointer.atm'
         elif item_type == 'STREAMS':
             file_key == 'streams.cice' if 'cice' in item_name else 'streams.ocean'
+        else:
+            file_key = item['filename']
         file_list[item_type][file_key] = SetStatus.IN_TRANSIT
 
     # create the message to display the transfer info
@@ -589,22 +626,23 @@ def monitor_check(monitor, config, file_list, event_list, display_event):
         file_list=pformat(transfer.file_list))
     logging.info('## ' + message)
 
-    if not config.get('global').get('dry_run', False):
-        while True:
-            try:
-                thread = threading.Thread(
-                    target=handle_transfer,
-                    args=(
-                        transfer,
-                        checked_new_files,
-                        thread_kill_event,
-                        event_list))
-            except:
-                sleep(1)
-            else:
-                thread_list.append(thread)
-                thread.start()
-                break
+    if config.get('global').get('dry_run', False):
+        return
+    while True:
+        try:
+            thread = threading.Thread(
+                target=handle_transfer,
+                args=(
+                    transfer,
+                    checked_new_files,
+                    thread_kill_event,
+                    event_list))
+        except:
+            sleep(1)
+        else:
+            thread_list.append(thread)
+            thread.start()
+            break
 
 def handle_transfer(transfer_job, f_list, event, event_list):
     global active_transfers
@@ -1055,7 +1093,7 @@ if __name__ == "__main__":
     # initialize the file_list
     line = 'Initializing file list'
     event_list.push(message=line)
-    for key, val in config.get('global').get('output_patterns').items():
+    for key, val in config.get('global').get('patterns').items():
         file_list[key] = {}
         file_name_list[key] = {}
         if key in ['ATM', 'MPAS_AM', 'MPAS_CICE']:
@@ -1156,11 +1194,13 @@ if __name__ == "__main__":
         if not monitor:
             line = 'error setting up monitor'
             event_list.push(message=line)
+            print line
             sys.exit()
 
-        line = 'Attempting connection to {}'.format(config.get('transfer').get('source_endpoint'))
+        line = 'Attempting connection to source endpoint'
         event_list.push(message=line)
-
+        if not config.get('global').get('ui'):
+            print line
         status, message = monitor.connect()
         event_list.push(message=message)
         if not status:
