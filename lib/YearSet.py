@@ -33,6 +33,10 @@ class YearSet(object):
         self._jobs.append(job)
     
     @property
+    def length(self):
+        return self._set_end_year - (self._set_start_year - 1)
+
+    @property
     def jobs(self):
         return self._jobs
     
