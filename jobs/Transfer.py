@@ -50,12 +50,25 @@ class Transfer(object):
             'destination_path': '',
             'src_email': '',
             'display_event': '',
-            'no_ui': ''
+            'ui': ''
         }
-        self.max_size = 100
+        self._max_size = 100
+        self._transfer_size = 0
         self.prevalidate(config)
         self.msg = None
         self.job_id = 0
+    
+    @property
+    def transfer_size(self):
+        return self.transfer_size
+    
+    @property
+    def max_size(self):
+        return self._max_size
+    
+    @max_size.setter
+    def max_size(self, size):
+        self._max_size = size
     
     @property
     def file_list(self):
@@ -128,18 +141,19 @@ class Transfer(object):
                     return -1
         self.status = JobStatus.VALID
         size = config.get('size')
-        self.max_size = int(size) if size else 100
+        self._max_size = int(size) if size and size > 0 else 100
         # only add the first n transfers up to the max
         file_list = sorted(self.config.get('file_list'), raw_file_cmp)
         transfer_list = []
         transfer_size = 0
         for index, element in enumerate(file_list):
             new_size = transfer_size + (element['size'] / 1000000000.0)
-            if self.max_size >= new_size:
+            if self._max_size >= new_size:
                 transfer_list.append(element)
                 transfer_size += (element['size'] / 1000000000.0)
             else:
                 break
+        self._transfer_size = transfer_size
         self.config['file_list'] = transfer_list
         for file_info in file_list:
             destination = os.path.join(self.config.get('destination_path'), file_info['type'])
@@ -203,10 +217,10 @@ class Transfer(object):
                 message += '_'
         message += '] {percent:.2f}%'.format(percent=percent_complete)
         
-        # finaly check if the event has already been pushed into the event_list
+        # check if the event has already been pushed into the event_list
         replaced = False
         for index, event in enumerate(self.event_list.list):
-            if start_end_str in event.message:
+            if task_id == event.data:
                 msg = '{time} {msg}'.format(
                     time=time.strftime("%I:%M"),
                     msg=message)
@@ -216,15 +230,21 @@ class Transfer(object):
                 replaced = True
                 break
         if not replaced:
-            self.event_list.push(message=message)
+            msg = '{time} {msg}'.format(
+                time=time.strftime("%I:%M"),
+                msg=message)
+            self.event_list.push(
+                message=msg,
+                data=task_id)
 
     def error_cleanup(self):
-        print_message('Removing partially transfered files')
-        destination_contents = os.listdir(self.config.get('destination_path'))
-        for transfer in self.config['file_list']:
-            t_file = transfer['filename'].split(os.sep)[-1]
-            if t_file in destination_contents:
-                os.remove(os.path.join(self.config.get('destination_path'), t_file))
+        pass
+        # print_message('Removing partially transfered files')
+        # destination_contents = os.listdir(self.config.get('destination_path'))
+        # for transfer in self.config['file_list']:
+        #     t_file = transfer['filename'].split(os.sep)[-1]
+        #     if t_file in destination_contents:
+        #         os.remove(os.path.join(self.config.get('destination_path'), t_file))
 
     def execute(self, event):
         # reject if job isnt valid
@@ -251,7 +271,7 @@ class Transfer(object):
         setup_globus(
             endpoints=endpoints,
             event_list=self.event_list,
-            no_ui=self.config.get('no_ui', False),
+            no_ui=not self.config.get('ui', False),
             src=self.config.get('src'),
             dst=self.config.get('src'),
             display_event=self.config.get('display_event'))
@@ -289,12 +309,14 @@ class Transfer(object):
 
         # Start the transfer
         task_id = None
+        result = None
         try:
             result = client.submit_transfer(transfer_task)
             task_id = result["task_id"]
             logging.info('starting transfer with task id %s', task_id)
         except Exception as e:
-            logging.error("result: %s", str(result))
+            if result:
+                logging.error("result: %s", str(result))
             logging.error("Could not submit the transfer")
             logging.error(format_debug(e))
             self.status = JobStatus.FAILED
@@ -326,7 +348,7 @@ class Transfer(object):
                     if number_transfered < status['files_transferred']:
                         number_transfered = status['files_transferred']
                         logging.info('progress %d/%d', status['files_transferred'], status['files'])
-                        percent_complete = (float(status['files_transferred']) / float(status['files'])) * 100
+                        percent_complete = (float(status['files_transferred'] + float(status['files_skipped'])) / float(status['files'])) * 100
                         self.display_status(percent_complete, task_id)
                     self.status = JobStatus.RUNNING
                 if event and event.is_set():
@@ -338,4 +360,4 @@ class Transfer(object):
                 client.cancel_task(task_id)
                 self.error_cleanup()
                 return
-            time.sleep(10)
+            time.sleep(5)
