@@ -71,7 +71,7 @@ class AMWGDiagnostic(object):
             'dataset_name': '',
             'run_scripts_path': ''
         }
-        self.type = 'amwg_diagnostic'
+        self.type = 'amwg'
         self.outputs = {}
         self.config = {}
         self.uuid = uuid4().hex

@@ -92,7 +92,7 @@ class CoupledDiagnostic(object):
         self.end_time = None
         self.config = {}
         self.status = JobStatus.INVALID
-        self.type = 'coupled_diagnostic'
+        self.type = 'coupled_diag'
         self.outputs = {}
         self.year_set = 0
         self.uuid = uuid4().hex
@@ -103,11 +103,11 @@ class CoupledDiagnostic(object):
     def __str__(self):
         return pformat({
             'type': self.type,
-            'config': self.config,
             'status': self.status,
             'depends_on': self.depends_on,
             'uuid': self.uuid,
-            'job_id': self.job_id
+            'job_id': self.job_id,
+            'year_set': self.year_set
         }, indent=4)
 
     def get_type(self):
@@ -129,7 +129,7 @@ class CoupledDiagnostic(object):
         web_dir = outter_dir = os.path.join(
             self.config.get('host_directory'),
             self.config.get('run_id'),
-            'year_set_' + str(self.config.get('year_set')))
+            'year_set_{}'.format(self.year_set))
         self.config['web_dir'] = web_dir
 
         if not os.path.exists(self.config.get('run_scripts_path')):
