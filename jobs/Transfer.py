@@ -20,6 +20,7 @@ from lib.util import print_message
 from lib.util import filename_to_year_set
 from lib.util import format_debug
 from lib.util import raw_file_cmp
+from lib.util import file_priority_cmp
 from lib.util import setup_globus
 from lib.util import strfdelta
 from lib.events import Event_list
@@ -143,7 +144,9 @@ class Transfer(object):
         size = config.get('size')
         self._max_size = int(size) if size and size > 0 else 100
         # only add the first n transfers up to the max
+        
         file_list = sorted(self.config.get('file_list'), raw_file_cmp)
+        file_list.sort(file_priority_cmp)
         transfer_list = []
         transfer_size = 0
         for index, element in enumerate(file_list):
@@ -180,34 +183,40 @@ class Transfer(object):
                     return dstpath + basename
         return dstpath
 
-    def display_status(self, percent_complete, task_id):
+    def display_status(self, percent_complete, task_id, num_completed, num_total):
         """
         Updates the event_list with a nicely formated percent completion
         """
 
         # First we need to parse through and find the years of the start and end
-        start_file = self.config.get('file_list')[0]
-        end_file = self.config.get('file_list')[-1]
-        allowed_chars = [str(i) for i in range(10)]
-        allowed_chars.append('-')
-        if not 'mpas-' in start_file:
-            index = start_file['filename'].rfind('-')
-            while start_file['filename'][index] in allowed_chars and index > 0:
-                index -= 1
-            start_file_name = start_file['filename'][index+1: -3]
-        if not 'mpas-' in end_file:
-            index = end_file['filename'].rfind('-')
-            while end_file['filename'][index] in allowed_chars and index > 0:
-                index -= 1
-            end_file_name = end_file['filename'][index+1: -3]
+        # start_file = self.config.get('file_list')[0]
+        # end_file = self.config.get('file_list')[-1]
+        # allowed_chars = [str(i) for i in range(10)]
+        # allowed_chars.append('-')
+        # if not 'mpas-' in start_file:
+        #     index = start_file['filename'].rfind('-')
+        #     while start_file['filename'][index] in allowed_chars and index > 0:
+        #         index -= 1
+        #     start_file_name = start_file['filename'][index + 1: index + 8]
+        # if not 'mpas-' in end_file:
+        #     index = end_file['filename'].rfind('-')
+        #     while end_file['filename'][index] in allowed_chars and index > 0:
+        #         index -= 1
+        #     end_file_name = end_file['filename'][index + 1: index + 8]
 
-        # Start the display string assembly
-        start_end_str = '{stype}:{start} to {etype}:{end}'.format(
-            start=start_file_name,
-            end=end_file_name,
-            stype=start_file['type'],
-            etype=end_file['type'])
-        message = 'Transfer {0} in progress ['.format(start_end_str)
+        # # Start the display string assembly
+        # start_end_str = '{stype}:{start} to {etype}:{end}'.format(
+        #     start=start_file_name,
+        #     end=end_file_name,
+        #     stype=start_file['type'],
+        #     etype=end_file['type'])
+        # message = 'Transfer {0} in progress ['.format(start_end_str)
+
+        spacer = ' ' if num_completed < 10 else ''
+        message = 'Transfer in progress {spacer}({completed}/{total}) ['.format(
+            completed=num_completed,
+            spacer=spacer,
+            total=num_total)
 
         # now get the percent completion and elapsed time
         for i in range(1, 100, 5):
@@ -271,7 +280,7 @@ class Transfer(object):
         setup_globus(
             endpoints=endpoints,
             event_list=self.event_list,
-            no_ui=not self.config.get('ui', False),
+            no_ui=not self.config.get('ui', True),
             src=self.config.get('src'),
             dst=self.config.get('src'),
             display_event=self.config.get('display_event'))
@@ -336,7 +345,11 @@ class Transfer(object):
                 if status['status'] == 'SUCCEEDED':
                     logging.info('progress %d/%d', status['files_transferred'], status['files'])
                     percent_complete = 100.0
-                    self.display_status(percent_complete, task_id)
+                    self.display_status(
+                        percent_complete=percent_complete,
+                        task_id=task_id,
+                        num_completed=int(status['files_transferred']) + int(status['files_skipped']) ,
+                        num_total=status['files'])
                     message = 'Transfer job completed'
                     self.status = JobStatus.COMPLETED
                     return
@@ -349,7 +362,11 @@ class Transfer(object):
                         number_transfered = status['files_transferred']
                         logging.info('progress %d/%d', status['files_transferred'], status['files'])
                         percent_complete = (float(status['files_transferred'] + float(status['files_skipped'])) / float(status['files'])) * 100
-                        self.display_status(percent_complete, task_id)
+                        self.display_status(
+                            percent_complete=percent_complete,
+                            task_id=task_id,
+                            num_completed=int(status['files_transferred']) + int(status['files_skipped']),
+                            num_total=status['files'])
                     self.status = JobStatus.RUNNING
                 if event and event.is_set():
                     client.cancel_task(task_id)
