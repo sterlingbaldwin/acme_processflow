@@ -30,10 +30,10 @@ The keys you need to change before running the first time are:
 ```
 [global]
     # The directory to hold post processing output
-    output_path = /p/cscratch/acme/<YOUR_USER_NAME>/output_test_2
+    output_path = /p/cscratch/acme/USER_NAME/PROJECT/output
 
     # The directory to store model output
-    data_cache_path = /p/cscratch/acme/<YOUR_USER_NAME>/input_test_2
+    data_cache_path = /p/cscratch/acme/USER_NAME/PROJECT/input
 
     # The path on the remote machine to look for model output
     source_path = /scratch2/scratchdirs/golaz/ACME_simulations/20170313.beta1_02.A_WCYCL1850S.ne30_oECv3_ICG.edison/run
@@ -50,8 +50,14 @@ The keys you need to change before running the first time are:
     # The experiment name
     experiment = case_scripts
 
-    # Your email address if you want email notifications of completion
-    email = youremail@llnl.gov
+    # The batch system type to submit to, currently only slurm is supported (PBS in the future)
+    batch_system_type = slurm
+
+    # The base URL for the server thats hosting image output
+    img_host_server = https://acme-viewer.llnl.gov
+
+    # The email address to send to when all processing is complete, leave commented out to turn off
+    email = your_email@llnl.gov
 
     # The regular expressions to use to search for files on the remote machine
     [[patterns]]
@@ -63,22 +69,28 @@ The keys you need to change before running the first time are:
         MPAS_O_IN = "mpas-o_in"
         MPAS_CICE_IN = "mpas-cice_in"
         RPT = "rpointer"
-        # Add custom file types here
+        # Add custom file types here for example
         # ATM_HIST_1 = "cam.h1"
         # ATM_HIST_2 = "cam.h2"
 
     # The jobs to run on each set, to turn off the job entirely leave its value blank
     [[set_jobs]]
+        # this will run ncclimo for both 5 and 10
         ncclimo = 5, 10
-        timeseries = 5, 10
-        amwg = 5, 10
-        coupled_diag = 5, 10
+        # this will run time series only at 10
+        timeseries = 10
+        # this will run amwg only at 5
+        amwg = 5
+        # this will turn off the coupled diag 
+        coupled_diag = 
 
 ```
 
 * For each run, the contents of output_path will be overwritten.
-* This configuration setup assumes you want to run all the diagnostics, including the coupled_diags. If you're interested in an atmosphere only run, there are two changes to make. 
 
+#### Atmospheric only runs
+
+This configuration setup assumes you want to run all the diagnostics, including the coupled_diags. If you're interested in an atmosphere only run, there are two changes to make. First, there's no need to transfer all the files, only the ATM files. Second, coupled_diag should be turned off
 
 Change these:
 ```
