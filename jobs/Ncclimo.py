@@ -30,7 +30,7 @@ class Climo(object):
         self.event_list = event_list
         self.config = {}
         self.status = JobStatus.INVALID
-        self.type = 'climo'
+        self.type = 'ncclimo'
         self.uuid = uuid4().hex
         self.yearset = config.get('yearset', 0)
         self.job_id = 0

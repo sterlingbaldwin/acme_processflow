@@ -63,9 +63,14 @@ def setup_globus(endpoints, no_ui=False, **kwargs):
     """
     message_sent = False
     display_event = kwargs.get('display_event')
-    if not no_ui and not display_event:
-        logging.error('Attempting to connect in ui mode, but no display_event given')
-        return False
+    # if not no_ui and not display_event:
+    #     logging.error('Attempting to connect in ui mode, but no display_event given')
+    #     return False
+    
+    if no_ui:
+        mailer = Mailer(
+            src=kwargs['src'],
+            dst=kwargs['dst'])
 
     # First go through the globus login process
     while not check_logged_in():
@@ -79,13 +84,11 @@ def setup_globus(endpoints, no_ui=False, **kwargs):
                     addr=kwargs['src'])
                 kwargs['event_list'].push(message=line)
             if not message_sent:
-                mailer = Mailer(
-                    src=kwargs['src'],
-                    dst=kwargs['dst'])
                 status = 'Globus login needed'
                 message = 'Your automated post processing job requires you log into globus. Please ssh into {host} activate the environment and run {cmd}\n\n'.format(
                     host=socket.gethostname(),
                     cmd='"globus login"')
+                print 'sending login message to {}'.format(kwargs['dst'])
                 message_sent = mailer.send(
                     status=status,
                     msg=message)
@@ -94,6 +97,7 @@ def setup_globus(endpoints, no_ui=False, **kwargs):
         else:
             if not no_ui:
                 display_event.set()
+            print '================================================'
             do_link_login_flow()
 
     if not endpoints:
@@ -107,15 +111,22 @@ def setup_globus(endpoints, no_ui=False, **kwargs):
     email_msg = ''
     client = get_client()
     while not activated: 
+        activated = True
         for endpoint in endpoints:
             msg = '## activating endpoint {}'.format(endpoint)
             logging.info(msg)
             r = client.endpoint_autoactivate(endpoint, if_expires_in=3600)
             logging.info('## ' + r['code'])
             if r["code"] == "AutoActivationFailed":
+                activated = False
                 logging.info('## endpoint autoactivation failed, going to manual')
-                message = 'Endpoint requires manual activation, please open the following URL in a browser to activate the endpoint:\n'
-                message += "https://www.globus.org/app/endpoints/{endpoint}/activate".format(endpoint=endpoint)
+                server_document = client.endpoint_server_list(endpoint)
+                for server in server_document['DATA']:
+                    hostname = server["hostname"]
+                    break
+                message = '{server} requires manual activation, please open the following URL in a browser to activate the endpoint:\n'.format(
+                    server=hostname)
+                message += "https://www.globus.org/app/endpoints/{endpoint}/activate \n\n".format(endpoint=endpoint)
                 if no_ui:
                     email_msg += message
                 else:
@@ -124,10 +135,10 @@ def setup_globus(endpoints, no_ui=False, **kwargs):
                 r = client.endpoint_autoactivate(endpoint, if_expires_in=3600)
                 if not r["code"] == "AutoActivationFailed":
                     activated = True
-            else:
-                activated = True
+
         if not activated:
             if not message_sent:
+                print 'sending activation message to {}'.format(kwargs['dst'])
                 message_sent = mailer.send(
                     status='Endpoint activation required',
                     msg=email_msg)
@@ -222,7 +233,7 @@ def check_year_sets(job_sets, file_list, sim_start_year, sim_end_year, debug, ad
     #                 print_message('  {key}: {value}'.format(key=file_key, value=status), 'ok')
 
 
-def start_ready_job_sets(job_sets, thread_list, debug, event, upload_config, event_list):
+def start_ready_job_sets(job_sets, thread_list, debug, event, event_list):
     """
     Iterates over the job sets checking for ready ready jobs, and starts them
 
@@ -256,7 +267,7 @@ def start_ready_job_sets(job_sets, thread_list, debug, event, upload_config, eve
                                 job,
                                 job_set, event,
                                 debug, 'slurm',
-                                upload_config, event_list)
+                                event_list)
                             thread = threading.Thread(
                                 target=monitor_job,
                                 args=args)
@@ -320,7 +331,7 @@ def handle_completed_job(job, job_set, event_list):
     if job_set_done:
         job_set.status = SetStatus.COMPLETED
 
-def monitor_job(job, job_set, event=None, debug=False, batch_type='slurm', upload_config=None, event_list=None):
+def monitor_job(job, job_set, event=None, debug=False, batch_type='slurm', event_list=None):
     """
     Monitor the slurm job, and update the status to 'complete' when it finishes
     This function should only be called from within a thread
@@ -494,7 +505,7 @@ def check_for_inplace_data(file_list, file_name_list, job_sets, config):
         os.makedirs(cache_path)
         return
 
-    patterns = config.get('global').get('output_patterns')
+    patterns = config.get('global').get('patterns')
     input_dirs = [os.path.join(cache_path, key) for key, val in patterns.items()]
     for input_dir in input_dirs:
         file_type = input_dir.split(os.sep)[-1]
@@ -606,14 +617,14 @@ def write_human_state(event_list, job_sets, state_path='run_state.txt', ui_mode=
                 out_str += '\n'
               
             out_str += '\n'
-            for line in event_list.list[-20:]:
+            for line in event_list.list:
                 if 'Transfer' in line.message:
                     continue
                 if 'hosted' in line.message:
                     continue
                 out_str += line.message + '\n'
                
-            out_str += line.message + '\n'
+            # out_str += line.message + '\n'
             for line in event_list.list:
                 if 'Transfer' not in line.message:
                     continue
@@ -625,8 +636,9 @@ def write_human_state(event_list, job_sets, state_path='run_state.txt', ui_mode=
                 out_str += line.message + '\n'
             outfile.write(out_str)
             if not ui_mode:
+                print '\n'
                 print out_str
-                print '================================================'
+                print '\n================================================\n'
     except Exception as e:
         logging.error(format_debug(e))
         return
@@ -722,12 +734,27 @@ def filename_to_file_list_key(filename):
 def filename_to_year_set(filename, freq):
     """
     Takes a filename and returns the year_set that the file belongs to
+
+    Parameters
+        filename (str or unicode): The name of the file to return the year set for
+        freq (int): The length of the year set
     """
+    if not isinstance(filename, (unicode, str)):
+        print "Filename is a {} not a string".format(type(filename))
+        raise
+    if not isinstance(freq, int):
+        try:
+            freq = int(freq)
+        except:
+            print "Freq is a {} not an int, and can not be converted".format(type(freq))
+            raise
+
     year = year_from_filename(filename)
     if year % freq == 0:
         return int(year / freq)
     else:
         return int(year / freq) + 1
+
 
 def create_symlink_dir(src_dir, src_list, dst):
     """
@@ -776,7 +803,39 @@ def file_list_cmp(a, b):
         else:
             return 0
 
+def file_priority_cmp(a, b):
+    priority = {
+        'ATM': 1,
+        'MPAS_AM': 2,
+        'MPAS_CICE': 3,
+        'MPAS_RST': 4,
+        'MPAS_O_IN': 5,
+        'MPAS_CICE_IN': 6,
+        'RPT': 7,
+    }
+    apriority = priority.get(a['type'])
+    bpriority = priority.get(b['type'])
+    if not apriority and not bpriority:
+        return 1
+    elif not apriority:
+        apriority = 8
+    elif not bpriority:
+        bpriority = 8
+    
+    return apriority - bpriority
+
+
 def raw_file_cmp(a, b):
+    """
+    Comparison function for incoming files
+
+    Parameters
+        a (file): the first operand
+        b (file): the second operand
+
+        the file consists of a filename, date, size and type
+    """
+
     a = str(a['filename'].split('/')[-1])
     b = str(b['filename'].split('/')[-1])
     if not filter(str.isdigit, a) or not filter(str.isdigit, b):

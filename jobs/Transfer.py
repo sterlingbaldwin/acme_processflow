@@ -20,6 +20,7 @@ from lib.util import print_message
 from lib.util import filename_to_year_set
 from lib.util import format_debug
 from lib.util import raw_file_cmp
+from lib.util import file_priority_cmp
 from lib.util import setup_globus
 from lib.util import strfdelta
 from lib.events import Event_list
@@ -50,12 +51,25 @@ class Transfer(object):
             'destination_path': '',
             'src_email': '',
             'display_event': '',
-            'no_ui': ''
+            'ui': ''
         }
-        self.max_size = 100
+        self._max_size = 100
+        self._transfer_size = 0
         self.prevalidate(config)
         self.msg = None
         self.job_id = 0
+    
+    @property
+    def transfer_size(self):
+        return self.transfer_size
+    
+    @property
+    def max_size(self):
+        return self._max_size
+    
+    @max_size.setter
+    def max_size(self, size):
+        self._max_size = size
     
     @property
     def file_list(self):
@@ -128,18 +142,21 @@ class Transfer(object):
                     return -1
         self.status = JobStatus.VALID
         size = config.get('size')
-        self.max_size = int(size) if size else 100
+        self._max_size = int(size) if size and size > 0 else 100
         # only add the first n transfers up to the max
+        
         file_list = sorted(self.config.get('file_list'), raw_file_cmp)
+        file_list.sort(file_priority_cmp)
         transfer_list = []
         transfer_size = 0
         for index, element in enumerate(file_list):
             new_size = transfer_size + (element['size'] / 1000000000.0)
-            if self.max_size >= new_size:
+            if self._max_size >= new_size:
                 transfer_list.append(element)
                 transfer_size += (element['size'] / 1000000000.0)
             else:
                 break
+        self._transfer_size = transfer_size
         self.config['file_list'] = transfer_list
         for file_info in file_list:
             destination = os.path.join(self.config.get('destination_path'), file_info['type'])
@@ -166,34 +183,40 @@ class Transfer(object):
                     return dstpath + basename
         return dstpath
 
-    def display_status(self, percent_complete, task_id):
+    def display_status(self, percent_complete, task_id, num_completed, num_total):
         """
         Updates the event_list with a nicely formated percent completion
         """
 
         # First we need to parse through and find the years of the start and end
-        start_file = self.config.get('file_list')[0]
-        end_file = self.config.get('file_list')[-1]
-        allowed_chars = [str(i) for i in range(10)]
-        allowed_chars.append('-')
-        if not 'mpas-' in start_file:
-            index = start_file['filename'].rfind('-')
-            while start_file['filename'][index] in allowed_chars and index > 0:
-                index -= 1
-            start_file_name = start_file['filename'][index+1: -3]
-        if not 'mpas-' in end_file:
-            index = end_file['filename'].rfind('-')
-            while end_file['filename'][index] in allowed_chars and index > 0:
-                index -= 1
-            end_file_name = end_file['filename'][index+1: -3]
+        # start_file = self.config.get('file_list')[0]
+        # end_file = self.config.get('file_list')[-1]
+        # allowed_chars = [str(i) for i in range(10)]
+        # allowed_chars.append('-')
+        # if not 'mpas-' in start_file:
+        #     index = start_file['filename'].rfind('-')
+        #     while start_file['filename'][index] in allowed_chars and index > 0:
+        #         index -= 1
+        #     start_file_name = start_file['filename'][index + 1: index + 8]
+        # if not 'mpas-' in end_file:
+        #     index = end_file['filename'].rfind('-')
+        #     while end_file['filename'][index] in allowed_chars and index > 0:
+        #         index -= 1
+        #     end_file_name = end_file['filename'][index + 1: index + 8]
 
-        # Start the display string assembly
-        start_end_str = '{stype}:{start} to {etype}:{end}'.format(
-            start=start_file_name,
-            end=end_file_name,
-            stype=start_file['type'],
-            etype=end_file['type'])
-        message = 'Transfer {0} in progress ['.format(start_end_str)
+        # # Start the display string assembly
+        # start_end_str = '{stype}:{start} to {etype}:{end}'.format(
+        #     start=start_file_name,
+        #     end=end_file_name,
+        #     stype=start_file['type'],
+        #     etype=end_file['type'])
+        # message = 'Transfer {0} in progress ['.format(start_end_str)
+
+        spacer = ' ' if num_completed < 10 else ''
+        message = 'Transfer in progress {spacer}({completed}/{total}) ['.format(
+            completed=num_completed,
+            spacer=spacer,
+            total=num_total)
 
         # now get the percent completion and elapsed time
         for i in range(1, 100, 5):
@@ -203,10 +226,10 @@ class Transfer(object):
                 message += '_'
         message += '] {percent:.2f}%'.format(percent=percent_complete)
         
-        # finaly check if the event has already been pushed into the event_list
+        # check if the event has already been pushed into the event_list
         replaced = False
         for index, event in enumerate(self.event_list.list):
-            if start_end_str in event.message:
+            if task_id == event.data:
                 msg = '{time} {msg}'.format(
                     time=time.strftime("%I:%M"),
                     msg=message)
@@ -216,15 +239,21 @@ class Transfer(object):
                 replaced = True
                 break
         if not replaced:
-            self.event_list.push(message=message)
+            msg = '{time} {msg}'.format(
+                time=time.strftime("%I:%M"),
+                msg=message)
+            self.event_list.push(
+                message=msg,
+                data=task_id)
 
     def error_cleanup(self):
-        print_message('Removing partially transfered files')
-        destination_contents = os.listdir(self.config.get('destination_path'))
-        for transfer in self.config['file_list']:
-            t_file = transfer['filename'].split(os.sep)[-1]
-            if t_file in destination_contents:
-                os.remove(os.path.join(self.config.get('destination_path'), t_file))
+        pass
+        # print_message('Removing partially transfered files')
+        # destination_contents = os.listdir(self.config.get('destination_path'))
+        # for transfer in self.config['file_list']:
+        #     t_file = transfer['filename'].split(os.sep)[-1]
+        #     if t_file in destination_contents:
+        #         os.remove(os.path.join(self.config.get('destination_path'), t_file))
 
     def execute(self, event):
         # reject if job isnt valid
@@ -251,7 +280,7 @@ class Transfer(object):
         setup_globus(
             endpoints=endpoints,
             event_list=self.event_list,
-            no_ui=self.config.get('no_ui', False),
+            no_ui=not self.config.get('ui', True),
             src=self.config.get('src'),
             dst=self.config.get('src'),
             display_event=self.config.get('display_event'))
@@ -289,12 +318,14 @@ class Transfer(object):
 
         # Start the transfer
         task_id = None
+        result = None
         try:
             result = client.submit_transfer(transfer_task)
             task_id = result["task_id"]
             logging.info('starting transfer with task id %s', task_id)
         except Exception as e:
-            logging.error("result: %s", str(result))
+            if result:
+                logging.error("result: %s", str(result))
             logging.error("Could not submit the transfer")
             logging.error(format_debug(e))
             self.status = JobStatus.FAILED
@@ -314,7 +345,11 @@ class Transfer(object):
                 if status['status'] == 'SUCCEEDED':
                     logging.info('progress %d/%d', status['files_transferred'], status['files'])
                     percent_complete = 100.0
-                    self.display_status(percent_complete, task_id)
+                    self.display_status(
+                        percent_complete=percent_complete,
+                        task_id=task_id,
+                        num_completed=int(status['files_transferred']) + int(status['files_skipped']) ,
+                        num_total=status['files'])
                     message = 'Transfer job completed'
                     self.status = JobStatus.COMPLETED
                     return
@@ -326,8 +361,12 @@ class Transfer(object):
                     if number_transfered < status['files_transferred']:
                         number_transfered = status['files_transferred']
                         logging.info('progress %d/%d', status['files_transferred'], status['files'])
-                        percent_complete = (float(status['files_transferred']) / float(status['files'])) * 100
-                        self.display_status(percent_complete, task_id)
+                        percent_complete = (float(status['files_transferred'] + float(status['files_skipped'])) / float(status['files'])) * 100
+                        self.display_status(
+                            percent_complete=percent_complete,
+                            task_id=task_id,
+                            num_completed=int(status['files_transferred']) + int(status['files_skipped']),
+                            num_total=status['files'])
                     self.status = JobStatus.RUNNING
                 if event and event.is_set():
                     client.cancel_task(task_id)
@@ -338,4 +377,4 @@ class Transfer(object):
                 client.cancel_task(task_id)
                 self.error_cleanup()
                 return
-            time.sleep(10)
+            time.sleep(5)

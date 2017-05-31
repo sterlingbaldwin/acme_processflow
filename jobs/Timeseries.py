@@ -85,7 +85,7 @@ class Timeseries(object):
             'ncclimo',
             '-a', self.config['annual_mode'],
             '-c', self.config['caseId'],
-            '-v', self.config['var_list'],
+            '-v', ','.join(self.config['var_list']),
             '-s', str(self.config['start_year']),
             '-e', str(self.config['end_year']),
             '-o', self.config['output_directory'],
@@ -134,12 +134,12 @@ class Timeseries(object):
 
             self.slurm_args['error_file'] = '-e {error_file}'.format(error_file=run_script + '.err')
             self.slurm_args['output_file'] = '-o {output_file}'.format(output_file=run_script + '.out')
+            slurm_command = ' '.join(cmd)
 
             with open(run_script, 'w') as batchfile:
                 batchfile.write('#!/bin/bash\n')
                 slurm_prefix = '\n'.join(['#SBATCH ' + self.slurm_args[s] for s in self.slurm_args]) + '\n'
                 batchfile.write(slurm_prefix)
-                slurm_command = ' '.join(cmd)
                 batchfile.write(slurm_command)
 
             # slurm_cmd = ['sbatch', run_script, '--oversubscribe']
@@ -226,9 +226,10 @@ class Timeseries(object):
         Post execution validation
         """
         output_dir = os.listdir(self.config.get('output_directory'))
-        var_list_split = self.config.get('var_list').split(',')
+        if not isinstance(self.config.get('var_list'), list):
+            self.config['var_list'] = [self.config.get('var_list')]
         complete = True
-        for var in var_list_split:
+        for var in self.config.get('var_list'):
             found = False
             for out in output_dir:
                 if var in out:

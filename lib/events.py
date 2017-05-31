@@ -71,7 +71,7 @@ class Event_list(object):
         return self._list
     
     def replace(self, index, message):
-        if index >= len(self._list):
+        if index >= len(self._list) or index < 0:
             raise ValueError('Index {0} out of range {1}'.format(
                 index, len(self._list)))
         self._list[index].message = message

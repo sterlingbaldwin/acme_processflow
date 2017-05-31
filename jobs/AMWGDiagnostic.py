@@ -71,7 +71,7 @@ class AMWGDiagnostic(object):
             'dataset_name': '',
             'run_scripts_path': ''
         }
-        self.type = 'amwg_diagnostic'
+        self.type = 'amwg'
         self.outputs = {}
         self.config = {}
         self.uuid = uuid4().hex
@@ -198,16 +198,19 @@ class AMWGDiagnostic(object):
         Check that what the job was supposed to do actually happened
         returns 1 if the job is done, 0 otherwise
         """
-        base = str(os.sep).join(self.config.get('test_path_diag').split('/')[:-1])
-        year_set = 'year_set_{0}'.format(self.config.get('year_set'))
+        base = str(os.sep).join(
+            self.config.get('test_path_diag').split(os.sep)[:-1])
+        year_set = 'year_set_{0}'.format(
+            self.config.get('year_set'))
         web_dir = '{base}/{year_set}{casename}-obs'.format(
             base=base,
             year_set=year_set,
             casename=self.config.get('test_casename'))
         if os.path.exists(web_dir):
-            out = Popen(['find', web_dir, '-type', 'f'], stdout=PIPE).communicate()
-            contents = out[0].split('\n')
-            return bool(len(contents) > 2300)
+            all_files = []
+            for path, dirs, files in os.walk(web_dir):
+                all_files += files
+            return bool(len(all_files) > 2000)
         else:
             return False
 
