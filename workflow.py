@@ -110,6 +110,13 @@ def setup(parser, display_event):
             dst=config.get('global').get('email'),
             event_list=event_list)
     else:
+        output_path = config.get('global').get('output_path')
+        error_output = os.path.join(
+            output_path,
+            'workflow.error')
+        if not os.path.exists(output_path):
+            os.makedirs(output_path)
+        sys.stderr = open(error_output, 'w')
         config['global']['ui'] = True
         msg = '## activating endpoints {}'.format(' '.join(endpoints))
         logging.info(msg)
@@ -563,6 +570,7 @@ def monitor_check(monitor, config, file_list, event_list, display_event):
     endpoints = [config['transfer']['source_endpoint'], config['transfer']['destination_endpoint']]
     setup_globus(
         endpoints=endpoints,
+        display_event=display_event,
         no_ui=not config.get('global').get('ui'),
         src=config.get('global').get('email'),
         dst=config.get('global').get('email'),
@@ -790,7 +798,8 @@ def display(stdscr, event, config):
             if len(job_sets) == 0:
                 sleep(1)
                 continue
-            pad.clrtobot()
+            pad.refresh(0, 0, 3, 5, hmax, wmax)
+            pad.clear()
             y = 0
             x = 0
             for year_set in job_sets:
@@ -1063,7 +1072,7 @@ if __name__ == "__main__":
             diaplay_thread.start()
 
         except KeyboardInterrupt as e:
-            print 'keyboard'
+            print 'keyboard exit'
             display_event.set()
             sys.exit()
 
@@ -1140,7 +1149,7 @@ if __name__ == "__main__":
             job_sets=job_sets,
             state_path=state_path,
             ui_mode=config.get('global').get('ui'))
-        if not config.get('global').get('no-ui', False):
+        if config.get('global').get('ui'):
             sleep(50)
             display_event.set()
             for t in thread_list:
@@ -1199,8 +1208,8 @@ if __name__ == "__main__":
 
         line = 'Attempting connection to source endpoint'
         event_list.push(message=line)
-        if not config.get('global').get('ui'):
-            print line
+        # if not config.get('global').get('ui'):
+        #     print line
         status, message = monitor.connect()
         event_list.push(message=message)
         if not status:
@@ -1250,7 +1259,6 @@ if __name__ == "__main__":
                 thread_list=thread_list,
                 debug=debug,
                 event=thread_kill_event,
-                upload_config=config.get('upload_diagnostic'),
                 event_list=event_list)
             write_human_state(
                 event_list=event_list,
