@@ -63,9 +63,9 @@ def setup_globus(endpoints, no_ui=False, **kwargs):
     """
     message_sent = False
     display_event = kwargs.get('display_event')
-    if not no_ui and not display_event:
-        logging.error('Attempting to connect in ui mode, but no display_event given')
-        return False
+    # if not no_ui and not display_event:
+    #     logging.error('Attempting to connect in ui mode, but no display_event given')
+    #     return False
     
     if no_ui:
         mailer = Mailer(
@@ -120,7 +120,12 @@ def setup_globus(endpoints, no_ui=False, **kwargs):
             if r["code"] == "AutoActivationFailed":
                 activated = False
                 logging.info('## endpoint autoactivation failed, going to manual')
-                message = 'Endpoint requires manual activation, please open the following URL in a browser to activate the endpoint:\n'
+                server_document = client.endpoint_server_list(endpoint)
+                for server in server_document['DATA']:
+                    hostname = server["hostname"]
+                    break
+                message = '{server} requires manual activation, please open the following URL in a browser to activate the endpoint:\n'.format(
+                    server=hostname)
                 message += "https://www.globus.org/app/endpoints/{endpoint}/activate \n\n".format(endpoint=endpoint)
                 if no_ui:
                     email_msg += message
@@ -138,8 +143,6 @@ def setup_globus(endpoints, no_ui=False, **kwargs):
                     status='Endpoint activation required',
                     msg=email_msg)
             sleep(30)
-    if no_ui:
-        print "All endpoints activated"
     if not no_ui:
         display_event.clear()
     return True
@@ -230,7 +233,7 @@ def check_year_sets(job_sets, file_list, sim_start_year, sim_end_year, debug, ad
     #                 print_message('  {key}: {value}'.format(key=file_key, value=status), 'ok')
 
 
-def start_ready_job_sets(job_sets, thread_list, debug, event, upload_config, event_list):
+def start_ready_job_sets(job_sets, thread_list, debug, event, event_list):
     """
     Iterates over the job sets checking for ready ready jobs, and starts them
 
@@ -264,7 +267,7 @@ def start_ready_job_sets(job_sets, thread_list, debug, event, upload_config, eve
                                 job,
                                 job_set, event,
                                 debug, 'slurm',
-                                upload_config, event_list)
+                                event_list)
                             thread = threading.Thread(
                                 target=monitor_job,
                                 args=args)
@@ -328,7 +331,7 @@ def handle_completed_job(job, job_set, event_list):
     if job_set_done:
         job_set.status = SetStatus.COMPLETED
 
-def monitor_job(job, job_set, event=None, debug=False, batch_type='slurm', upload_config=None, event_list=None):
+def monitor_job(job, job_set, event=None, debug=False, batch_type='slurm', event_list=None):
     """
     Monitor the slurm job, and update the status to 'complete' when it finishes
     This function should only be called from within a thread
@@ -800,7 +803,39 @@ def file_list_cmp(a, b):
         else:
             return 0
 
+def file_priority_cmp(a, b):
+    priority = {
+        'ATM': 1,
+        'MPAS_AM': 2,
+        'MPAS_CICE': 3,
+        'MPAS_RST': 4,
+        'MPAS_O_IN': 5,
+        'MPAS_CICE_IN': 6,
+        'RPT': 7,
+    }
+    apriority = priority.get(a['type'])
+    bpriority = priority.get(b['type'])
+    if not apriority and not bpriority:
+        return 1
+    elif not apriority:
+        apriority = 8
+    elif not bpriority:
+        bpriority = 8
+    
+    return apriority - bpriority
+
+
 def raw_file_cmp(a, b):
+    """
+    Comparison function for incoming files
+
+    Parameters
+        a (file): the first operand
+        b (file): the second operand
+
+        the file consists of a filename, date, size and type
+    """
+
     a = str(a['filename'].split('/')[-1])
     b = str(b['filename'].split('/')[-1])
     if not filter(str.isdigit, a) or not filter(str.isdigit, b):
