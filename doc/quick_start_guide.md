@@ -18,8 +18,8 @@ If your user doesnt have anaconda installed, you will need to install anaconda f
 
 For a new run you'll need to create an input directory and setup your runs configuration file. Make a copy of the sample config file.
 ```
-mkdir /p/cscratch/acme/<YOUR_USER_NAME>/input
-cd /p/cscratch/acme/<YOUR_USER_NAME>/input
+mkdir /p/cscratch/acme/USER_NAME/PROJECT/input
+cd /p/cscratch/acme/USER_NAME/PROJECT/input
 wget https://raw.githubusercontent.com/sterlingbaldwin/acme_workflow/master/run.cfg
 ```
 
@@ -29,38 +29,95 @@ Once you have the file, open run.cfg in your favorite editor. There are are 9 va
 The keys you need to change before running the first time are:
 ```
 [global]
-output_path = /p/cscratch/acme/<YOUR_USERNAME>/output
-data_cache_path = /p/cscratch/acme/<YOUR_USERNAME>/input
-simulation_end_year = SOMENUMBER
-set_frequency = [LIST, OF, NUMBERS]
-run_id = YOUR_RUN_ID
-email = youremail@llnl.gov
+    # The directory to hold post processing output
+    output_path = /p/cscratch/acme/<YOUR_USER_NAME>/output_test_2
 
-[transfer]
-source_path = PATH_TO_REMOTE_DATA
-source_endpoint = A_GLOBUS_ENDPOINT_ID
-destination_endpoint = A_GLOBUS_ENDPOINT_ID
+    # The directory to store model output
+    data_cache_path = /p/cscratch/acme/<YOUR_USER_NAME>/input_test_2
+
+    # The path on the remote machine to look for model output
+    source_path = /scratch2/scratchdirs/golaz/ACME_simulations/20170313.beta1_02.A_WCYCL1850S.ne30_oECv3_ICG.edison/run
+
+    # The year to start the post processing, typically 1
+    simulation_start_year =  1
+
+    # The last year to run post processing jobs on
+    simulation_end_year = 20
+
+    # The list of year lengths to run jobs on
+    set_frequency = 5, 10
+
+    # The experiment name
+    experiment = case_scripts
+
+    # Your email address if you want email notifications of completion
+    email = youremail@llnl.gov
+
+    # The regular expressions to use to search for files on the remote machine
+    [[patterns]]
+        STREAMS = "streams"
+        ATM = "cam.h0"
+        MPAS_AM = "mpaso.hist.am.timeSeriesStatsMonthly"
+        MPAS_CICE = "mpascice.hist.am.timeSeriesStatsMonthly"
+        MPAS_RST = "mpaso.rst.0"
+        MPAS_O_IN = "mpas-o_in"
+        MPAS_CICE_IN = "mpas-cice_in"
+        RPT = "rpointer"
+        # Add custom file types here
+        # ATM_HIST_1 = "cam.h1"
+        # ATM_HIST_2 = "cam.h2"
+
+    # The jobs to run on each set, to turn off the job entirely leave its value blank
+    [[set_jobs]]
+        ncclimo = 5, 10
+        timeseries = 5, 10
+        amwg = 5, 10
+        coupled_diag = 5, 10
+
 ```
 
 * For each run, the contents of output_path will be overwritten.
 * This configuration setup assumes you want to run all the diagnostics, including the coupled_diags. If you're interested in an atmosphere only run, there are two changes to make. 
 
+
+Change these:
 ```
 [global]
 ...
-output_patterns = {"STREAMS":"streams", "ATM":"cam.h0", "MPAS_AM": "mpaso.hist.am.timeSeriesStatsMonthly", "MPAS_CICE": "mpascice.hist.am.timeSeriesStatsMonthly", "MPAS_RST": "mpaso.rst.0", "MPAS_O_IN": "mpas-o_in", "MPAS_CICE_IN": "mpas-cice_in", "RPT": "rpointer"}}
-...
-set_jobs = ["ncclimo", "timeseries", "amwg", "coupled_diag"]
+    [[patterns]]
+        STREAMS = "streams"
+        ATM = "cam.h0"
+        MPAS_AM = "mpaso.hist.am.timeSeriesStatsMonthly"
+        MPAS_CICE = "mpascice.hist.am.timeSeriesStatsMonthly"
+        MPAS_RST = "mpaso.rst.0"
+        MPAS_O_IN = "mpas-o_in"
+        MPAS_CICE_IN = "mpas-cice_in"
+        RPT = "rpointer"
+        # Add custom file types here
+        # ATM_HIST_1 = "cam.h1"
+        # ATM_HIST_2 = "cam.h2"
+
+    [[set_jobs]]
+        ncclimo = 5, 10
+        timeseries = 5, 10
+        amwg = 5, 10
+        coupled_diag = 5, 10
 ```
 
-For ATM only runs change these to:
+To these:
 
 ```
 [global]
 ...
-output_patterns = {"ATM":"cam.h0"}
+    [[patterns]]
+        ATM = "cam.h0"
+       
 ...
-set_jobs = ["ncclimo", "timeseries", "amwg"]
+    [[set_jobs]]
+        ncclimo = 5, 10
+        timeseries = 5, 10
+        amwg = 5, 10
+        coupled_diag = 
 ```
 
 ### Config Explanation<a name="config"></a>
@@ -76,9 +133,6 @@ The highest year number to expect
 
 #### set_frequency
 A list of lengths of processing sets. E.g set_frequency = [5, 10] will run the processing jobs for every 5 years, and every 10 years. If run on 10 years of data, it will create 3 job sets, 1-5, 6-10, 1-10
-
-#### run_id
-An arbitrary identifyer for each post processing run. This should be updated for each run or it will over write the html output of previous runs.
 
 #### source_path
 The path on the source_endpoint to look for model output.
@@ -97,6 +151,8 @@ The email address you would like notified when the run completes.
 Running on acme1 and aims4 is very easy. Simply activate the conda environment provided, and run the script. 
 
 The run.cfg can exist where ever you like, use the -c flag followed by the path to the config. Once you start the run, you will need to authenticate with Globus for the file transfers. You can find a walk through of the [globus authentication process here](globus_authentication_walkthrough.md)
+
+While running in UI mode, all stderr is redirected to a file in your output directory named workflow.error.
 
 ```
 source activate /p/cscratch/acme/bin/acme
