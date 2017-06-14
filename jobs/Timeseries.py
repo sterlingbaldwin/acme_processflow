@@ -19,6 +19,7 @@ from lib.util import check_slurm_job_submission
 from lib.events import Event_list
 from lib.util import cmd_exists
 from lib.util import get_climo_output_files
+from lib.util import raw_filename_cmp
 from JobStatus import JobStatus
 
 
@@ -81,6 +82,7 @@ class Timeseries(object):
         self.start_time = datetime.now()
         input_dir = self.config.get('input_directory')
         file_list = [os.path.join(input_dir, item) for item in os.listdir(input_dir)]
+        file_list.sort(raw_filename_cmp)
         cmd = [
             'ncclimo',
             '-a', self.config['annual_mode'],

@@ -874,6 +874,55 @@ def raw_file_cmp(a, b):
         else:
             return 0
 
+def raw_filename_cmp(a, b):
+    """
+    Comparison function for incoming files
+
+    Parameters
+        a (file): the first operand
+        b (file): the second operand
+
+        the file consists of a filename, date, size and type
+    """
+
+    a = a.split('/')[-1]
+    b = b.split('/')[-1]
+    if not filter(str.isdigit, a) or not filter(str.isdigit, b):
+        return a > b
+    expression = '\d\d\d\d-\d\d.*'
+    asearch = re.search(expression, a)
+    if not asearch:
+        return -1
+    bsearch = re.search(expression, b)
+    if not bsearch:
+        return -1
+    a_index = asearch.start()
+    b_index = bsearch.start()
+    a_walk_index = 0
+    while str(a[a_index + a_walk_index]).isdigit():
+        a_walk_index += 1
+    b_walk_index = 0
+    while str(b[b_index + b_walk_index]).isdigit():
+        b_walk_index += 1
+    a_year = int(a[a_index: a_index + a_walk_index])
+    b_year = int(b[b_index: b_index + b_walk_index])
+    if a_year > b_year:
+        return 1
+    elif a_year < b_year:
+        return -1
+    else:
+        month_walk = 1
+        while a[a_index + a_walk_index + month_walk].isdigit():
+            month_walk += 1
+        a_month = int(a[a_index + a_walk_index + 1: a_index + a_walk_index + month_walk])
+        b_month = int(b[b_index + b_walk_index + 1: b_index + b_walk_index + month_walk])
+        if a_month > b_month:
+            return 1
+        elif a_month < b_month:
+            return -1
+        else:
+            return 0
+
 def thread_sleep(seconds, event):
     """
     Allows a thread to sleep for one second at at time, and cancel when if the
