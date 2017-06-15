@@ -59,7 +59,7 @@ if not os.environ.get('NCARG_ROOT'):
 # create global Event_list
 event_list = Event_list()
 
-def setup(parser, display_event):
+def setup(parser, display_event, **kwargs):
     """
     Parse the commandline arguments, and setup the master config dict
 
@@ -73,6 +73,14 @@ def setup(parser, display_event):
     if args.debug:
         debug = True
         print_message('Running in debug mode', 'ok')
+    
+    # check if globus config exists and is valid, if not remove it
+    globus_config = os.path.join(os.path.expanduser('~'), '.globus.cfg')
+    if os.path.exists(globus_config):
+        try:
+            conf = ConfigObj(globus_config)
+        except:
+            os.remove(globus_config)
 
     # read through the config file and setup the config dict
     if not args.config:
@@ -93,40 +101,51 @@ def setup(parser, display_event):
         print_debug(e)
         print "Error parsing config file {}".format(args.config)
         sys.exit()
-
     
-    endpoints = [endpoint for endpoint in config['transfer'].values()]
-    if args.no_ui:
-        print 'Running in no-ui mode'
-        config['global']['ui'] = False
-        addr = config.get('global').get('email')
-        if not addr:
-            print 'When running in no-ui mode, you must enter an email address.'
-            sys.exit()
-        setup_globus(
-            endpoints=endpoints,
-            no_ui=True,
-            src=config.get('global').get('email'),
-            dst=config.get('global').get('email'),
-            event_list=event_list)
+    file_list = kwargs.get('file_list')
+    file_name_list = kwargs.get('file_name_list')
+    all_data = False
+    if file_list and file_name_list:
+        all_data = check_for_inplace_data(
+            file_list=kwargs.get('file_list'),
+            file_name_list=kwargs.get('file_name_list'),
+            config=config)
+
+    if not all_data:
+        endpoints = [endpoint for endpoint in config['transfer'].values()]
+        if args.no_ui:
+            print 'Running in no-ui mode'
+            config['global']['ui'] = False
+            addr = config.get('global').get('email')
+            if not addr:
+                print 'When running in no-ui mode, you must enter an email address.'
+                sys.exit()
+            setup_globus(
+                endpoints=endpoints,
+                no_ui=True,
+                src=config.get('global').get('email'),
+                dst=config.get('global').get('email'),
+                event_list=event_list)
+        else:
+            output_path = config.get('global').get('output_path')
+            error_output = os.path.join(
+                output_path,
+                'workflow.error')
+            if not os.path.exists(output_path):
+                os.makedirs(output_path)
+            sys.stderr = open(error_output, 'w')
+            config['global']['ui'] = True
+            msg = '## activating endpoints {}'.format(' '.join(endpoints))
+            logging.info(msg)
+            if not setup_globus(
+                endpoints=endpoints,
+                display_event=display_event,
+                no_ui=False):
+                print "Globus setup error"
+                return -1
+            print 'Globus setup complete'
     else:
-        output_path = config.get('global').get('output_path')
-        error_output = os.path.join(
-            output_path,
-            'workflow.error')
-        if not os.path.exists(output_path):
-            os.makedirs(output_path)
-        sys.stderr = open(error_output, 'w')
-        config['global']['ui'] = True
-        msg = '## activating endpoints {}'.format(' '.join(endpoints))
-        logging.info(msg)
-        if not setup_globus(
-            endpoints=endpoints,
-            display_event=display_event,
-            no_ui=False):
-            print "Globus setup error"
-            return -1
-        print 'Globus setup complete'
+        print "All data is present, skipping globus setup"
 
     if args.dry_run:
         config['global']['dry_run'] = True
@@ -289,13 +308,14 @@ def add_jobs(year_set):
         required_jobs['ncclimo'] = True
         climo_output_dir = os.path.join(
             config.get('global').get('output_path'),
-            'climo')
+            'climo',
+            '{}yr'.format(year_set.length))
         if not os.path.exists(climo_output_dir):
             os.makedirs(climo_output_dir)
 
         regrid_output_dir = os.path.join(
             config.get('global').get('output_path'),
-            'regrid')
+            'climo_regrid')
         if not os.path.exists(regrid_output_dir):
             os.makedirs(regrid_output_dir)
 
@@ -314,6 +334,7 @@ def add_jobs(year_set):
             'ncclimo_path': config.get('ncclimo').get('ncclimo_path'),
         }
         climo = Climo(climo_config, event_list=event_list)
+
         msg = 'Adding Ncclimo job to the job list: {}'.format(str(climo))
         logging.info(msg)
         year_set.add_job(climo)
@@ -322,8 +343,8 @@ def add_jobs(year_set):
         required_jobs['timeseries'] = True
         timeseries_output_dir = os.path.join(
             config.get('global').get('output_path'),
-            'timeseries',
-            'year_set_{}'.format(year_set.set_number))
+            'monthly',
+            '{}yr'.format(year_set.length))
         if not os.path.exists(timeseries_output_dir):
             msg = 'Creating timeseries output directory'
             logging.info(msg)
@@ -341,6 +362,7 @@ def add_jobs(year_set):
             'end_year': year_set.set_end_year,
             'input_directory': climo_temp_dir,
             'output_directory': timeseries_output_dir,
+            'regrid_map_path': config.get('ncclimo').get('regrid_map_path')
         }
         timeseries = Timeseries(timeseries_config, event_list=event_list)
         timeseries.depends_on = []
@@ -364,6 +386,7 @@ def add_jobs(year_set):
         c_config = config.get('coupled_diags')
         coupled_diag_config = {
             'rpt_dir': g_config.get('rpt_dir'),
+            'run_ocean': c_config.get('run_ocean', False),
             'mpaso_regions_file': c_config.get('mpaso_regions_file'),
             'run_scripts_path': config.get('global').get('run_scripts_path'),
             'output_base_dir': coupled_project_dir,
@@ -480,7 +503,8 @@ def monitor_check(monitor, config, file_list, event_list, display_event):
     patterns = config.get('global').get('patterns')
     for file_info in new_files:
         for folder, file_type in patterns.items():
-            if file_type in file_info['filename']:
+            if re.search(pattern=file_type, string=file_info['filename']):
+            # if file_type in file_info['filename']:
                 file_info['type'] = folder
                 break
 
@@ -490,7 +514,7 @@ def monitor_check(monitor, config, file_list, event_list, display_event):
     for new_file in new_files:
         file_type = new_file.get('type')
         if not file_type:
-            message = "File {0} has no file_type, possible permission issue".format(
+            message = "File {0} has no file_type".format(
                 new_file['filename'])
             event_list.push(message=message)
             continue
@@ -1031,7 +1055,11 @@ if __name__ == "__main__":
     all_data = False
 
     # Read in parameters from config
-    config = setup(parser, display_event)
+    config = setup(
+        parser,
+        display_event,
+        file_list=file_list,
+        file_name_list=file_name_list)
     
     # A list of files that have been transfered
     transfer_list = []
@@ -1130,7 +1158,6 @@ if __name__ == "__main__":
     all_data = check_for_inplace_data(
         file_list=file_list,
         file_name_list=file_name_list,
-        job_sets=job_sets,
         config=config)
     check_year_sets(
         job_sets=job_sets,
@@ -1245,7 +1272,6 @@ if __name__ == "__main__":
             all_data = check_for_inplace_data(
                 file_list=file_list,
                 file_name_list=file_name_list,
-                job_sets=job_sets,
                 config=config)
             check_year_sets(
                 job_sets=job_sets,
