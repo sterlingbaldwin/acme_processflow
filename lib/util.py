@@ -494,7 +494,7 @@ def setup_local_hosting(job, event_list, img_src, generate=False):
         message=msg,
         data=job)
 
-def check_for_inplace_data(file_list, file_name_list, job_sets, config):
+def check_for_inplace_data(file_list, file_name_list, config):
     """
     Checks the data cache for any files that might alread   y be in place,
     updates the file_list and job_sets accordingly
@@ -504,7 +504,7 @@ def check_for_inplace_data(file_list, file_name_list, job_sets, config):
     if not os.path.exists(cache_path):
         os.makedirs(cache_path)
         return
-
+    
     patterns = config.get('global').get('patterns')
     input_dirs = [os.path.join(cache_path, key) for key, val in patterns.items()]
     for input_dir in input_dirs:
@@ -547,8 +547,6 @@ def check_for_inplace_data(file_list, file_name_list, job_sets, config):
     for key, val in patterns.items():
         for file_key in file_list[key]:
             if file_list[key][file_key] != SetStatus.DATA_READY:
-                # print 'file: {} {} is not ready'.format(key, file_key)
-                # sys.exit()
                 return False
     return True
 
@@ -887,8 +885,6 @@ def raw_filename_cmp(a, b):
 
     a = a.split('/')[-1]
     b = b.split('/')[-1]
-    if not filter(str.isdigit, a) or not filter(str.isdigit, b):
-        return a > b
     expression = '\d\d\d\d-\d\d.*'
     asearch = re.search(expression, a)
     if not asearch:
