@@ -52,7 +52,8 @@ class Timeseries(object):
             'output_directory': '',
             'var_list': '',
             'caseId': '',
-            'run_scripts_path': ''
+            'run_scripts_path': '',
+            'regrid_map_path': '',
         }
         self.proc = None
         self.slurm_args = {
@@ -91,6 +92,7 @@ class Timeseries(object):
             '-s', str(self.config['start_year']),
             '-e', str(self.config['end_year']),
             '-o', self.config['output_directory'],
+            '--map={}'.format(self.config.get('regrid_map_pat')),
             ' '.join(file_list)
         ]
         if not batch:
