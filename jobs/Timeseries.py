@@ -92,7 +92,7 @@ class Timeseries(object):
             '-s', str(self.config['start_year']),
             '-e', str(self.config['end_year']),
             '-o', self.config['output_directory'],
-            '--map={}'.format(self.config.get('regrid_map_pat')),
+            '--map={}'.format(self.config.get('regrid_map_path')),
             ' '.join(file_list)
         ]
         if not batch:
