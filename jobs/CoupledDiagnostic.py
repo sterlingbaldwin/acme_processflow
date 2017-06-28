@@ -10,7 +10,7 @@ from subprocess import Popen, PIPE
 from time import sleep
 from random import randint
 from datetime import datetime
-
+from shutil import copyfile
 from cdp.cdp_viewer import OutputViewer
 
 from lib.util import render
@@ -69,7 +69,8 @@ class CoupledDiagnostic(object):
             'dataset_name': '',
             'output_base_dir': '',
             'run_scripts_path': '',
-            'mpas_rst_dir': ''
+            'mpas_rst_dir': '',
+            'run_ocean': ''
         }
         self.slurm_args = {
             'num_cores': '-n 16', # 16 cores
@@ -88,6 +89,7 @@ class CoupledDiagnostic(object):
             'LWCF',
             'TAU'
         ]
+        config['run_ocean'] = 1 if config.get('run_ocean') else 0
         self.start_time = None
         self.end_time = None
         self.config = {}
@@ -369,11 +371,19 @@ class CoupledDiagnostic(object):
             return -1
 
         # render the run_AIMS.csh script
+        template_out = self.config.get('rendered_output_path')
         render(
             variables=self.config,
             input_path=self.config.get('coupled_template_path'),
-            output_path=self.config.get('rendered_output_path'),
+            output_path=template_out,
             delimiter='%%')
+        run_script_template_out = os.path.join(
+            self.config.get('run_scripts_path'), 'coupled_diag_{0}-{1}.csh'.format(
+                self.config.get('start_year'),
+                self.config.get('end_year')))
+        copyfile(
+            src=template_out,
+            dst=run_script_template_out)
 
         cmd = 'csh {run_AIMS}'.format(run_AIMS=self.config.get('rendered_output_path'))
 
