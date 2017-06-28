@@ -94,6 +94,7 @@ class Climo(object):
             '-r', self.config['regrid_map_path'],
             '-o', self.config['climo_output_directory'],
             '-O', self.config['regrid_output_directory'],
+            '-l'
         ]
         if not batch:
             # Not running in batch mode
