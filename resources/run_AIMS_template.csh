@@ -97,7 +97,7 @@ setenv ref_remap_ts                     1
 
 # Select sets of diagnostics to generate (False = 0, True = 1)
 setenv generate_atm_diags 		1
-setenv generate_ocnice_diags 		1
+setenv generate_ocnice_diags 		%%run_ocean%%
 
 # The following ocn/ice diagnostic switches are ignored if generate_ocnice_diags is set to 0
 setenv generate_ohc_trends 		1

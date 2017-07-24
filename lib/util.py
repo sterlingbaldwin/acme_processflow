@@ -494,7 +494,7 @@ def setup_local_hosting(job, event_list, img_src, generate=False):
         message=msg,
         data=job)
 
-def check_for_inplace_data(file_list, file_name_list, job_sets, config):
+def check_for_inplace_data(file_list, file_name_list, config):
     """
     Checks the data cache for any files that might alread   y be in place,
     updates the file_list and job_sets accordingly
@@ -504,7 +504,7 @@ def check_for_inplace_data(file_list, file_name_list, job_sets, config):
     if not os.path.exists(cache_path):
         os.makedirs(cache_path)
         return
-
+    
     patterns = config.get('global').get('patterns')
     input_dirs = [os.path.join(cache_path, key) for key, val in patterns.items()]
     for input_dir in input_dirs:
@@ -547,8 +547,6 @@ def check_for_inplace_data(file_list, file_name_list, job_sets, config):
     for key, val in patterns.items():
         for file_key in file_list[key]:
             if file_list[key][file_key] != SetStatus.DATA_READY:
-                # print 'file: {} {} is not ready'.format(key, file_key)
-                # sys.exit()
                 return False
     return True
 
@@ -840,6 +838,53 @@ def raw_file_cmp(a, b):
     b = str(b['filename'].split('/')[-1])
     if not filter(str.isdigit, a) or not filter(str.isdigit, b):
         return a > b
+    expression = '\d\d\d\d-\d\d.*'
+    asearch = re.search(expression, a)
+    if not asearch:
+        return -1
+    bsearch = re.search(expression, b)
+    if not bsearch:
+        return -1
+    a_index = asearch.start()
+    b_index = bsearch.start()
+    a_walk_index = 0
+    while str(a[a_index + a_walk_index]).isdigit():
+        a_walk_index += 1
+    b_walk_index = 0
+    while str(b[b_index + b_walk_index]).isdigit():
+        b_walk_index += 1
+    a_year = int(a[a_index: a_index + a_walk_index])
+    b_year = int(b[b_index: b_index + b_walk_index])
+    if a_year > b_year:
+        return 1
+    elif a_year < b_year:
+        return -1
+    else:
+        month_walk = 1
+        while a[a_index + a_walk_index + month_walk].isdigit():
+            month_walk += 1
+        a_month = int(a[a_index + a_walk_index + 1: a_index + a_walk_index + month_walk])
+        b_month = int(b[b_index + b_walk_index + 1: b_index + b_walk_index + month_walk])
+        if a_month > b_month:
+            return 1
+        elif a_month < b_month:
+            return -1
+        else:
+            return 0
+
+def raw_filename_cmp(a, b):
+    """
+    Comparison function for incoming files
+
+    Parameters
+        a (file): the first operand
+        b (file): the second operand
+
+        the file consists of a filename, date, size and type
+    """
+
+    a = a.split('/')[-1]
+    b = b.split('/')[-1]
     expression = '\d\d\d\d-\d\d.*'
     asearch = re.search(expression, a)
     if not asearch:

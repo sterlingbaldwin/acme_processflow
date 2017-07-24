@@ -9,6 +9,7 @@ from subprocess import Popen, PIPE
 from pprint import pformat
 from time import sleep
 from datetime import datetime
+from shutil import copyfile
 # job modules
 from JobStatus import JobStatus
 # output_viewer modules
@@ -210,7 +211,7 @@ class AMWGDiagnostic(object):
             all_files = []
             for path, dirs, files in os.walk(web_dir):
                 all_files += files
-            return bool(len(all_files) > 2000)
+            return bool(len(all_files) > 1000)
         else:
             return False
 
@@ -243,6 +244,13 @@ class AMWGDiagnostic(object):
             variables=self.config,
             input_path=self.config.get('template_path'),
             output_path=template_out)
+        run_script_template_out = os.path.join(
+            self.config.get('run_scripts_path'), 'amwg_{0}-{1}.csh'.format(
+                self.config.get('start_year'),
+                self.config.get('end_year')))
+        copyfile(
+            src=template_out,
+            dst=run_script_template_out)
         if debug:
             print 'run script rendering complete'
         # get the list of climo files for this diagnostic
@@ -281,8 +289,8 @@ class AMWGDiagnostic(object):
         cmd = ['csh', template_out]
         with open(run_script, 'w') as batchfile:
             batchfile.write('#!/bin/bash\n')
-            slurm_prefix = ''.join(['#SBATCH {value}\n'.format(value=v)
-                                    for k, v in self.slurm_args.iteritems()])
+            slurm_args_str = ['#SBATCH {value}\n'.format(value=v) for k, v in self.slurm_args.items()]
+            slurm_prefix = ''.join(slurm_args_str)
             batchfile.write(slurm_prefix)
             slurm_command = ' '.join(cmd)
             batchfile.write(slurm_command)
