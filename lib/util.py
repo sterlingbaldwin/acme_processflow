@@ -301,14 +301,14 @@ def handle_completed_job(job, job_set, event_list):
         job_set.status = SetStatus.FAILED
         return
 
-    if job.get_type() == 'coupled_diagnostic':
+    if job.get_type() == 'coupled_diag':
         img_dir = 'coupled_diagnostics_{casename}-obs'.format(
             casename=job.config.get('test_casename'))
         img_src = os.path.join(
             job.config.get('coupled_project_dir'),
             img_dir)
         setup_local_hosting(job, event_list, img_src)
-    elif job.get_type() == 'amwg_diagnostic':
+    elif job.get_type() == 'amwg':
         img_dir = 'year_set_{year}{casename}-obs'.format(
             year=job.config.get('year_set'),
             casename=job.config.get('test_casename'))
@@ -316,9 +316,6 @@ def handle_completed_job(job, job_set, event_list):
             job.config.get('test_path_diag'),
             '..',
             img_dir)
-        setup_local_hosting(job, event_list, img_src)
-    elif job.get_type() == 'uvcmetrics':
-        img_src = os.path.join(job.config.get('--outputdir'), 'amwg')
         setup_local_hosting(job, event_list, img_src)
     job_set_done = True
     for job in job_set.jobs:
@@ -338,17 +335,23 @@ def monitor_job(job, job_set, event=None, debug=False, batch_type='slurm', event
     """
     job.start_time = datetime.now()
     job_id = job.execute(batch='slurm')
+
+    # If the job has already been run, handle it like it just finished
     if job_id == 0:
         job.set_status(JobStatus.COMPLETED)
         job.postvalidate()
         if job.status == JobStatus.COMPLETED:
             handle_completed_job(job, job_set, event_list)
             return
+
+    # If the job still needs aditional files to transfer, wait for the transfer to finish
     while job_id == -1:
         job.set_status(JobStatus.WAITING_ON_INPUT)
         if thread_sleep(60, event):
             return
         job_id = job.execute(batch='slurm')
+    
+    # Prep for submitting the job
     job.set_status(JobStatus.SUBMITTED)
     message = 'Submitted {0} for year_set {1}'.format(
         job.get_type(),
@@ -367,13 +370,16 @@ def monitor_job(job, job_set, event=None, debug=False, batch_type='slurm', event
         if job.status not in exit_list:
             if job.status == JobStatus.INVALID:
                 return
+            
+            # if the job is done, or there has been an error, exit
             if job.status == JobStatus.FAILED:
                 job_set.status = SetStatus.FAILED
                 return
-            # if the job is done, or there has been an error, exit
+            # if the job has completed successfully, handle completion and exit
             if job.status == JobStatus.COMPLETED:
                 handle_completed_job(job, job_set, event_list)
                 return
+        # Job is running
         elif job.status in none_exit_list and job_id != 0:
             cmd = ['scontrol', 'show', 'job', str(job_id)]
             while True:
@@ -424,9 +430,6 @@ def monitor_job(job, job_set, event=None, debug=False, batch_type='slurm', event
                     status=status,
                     type=job.get_type())
                 logging.info('##' + message)
-
-                if status == JobStatus.RUNNING and job_set.status != SetStatus.RUNNING:
-                    job_set.status = SetStatus.RUNNING
 
             # wait for 10 seconds, or if the kill_thread event has been set, exit
             if thread_sleep(10, event):
@@ -779,27 +782,6 @@ def create_symlink_dir(src_dir, src_list, dst):
             msg = format_debug(e)
             logging.error(e)
 
-def file_list_cmp(a, b):
-    """
-    A custom comparator function for the file_list object
-    """
-    a_index = a.find('-')
-    b_index = b.find('-')
-    a_year = int(a[:a_index])
-    b_year = int(b[:b_index])
-    if a_year > b_year:
-        return 1
-    elif a_year < b_year:
-        return -1
-    else:
-        a_month = int(a[a_index + 1:])
-        b_month = int(b[b_index + 1:])
-        if a_month > b_month:
-            return 1
-        elif a_month < b_month:
-            return -1
-        else:
-            return 0
 
 def file_priority_cmp(a, b):
     priority = {
@@ -847,12 +829,12 @@ def raw_file_cmp(a, b):
         return -1
     a_index = asearch.start()
     b_index = bsearch.start()
-    a_walk_index = 0
-    while str(a[a_index + a_walk_index]).isdigit():
-        a_walk_index += 1
-    b_walk_index = 0
-    while str(b[b_index + b_walk_index]).isdigit():
-        b_walk_index += 1
+    a_walk_index = 4
+    # while str(a[a_index + a_walk_index]).isdigit():
+    #     a_walk_index += 1
+    b_walk_index = 4
+    # while str(b[b_index + b_walk_index]).isdigit():
+    #     b_walk_index += 1
     a_year = int(a[a_index: a_index + a_walk_index])
     b_year = int(b[b_index: b_index + b_walk_index])
     if a_year > b_year:
@@ -860,9 +842,9 @@ def raw_file_cmp(a, b):
     elif a_year < b_year:
         return -1
     else:
-        month_walk = 1
-        while a[a_index + a_walk_index + month_walk].isdigit():
-            month_walk += 1
+        month_walk = 2
+        # while a[a_index + a_walk_index + month_walk].isdigit():
+        #     month_walk += 1
         a_month = int(a[a_index + a_walk_index + 1: a_index + a_walk_index + month_walk])
         b_month = int(b[b_index + b_walk_index + 1: b_index + b_walk_index + month_walk])
         if a_month > b_month:
@@ -877,10 +859,9 @@ def raw_filename_cmp(a, b):
     Comparison function for incoming files
 
     Parameters
-        a (file): the first operand
-        b (file): the second operand
+        a (str): the first filename
+        b (str): the second filename
 
-        the file consists of a filename, date, size and type
     """
 
     a = a.split('/')[-1]
@@ -894,12 +875,12 @@ def raw_filename_cmp(a, b):
         return -1
     a_index = asearch.start()
     b_index = bsearch.start()
-    a_walk_index = 0
-    while str(a[a_index + a_walk_index]).isdigit():
-        a_walk_index += 1
-    b_walk_index = 0
-    while str(b[b_index + b_walk_index]).isdigit():
-        b_walk_index += 1
+    a_walk_index = 4
+    # while str(a[a_index + a_walk_index]).isdigit():
+    #     a_walk_index += 1
+    b_walk_index = 4
+    # while str(b[b_index + b_walk_index]).isdigit():
+    #     b_walk_index += 1
     a_year = int(a[a_index: a_index + a_walk_index])
     b_year = int(b[b_index: b_index + b_walk_index])
     if a_year > b_year:
@@ -907,9 +888,9 @@ def raw_filename_cmp(a, b):
     elif a_year < b_year:
         return -1
     else:
-        month_walk = 1
-        while a[a_index + a_walk_index + month_walk].isdigit():
-            month_walk += 1
+        month_walk = 2
+        # while a[a_index + a_walk_index + month_walk].isdigit():
+        #     month_walk += 1
         a_month = int(a[a_index + a_walk_index + 1: a_index + a_walk_index + month_walk])
         b_month = int(b[b_index + b_walk_index + 1: b_index + b_walk_index + month_walk])
         if a_month > b_month:

@@ -162,7 +162,10 @@ class CoupledDiagnostic(object):
         output_directory = os.path.join(output_path, output_directory)
         if os.path.exists(output_directory):
             contents = os.listdir(output_directory)
-            return bool(len(contents) >= 60)
+            target_output = 35
+            if self.config['run_ocean']:
+                target_output = 60
+            return bool(len(contents) >= target_output)
         else:
             return False
 

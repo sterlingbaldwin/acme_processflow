@@ -83,7 +83,7 @@ class Timeseries(object):
         self.start_time = datetime.now()
         input_dir = self.config.get('input_directory')
         file_list = [os.path.join(input_dir, item) for item in os.listdir(input_dir)]
-        file_list.sort(raw_filename_cmp)
+        file_list.sort()
         cmd = [
             'ncclimo',
             '-a', self.config['annual_mode'],

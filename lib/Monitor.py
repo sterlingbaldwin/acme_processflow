@@ -72,7 +72,6 @@ class Monitor(object):
 
         return False if error, True on success
         """
-        self.event_list.push(message='attempting connection')
         setup_globus(
             endpoints=self.source_endpoint,
             no_ui=self.no_ui,
@@ -124,11 +123,12 @@ class Monitor(object):
             for p in self.patterns:
                 if not re.search(pattern=p, string=f['name']):
                     continue
-                self.new_files.append({
+                new_file = {
                     'filename': f['name'],
                     'date': f['last_modified'],
                     'size': f['size']
-                })
+                }
+                self.new_files.append(new_file)
                 break
     @property
     def new_files(self):
