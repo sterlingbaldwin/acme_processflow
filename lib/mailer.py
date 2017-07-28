@@ -21,23 +21,6 @@ class Mailer(object):
         self.default_message = 'Your post processsing job has completed successfully'
         self.default_status = 'SUCCEESS'
 
-    def validate(self):
-        """
-        Validate the source and destination addresses
-
-        returns True if valid, False otherwise
-        """
-        if not validate_email(self.dst, check_mx=True, verify=True):
-            msg = 'Invalid destination email address {}'.format(self.dst)
-            logging.error(msg)
-            return False
-        elif not validate_email(self.src, check_mx=True, verify=True):
-            msg = 'Invalid source email address {}'.format(self.src)
-            logging.error(msg)
-            return False
-        else:
-            return True
-
     def send(self, status=None, msg=None):
         """
         Send the email with contents = msg and subject line = status
@@ -48,8 +31,6 @@ class Mailer(object):
 
         returns True if succesful, False otherwise
         """
-        if not self.validate():
-            return False
         if not msg:
             msg = self.default_message
         if not status:

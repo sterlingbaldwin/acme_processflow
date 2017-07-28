@@ -25,6 +25,7 @@ from jobs.Ncclimo import Climo
 from jobs.Timeseries import Timeseries
 from jobs.AMWGDiagnostic import AMWGDiagnostic
 from jobs.CoupledDiagnostic import CoupledDiagnostic
+from jobs.ACMEDiags import ACMEDiags
 from jobs.JobStatus import JobStatus
 
 from lib.Monitor import Monitor
@@ -89,19 +90,22 @@ def setup(parser, display_event, **kwargs):
         sys.exit()
     try:
         config = ConfigObj(args.config)
-        if not isinstance(config['global']['set_frequency'], list):
-            config['global']['set_frequency'] = [config['global']['set_frequency']]
+        set_frequency = config.get('global').get('set_frequency')
+        if not isinstance(set_frequency, list):
+            config['global']['set_frequency'] = [int(set_frequency)]
         new_freqs = []
-        for freq in config['global']['set_frequency']:
+        for freq in set_frequency:
             if not isinstance(freq, int):
                 new_freqs.append(int(freq))
             else:
                 new_freqs.append(freq)
-        config['global']['set_frequency'] = new_freqs
+        set_frequency = new_freqs
     except Exception as e:
         print_debug(e)
         print "Error parsing config file {}".format(args.config)
         sys.exit()
+    
+
     
     file_list = kwargs.get('file_list')
     file_name_list = kwargs.get('file_name_list')
@@ -453,9 +457,9 @@ def add_jobs(year_set):
         if not os.path.exists(amwg_project_dir):
             os.makedirs(amwg_project_dir)
 
-        host_prefix = os.path.join(
-            config.get('global').get('img_host_server'),
-            config.get('amwg').get('host_prefix'))
+        host_prefix ='{server}/{prefix}'.format(
+            server=config.get('global').get('img_host_server', 'https://acme-viewer.llnl.gov'),
+            prefix=config.get('amwg').get('host_prefix'))
 
         amwg_temp_dir = os.path.join(config['global']['tmp_path'], 'amwg', year_set_str)
         if not os.path.exists(diag_temp_dir):
@@ -485,6 +489,51 @@ def add_jobs(year_set):
         msg = 'Adding AMWGDiagnostic job to the job list: {}'.format(str(amwg_config))
         logging.info(msg)
         year_set.add_job(amwg_diag)
+    
+    if not required_jobs['acme_diag']:
+        required_jobs['acme_diag'] = True
+
+        acme_diags_project_dir = os.path.join(
+            config.get('global').get('output_path'),
+            'acme_diags',
+            'year_set_{}'.format(year_set.set_number))
+        if not os.path.exists(acme_diags_project_dir):
+            os.makedirs(acme_diags_project_dir)
+        
+        host_prefix = '{server}/{prefix}'.format(
+            server=config.get('global').get('img_host_server', 'https://acme-viewer.llnl.gov'),
+            prefix=config.get('acme_diag').get('host_prefix'))
+        
+        acme_diags_temp_dir = os.path.join(
+            config.get('global').get('tmp_path'),
+            'acme_diags',
+            year_set_str)
+        
+        if not os.path.exists(acme_diags_temp_dir):
+            os.makedirs(acme_diags_temp_dir)
+        template_path = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'resources', 'acme_diags_template.py')
+        acme_config = config.get('acme_diag')
+        acme_diags_config = {
+            'regrided_climo_path': regrid_output_dir,
+            'reference_data_path': acme_config.get('reference_data_path'),
+            'test_data_path': acme_diags_temp_dir,
+            'test_name': config.get('global').get('experiment'),
+            'seasons': acme_config.get('seasons'),
+            'backend': acme_config.get('backend'),
+            'sets': acme_config.get('sets'),
+            'results_dir': acme_diags_project_dir,
+            'diff_colormap': acme_config.get('diff_colormap'),
+            'template_path': template_path,
+            'run_scripts_path': config.get('global').get('run_scripts_path'),
+            'end_year': year_set.set_end_year,
+            'start_year': year_set.set_start_year,
+            'year_set': year_set.set_number
+        }
+        acme_diag = ACMEDiags(acme_diags_config, event_list)
+        msg = "Adding ACME Diagnostic to the job list: {}".format(
+            str(acme_diag))
+        logging.info(msg)
+        year_set.add_job(acme_diag)
 
     return year_set
 
@@ -1303,9 +1352,12 @@ if __name__ == "__main__":
                 message = 'All processing complete'
                 emailaddr = config.get('global').get('email')
                 if emailaddr:
+                    event_list.push(message='Sending notification email to ' + emailaddr)
                     try:
                         diag_msg = ''
-                        if config['set_jobs'].get('coupled_diag') or config['set_jobs'].get('amwg'):
+                        if config['global']['set_jobs'].get('coupled_diag') \
+                           or config['global']['set_jobs'].get('amwg') \
+                           or config['global']['set_jobs'].get('acme_diag'):
                             diag_msg = 'Your diagnostics can be found here:'
                             for evt in event_list.list:
                                 if 'hosted' in evt.message:
