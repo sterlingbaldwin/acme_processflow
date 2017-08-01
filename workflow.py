@@ -490,8 +490,8 @@ def add_jobs(year_set):
         logging.info(msg)
         year_set.add_job(amwg_diag)
     
-    if not required_jobs['acme_diag']:
-        required_jobs['acme_diag'] = True
+    if not required_jobs['acme_diags']:
+        required_jobs['acme_diags'] = True
 
         acme_diags_project_dir = os.path.join(
             config.get('global').get('output_path'),

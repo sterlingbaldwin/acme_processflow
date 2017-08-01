@@ -1,7 +1,6 @@
 import smtplib
 import logging
 from email.mime.text import MIMEText
-from validate_email import validate_email
 
 class Mailer(object):
     """
