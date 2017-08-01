@@ -506,7 +506,7 @@ def check_for_inplace_data(file_list, file_name_list, config):
     sim_end_year = int(config.get('global').get('simulation_end_year'))
     if not os.path.exists(cache_path):
         os.makedirs(cache_path)
-        return
+        return False
     
     patterns = config.get('global').get('patterns')
     input_dirs = [os.path.join(cache_path, key) for key, val in patterns.items()]
