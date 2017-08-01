@@ -89,7 +89,7 @@ class CoupledDiagnostic(object):
             'LWCF',
             'TAU'
         ]
-        config['run_ocean'] = 1 if config.get('run_ocean') else 0
+        config['run_ocean'] = int(config['run_ocean'])
         self.start_time = None
         self.end_time = None
         self.config = {}
@@ -192,23 +192,29 @@ class CoupledDiagnostic(object):
             src_list=climo_src_list,
             dst=run_dir)
         # craete mpaso.hist.am links and mpascice links
-        for mpas_dir in ['mpas_am_dir', 'mpas_cice_dir']:
-            mpas_temp_list = []
-            all_years = []
-            mpas_path = self.config.get(mpas_dir)
-            for mpas in os.listdir(mpas_path):
-                start = re.search(r'\.\d\d\d\d', mpas)
-                s_index = start.start() + 1
-                year = int(mpas[s_index: s_index + 4])
-                if year > set_end_year or year < set_start_year:
-                    if year == set_end_year + 1:
-                        month = int(mpas[s_index + 5: s_index + 7])
-                        if month == 1:
-                            mpas_temp_list.append(mpas)
-                    continue
-                mpas_temp_list.append(mpas)
-                if year not in all_years:
-                    all_years.append(year)
+        if self.config.get('run_ocean'):
+            for mpas_dir in ['mpas_am_dir', 'mpas_cice_dir']:
+                mpas_temp_list = []
+                all_years = []
+                mpas_path = self.config.get(mpas_dir)
+                if not mpas_path:
+                    self.event_list.push(message='Run ocean set, but no mpas files included. Invalid configuration')
+                    self.status = JobStatus.INVALID
+                    print 'run_ocean = ' + str(self.config['run_ocean'])
+                    return 2
+                for mpas in os.listdir(mpas_path):
+                    start = re.search(r'\.\d\d\d\d', mpas)
+                    s_index = start.start() + 1
+                    year = int(mpas[s_index: s_index + 4])
+                    if year > set_end_year or year < set_start_year:
+                        if year == set_end_year + 1:
+                            month = int(mpas[s_index + 5: s_index + 7])
+                            if month == 1:
+                                mpas_temp_list.append(mpas)
+                        continue
+                    mpas_temp_list.append(mpas)
+                    if year not in all_years:
+                        all_years.append(year)
 
             if len(all_years) < (set_end_year - set_start_year):
                 return False
@@ -370,8 +376,11 @@ class CoupledDiagnostic(object):
             return 0
         self.start_time = datetime.now()
         # create symlinks to the input data
-        if not self.setup_input_directory():
+        setup_status = self.setup_input_directory()
+        if not setup_status:
             return -1
+        elif setup_status == 2:
+            return False
 
         # render the run_AIMS.csh script
         template_out = self.config.get('rendered_output_path')

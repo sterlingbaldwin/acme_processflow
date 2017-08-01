@@ -70,6 +70,11 @@ def setup(parser, display_event, **kwargs):
         display_event (Threadding_event): The event to turn the display on and off
     """
     global debug
+    file_list = kwargs.get('file_list')
+    file_name_list = kwargs.get('file_name_list')
+    job_sets = kwargs.get('job_sets')
+
+    all_data = False
     args = parser.parse_args()
 
     if args.debug:
@@ -103,82 +108,9 @@ def setup(parser, display_event, **kwargs):
     except Exception as e:
         print_debug(e)
         print "Error parsing config file {}".format(args.config)
+        parser.print_help()
         sys.exit()
     
-
-    
-    file_list = kwargs.get('file_list')
-    file_name_list = kwargs.get('file_name_list')
-    all_data = False
-    if file_list and file_name_list:
-        all_data = check_for_inplace_data(
-            file_list=kwargs.get('file_list'),
-            file_name_list=kwargs.get('file_name_list'),
-            config=config)
-
-    if not all_data:
-        endpoints = [endpoint for endpoint in config['transfer'].values()]
-        if args.no_ui:
-            print 'Running in no-ui mode'
-            config['global']['ui'] = False
-            addr = config.get('global').get('email')
-            if not addr:
-                print 'When running in no-ui mode, you must enter an email address.'
-                sys.exit()
-            setup_globus(
-                endpoints=endpoints,
-                no_ui=True,
-                src=config.get('global').get('email'),
-                dst=config.get('global').get('email'),
-                event_list=event_list)
-        else:
-            output_path = config.get('global').get('output_path')
-            error_output = os.path.join(
-                output_path,
-                'workflow.error')
-            if not os.path.exists(output_path):
-                os.makedirs(output_path)
-            sys.stderr = open(error_output, 'w')
-            config['global']['ui'] = True
-            msg = '## activating endpoints {}'.format(' '.join(endpoints))
-            logging.info(msg)
-            if not setup_globus(
-                endpoints=endpoints,
-                display_event=display_event,
-                no_ui=False):
-                print "Globus setup error"
-                return -1
-            print 'Globus setup complete'
-    else:
-        print "All data is present, skipping globus setup"
-
-    if args.dry_run:
-        config['global']['dry_run'] = True
-    else:
-        config['global']['dry_run'] = False
-
-    if args.no_cleanup:
-        config['global']['no_cleanup'] = True
-    else:
-        config['global']['no_cleanup'] = False
-
-    if args.no_monitor:
-        config['global']['no_monitor'] = True
-        print "Turning off remote monitoring"
-    else:
-        config['global']['no_monitor'] = False
-    
-    if args.size:
-        config['transfer']['size'] = args.size
-    else:
-        config['transfer']['size'] = 100
-    
-    # if args.viewer:
-    #     print 'Turning on output_viewer mode'
-    #     config['global']['viewer'] = True
-    # else:
-    #     config['global']['viewer'] = False
-
     # setup config for file type directories
     for key, val in config.get('global').get('patterns').items():
         new_dir = os.path.join(
@@ -221,6 +153,129 @@ def setup(parser, display_event, **kwargs):
     config['global']['tmp_path'] = os.path.join(
         config['global']['output_path'],
         'tmp')
+    
+    # compute number of expected year_sets
+    sim_start_year = int(config.get('global').get('simulation_start_year'))
+    sim_end_year = int(config.get('global').get('simulation_end_year'))
+    number_of_sim_years = sim_end_year - (sim_start_year - 1)
+    frequencies = config.get('global').get('set_frequency')
+    line = 'Initializing year sets'
+    event_list.push(message=line)
+    for freq in frequencies:
+        freq = int(freq)
+        year_set = number_of_sim_years / freq
+
+        # initialize the job_sets dict
+        for i in range(1, year_set + 1):
+            set_start_year = sim_start_year + ((i - 1) * freq)
+            set_end_year = set_start_year + freq - 1
+            new_set = YearSet(
+                set_number=len(job_sets) + 1,
+                start_year=set_start_year,
+                end_year=set_end_year)
+            job_sets.append(new_set)
+    
+
+    # initialize the file_list
+    line = 'Initializing file list'
+    event_list.push(message=line)
+    for key, val in config.get('global').get('patterns').items():
+        file_list[key] = {}
+        file_name_list[key] = {}
+        if key in ['ATM', 'MPAS_AM', 'MPAS_CICE']:
+            for year in range(sim_start_year, sim_end_year + 1):
+                for month in range(1, 13):
+                    file_key = str(year) + '-' + str(month)
+                    file_list[key][file_key] = SetStatus.NO_DATA
+                    file_name_list[key][file_key] = ''
+        elif key == 'MPAS_CICE_IN':
+            file_list[key]['mpas-cice_in'] = SetStatus.NO_DATA
+        elif key == 'MPAS_O_IN':
+            file_list[key]['mpas-o_in'] = SetStatus.NO_DATA
+        elif key == 'RPT':
+            file_list[key]['rpointer.ocn'] = SetStatus.NO_DATA
+            file_list[key]['rpointer.atm'] = SetStatus.NO_DATA
+        elif key == 'MPAS_RST':
+            for year in range(2, number_of_sim_years + 1):
+                file_key = '{year}-1'.format(year=year)
+                file_list[key][file_key] = SetStatus.NO_DATA
+        elif key == 'STREAMS':
+            file_list[key]['streams.ocean'] = SetStatus.NO_DATA
+            file_list[key]['streams.cice'] = SetStatus.NO_DATA
+    
+    if not file_list is None and \
+       not file_name_list is None:
+        all_data = check_for_inplace_data(
+            file_list=kwargs.get('file_list'),
+            file_name_list=kwargs.get('file_name_list'),
+            config=config)
+
+    if not all_data:
+        endpoints = [endpoint for endpoint in config['transfer'].values()]
+        if args.no_ui:
+            print 'Running in no-ui mode'
+            config['global']['ui'] = False
+            addr = config.get('global').get('email')
+            if not addr:
+                print 'When running in no-ui mode, you must enter an email address.'
+                sys.exit()
+            setup_globus(
+                endpoints=endpoints,
+                no_ui=True,
+                src=config.get('global').get('email'),
+                dst=config.get('global').get('email'),
+                event_list=event_list)
+        else:
+            output_path = config.get('global').get('output_path')
+            error_output = os.path.join(
+                output_path,
+                'workflow.error')
+            if not os.path.exists(output_path):
+                os.makedirs(output_path)
+            sys.stderr = open(error_output, 'w')
+            config['global']['ui'] = True
+            msg = '## activating endpoints {}'.format(' '.join(endpoints))
+            logging.info(msg)
+            if not setup_globus(
+                endpoints=endpoints,
+                display_event=display_event,
+                no_ui=False):
+                print "Globus setup error"
+                return -1
+            print 'Globus setup complete'
+    else:
+        print "All data is present, skipping globus setup"
+        if args.no_ui:
+            config['global']['ui'] = False
+        else:
+            config['global']['ui'] = True
+
+    if args.dry_run:
+        config['global']['dry_run'] = True
+    else:
+        config['global']['dry_run'] = False
+
+    if args.no_cleanup:
+        config['global']['no_cleanup'] = True
+    else:
+        config['global']['no_cleanup'] = False
+
+    if args.no_monitor:
+        config['global']['no_monitor'] = True
+        print "Turning off remote monitoring"
+    else:
+        config['global']['no_monitor'] = False
+    
+    if args.size:
+        config['transfer']['size'] = args.size
+    else:
+        config['transfer']['size'] = 100
+    
+    # if args.viewer:
+    #     print 'Turning on output_viewer mode'
+    #     config['global']['viewer'] = True
+    # else:
+    #     config['global']['viewer'] = False
     
     config['global']['run_id'] = uuid4().hex[:5]
 
@@ -490,8 +545,8 @@ def add_jobs(year_set):
         logging.info(msg)
         year_set.add_job(amwg_diag)
     
-    if not required_jobs['acme_diag']:
-        required_jobs['acme_diag'] = True
+    if not required_jobs['acme_diags']:
+        required_jobs['acme_diags'] = True
 
         acme_diags_project_dir = os.path.join(
             config.get('global').get('output_path'),
@@ -1110,30 +1165,28 @@ if __name__ == "__main__":
     # A flag to tell if we have all the data locally
     all_data = False
 
+    # the master list of all job sets
+    job_sets = []
+
     # Read in parameters from config
     config = setup(
         parser,
         display_event,
         file_list=file_list,
-        file_name_list=file_name_list)
+        file_name_list=file_name_list,
+        job_sets=job_sets)
     
+    # for section in config:
+    #     print section
+    #     for item in config[section]:
+    #         print '\t', item, config[section][item]
+    # sys.exit()
     # A list of files that have been transfered
     transfer_list = []
 
     if config == -1:
         print "Error in setup, exiting"
         sys.exit(1)
-
-    # for section in config:
-    #     print section
-    #     for item in config[section]:
-    #         if not isinstance(config[section][item], dict):
-    #             print '\t', item, '=', pformat(config[section][item])
-    #         else:
-    #             print '\t', item
-    #             for key, val in config[section][item].items():
-    #                 print '\t\t', key, '=', val
-    # sys.exit()
 
     # check that all netCDF files exist
     path_exists(config)
