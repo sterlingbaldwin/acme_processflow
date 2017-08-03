@@ -22,6 +22,17 @@ from jobs.JobStatus import JobStatus
 from mailer import Mailer
 from string import Formatter
 
+def check_config_white_space(filepath):
+    line_index = 0
+    with open(filepath, 'r') as infile:
+        for line in infile.readline():
+            index = line.find('=')
+            if index == -1:
+                continue
+            if line[index + 1] != ' '
+                break
+    return line_index
+
 def strfdelta(tdelta, fmt):
     f = Formatter()
     d = {}

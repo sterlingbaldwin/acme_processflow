@@ -94,6 +94,10 @@ def setup(parser, display_event, **kwargs):
         parser.print_help()
         sys.exit()
     try:
+        line_index = check_config_white_space(args.config)
+        if line_index != 0:
+            print 'ERROR: line {num} does not have a space after the \'=\', white space is required. Please add a space and run again.'
+            sys.exit(-1)
         config = ConfigObj(args.config)
         set_frequency = config.get('global').get('set_frequency')
         if not isinstance(set_frequency, list):
