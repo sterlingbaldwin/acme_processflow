@@ -81,8 +81,8 @@ The keys you need to change before running the first time are:
         timeseries = 10
         # this will run amwg only at 5
         amwg = 5
-        # this will turn off the coupled diag 
-        coupled_diag = 
+        # this will turn off the coupled diags 
+        coupled_diags = 
 
 ```
 
@@ -113,7 +113,8 @@ Change these:
         ncclimo = 5, 10
         timeseries = 5, 10
         amwg = 5, 10
-        coupled_diag = 5, 10
+        coupled_diags = 5, 10
+        acme_diags = 5, 10
 ```
 
 To these:
@@ -129,7 +130,7 @@ To these:
         ncclimo = 5, 10
         timeseries = 5, 10
         amwg = 5, 10
-        coupled_diag = 
+        coupled_diags = 
 ```
 
 ### Config Explanation<a name="config"></a>

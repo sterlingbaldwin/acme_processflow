@@ -44,7 +44,7 @@ class ACMEDiags(object):
         self.end_time = None
         self.config = {}
         self.status = JobStatus.INVALID
-        self.type = "acme_diag"
+        self.type = "acme_diags"
         self.year_set = 0
         self.job_id = 0
         self.uuid = uuid4().hex
@@ -80,6 +80,8 @@ class ACMEDiags(object):
             self.event_list.push(message=message)
             logging.info(message)
             return 0
+        else:
+            self.status = JobStatus.PENDING
         
         if debug:
             print 'ACME diags not computed, setting up for execution'
@@ -159,7 +161,7 @@ class ACMEDiags(object):
                     type=self.get_type(),
                     id=self.job_id,
                     state=self.status)
-                logging.info('## ' + message)
+                logging.info(message)
                 self.event_list.push(message=message)
 
         return self.job_id

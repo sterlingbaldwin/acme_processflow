@@ -93,7 +93,7 @@ def setup(parser, display_event, **kwargs):
     if not args.config:
         parser.print_help()
         sys.exit()
-    try:
+    try: 
         line_index = check_config_white_space(args.config)
         if line_index != 0:
             print 'ERROR: line {num} does not have a space after the \'=\', white space is required. Please add a space and run again.'
@@ -440,8 +440,8 @@ def add_jobs(year_set):
         logging.info(msg)
         year_set.add_job(timeseries)
 
-    if not required_jobs['coupled_diag']:
-        required_jobs['coupled_diag'] = True
+    if not required_jobs['coupled_diags']:
+        required_jobs['coupled_diags'] = True
         coupled_project_dir = os.path.join(
             config.get('global').get('output_path'),
             'coupled_diags',
@@ -561,7 +561,7 @@ def add_jobs(year_set):
         
         host_prefix = '{server}/{prefix}'.format(
             server=config.get('global').get('img_host_server', 'https://acme-viewer.llnl.gov'),
-            prefix=config.get('acme_diag').get('host_prefix'))
+            prefix=config.get('acme_diags').get('host_prefix'))
         
         acme_diags_temp_dir = os.path.join(
             config.get('global').get('tmp_path'),
@@ -571,7 +571,7 @@ def add_jobs(year_set):
         if not os.path.exists(acme_diags_temp_dir):
             os.makedirs(acme_diags_temp_dir)
         template_path = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'resources', 'acme_diags_template.py')
-        acme_config = config.get('acme_diag')
+        acme_config = config.get('acme_diags')
         acme_diags_config = {
             'regrided_climo_path': regrid_output_dir,
             'reference_data_path': acme_config.get('reference_data_path'),
@@ -1415,7 +1415,7 @@ if __name__ == "__main__":
                         if config['global']['set_jobs'].get('coupled_diag') \
                            or config['global']['set_jobs'].get('amwg') \
                            or config['global']['set_jobs'].get('acme_diag'):
-                            diag_msg = 'Your diagnostics can be found here:'
+                            diag_msg = 'Your diagnostics can be found here:\n'
                             for evt in event_list.list:
                                 if 'hosted' in evt.message:
                                     diag_msg += evt.message + '\n'

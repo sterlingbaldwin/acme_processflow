@@ -94,7 +94,7 @@ class CoupledDiagnostic(object):
         self.end_time = None
         self.config = {}
         self.status = JobStatus.INVALID
-        self.type = 'coupled_diag'
+        self.type = 'coupled_diags'
         self.outputs = {}
         self.year_set = 0
         self.uuid = uuid4().hex
@@ -191,16 +191,15 @@ class CoupledDiagnostic(object):
             src_dir=climo_temp_path,
             src_list=climo_src_list,
             dst=run_dir)
-        # craete mpaso.hist.am links and mpascice links
+        # create mpaso.hist.am links and mpascice links
         if self.config.get('run_ocean'):
             for mpas_dir in ['mpas_am_dir', 'mpas_cice_dir']:
                 mpas_temp_list = []
                 all_years = []
                 mpas_path = self.config.get(mpas_dir)
                 if not mpas_path:
-                    self.event_list.push(message='Run ocean set, but no mpas files included. Invalid configuration')
+                    self.event_list.push(message='Run ocean set to 1, but no mpas files included. Invalid configuration')
                     self.status = JobStatus.INVALID
-                    print 'run_ocean = ' + str(self.config['run_ocean'])
                     return 2
                 for mpas in os.listdir(mpas_path):
                     start = re.search(r'\.\d\d\d\d', mpas)
@@ -237,133 +236,6 @@ class CoupledDiagnostic(object):
                 dst=run_dir)
         return True
 
-    def generateIndex(self):
-        """
-        Generates the index.json for uploading to the diagnostic viewer
-        """
-        message = 'Starting index generataion for coupled diagnostic'
-        self.event_list.push(message=message)
-
-        viewer = OutputViewer(index_name="Coupled Diagnostic")
-        viewer.add_page("Coupled Diagnostics Output", ["Description", "ANN", "DJF", "JJA"])
-
-        viewer.add_group('Time Series Plots: Global and Zonal-band means (ATM)')
-        viewer.add_row('Precipitation Rate (GPCP)')
-        viewer.add_col('PRECT')
-        viewer.add_col('case_scripts_PRECT_ANN_reg_ts.png', is_file=True)
-
-        viewer.add_row('TOM Net Radiative Flux')
-        viewer.add_col('RESTOM')
-        viewer.add_col('case_scripts_RESTOM_ANN_reg_ts.png', is_file=True)
-        viewer.add_row('TOM Net LW Flux')
-        viewer.add_col('FLNT')
-        viewer.add_col('case_scripts_FLNT_ANN_reg_ts.png', is_file=True)
-        viewer.add_row('TOM Net SW Flux')
-        viewer.add_col('FSNT')
-        viewer.add_col('case_scripts_FSNT_ANN_reg_ts.png', is_file=True)
-
-        viewer.add_group('Time Series Plots: Global/Hemispheric means (OCN/ICE)')
-        viewer.add_row('Global SST')
-        viewer.add_col('Global Sea Surface Tempurature')
-        viewer.add_col('sst_global_case_scripts.png', is_file=True)
-        viewer.add_row('Global SST')
-        viewer.add_col('Global Sea Surface Tempurature')
-        viewer.add_col('sst_global_case_scripts.png', is_file=True)
-        viewer.add_row('Global OHC')
-        viewer.add_col('Global OHC')
-        viewer.add_col('ohc_global_case_scripts.png', is_file=True)
-        viewer.add_row('NH Ice Area')
-        viewer.add_col('Northern Hemisphere Ice Area')
-        viewer.add_col('iceAreaCellNH_case_scripts.png', is_file=True)
-        viewer.add_row('SH Ice Area')
-        viewer.add_col('Southern Hemisphere Ice Area')
-        viewer.add_col('iceAreaCellSH_case_scripts.png', is_file=True)
-        viewer.add_row('NH Ice Volume')
-        viewer.add_col('Northern Hemisphere Ice Volume')
-        viewer.add_col('iceVolumeCellNH_case_scripts.png', is_file=True)
-        viewer.add_row('SH Ice Volume')
-        viewer.add_col('Southern Hemisphere Ice Volume')
-        viewer.add_col('iceVolumeCellSH_case_scripts.png', is_file=True)
-
-        viewer.add_group('Climatology Plots (ATM)')
-        viewer.add_row('PRECT')
-        viewer.add_col('Precipitation Rate')
-        viewer.add_col('case_scripts-GPCP_PRECT_climo_ANN.png', is_file=True)
-        viewer.add_col('case_scripts-GPCP_PRECT_climo_DJF.png', is_file=True)
-        viewer.add_col('case_scripts-GPCP_PRECT_climo_JJA.png', is_file=True)
-        viewer.add_row('FSNTOA')
-        viewer.add_col('TOA net SW flux')
-        viewer.add_col('case_scripts-CERES-EBAF_FSNTOA_climo_ANN.png', is_file=True)
-        viewer.add_col('case_scripts-CERES-EBAF_FSNTOA_climo_DJF.png', is_file=True)
-        viewer.add_col('case_scripts-CERES-EBAF_FSNTOA_climo_JJA.png', is_file=True)
-        viewer.add_row('FLUT')
-        viewer.add_col('TOA upward LW flux')
-        viewer.add_col('case_scripts-CERES-EBAF_FLUT_climo_ANN.png', is_file=True)
-        viewer.add_col('case_scripts-CERES-EBAF_FLUT_climo_DJF.png', is_file=True)
-        viewer.add_col('case_scripts-CERES-EBAF_FLUT_climo_JJA.png', is_file=True)
-        viewer.add_row('SWCF')
-        viewer.add_col('TOA shortwave cloud forcing')
-        viewer.add_col('case_scripts-CERES-EBAF_SWCF_climo_ANN.png', is_file=True)
-        viewer.add_col('case_scripts-CERES-EBAF_SWCF_climo_DJF.png', is_file=True)
-        viewer.add_col('case_scripts-CERES-EBAF_SWCF_climo_JJA.png', is_file=True)
-        viewer.add_row('LWCF')
-        viewer.add_col('TOA longwave cloud forcing')
-        viewer.add_col('case_scripts-CERES-EBAF_LWCF_climo_ANN.png', is_file=True)
-        viewer.add_col('case_scripts-CERES-EBAF_LWCF_climo_DJF.png', is_file=True)
-        viewer.add_col('case_scripts-CERES-EBAF_LWCF_climo_JJA.png', is_file=True)
-        viewer.add_row('TAU')
-        viewer.add_col('Ocean Wind Stress')
-        viewer.add_col('case_scripts-ERS_TAU_climo_ANN.png', is_file=True)
-        viewer.add_col('case_scripts-ERS_TAU_climo_DJF.png', is_file=True)
-        viewer.add_col('case_scripts-ERS_TAU_climo_JJA.png', is_file=True)
-
-        viewer.add_group('Climatology Plots (OCN/ICE)')
-        viewer.add_row('SST')
-        viewer.add_col('SST Hadley-NOAA-OI')
-        viewer.add_col('sstHADOI_case_scripts_ANN_years0001-0010.png', is_file=True)
-        viewer.add_col('sstHADOI_case_scripts_JFM_years0001-0010.png', is_file=True)
-        viewer.add_col('sstHADOI_case_scripts_JAS_years0001-0010.png', is_file=True)
-        viewer.add_row('SSS')
-        viewer.add_col('SSS Aquarius')
-        viewer.add_col('sssAquarius_case_scripts_ANN_years0001-0010.png', is_file=True)
-        viewer.add_col('sssAquarius_case_scripts_JFM_years0001-0010.png', is_file=True)
-        viewer.add_col('sssAquarius_case_scripts_JAS_years0001-0010.png', is_file=True)
-        viewer.add_row('MLD')
-        viewer.add_col('MLD Holte-Talley ARGO')
-        viewer.add_col('mldHolteTalleyARGO_case_scripts_ANN_years0001-0010.png', is_file=True)
-        viewer.add_col('mldHolteTalleyARGO_case_scripts_JFM_years0001-0010.png', is_file=True)
-        viewer.add_col('mldHolteTalleyARGO_case_scripts_JAS_years0001-0010.png', is_file=True)
-        viewer.add_row('Ice Conc.')
-        viewer.add_col('Northern Hemisphere Sea-ice')
-        viewer.add_col('iceconcNASATeamNH_case_scripts_ANN_years0001-0010.png', is_file=True)
-        viewer.add_col('iceconcNASATeamNH_case_scripts_JFM_years0001-0010.png', is_file=True)
-        viewer.add_col('iceconcNASATeamNH_case_scripts_JAS_years0001-0010.png', is_file=True)
-        viewer.add_row('Ice Conc.')
-        viewer.add_col('Northern Hemisphere Sea-ice')
-        viewer.add_col('iceconcBootstrapNH_case_scripts_ANN_years0001-0010.png', is_file=True)
-        viewer.add_col('iceconcBootstrapNH_case_scripts_JFM_years0001-0010.png', is_file=True)
-        viewer.add_col('iceconcBootstrapNH_case_scripts_JAS_years0001-0010.png', is_file=True)
-        viewer.add_row('Ice Thick.')
-        viewer.add_col('Northern Hemisphere Sea-ice')
-        viewer.add_col('icethickNH_case_scripts_FM_years0001-0010.png', is_file=True)
-        viewer.add_col('icethickNH_case_scripts_ON_years0001-0010.png', is_file=True)
-        viewer.add_row('Ice Conc.')
-        viewer.add_col('Northern Hemisphere Sea-ice')
-        viewer.add_col('iceconcNASATeamSH_case_scripts_ANN_years0001-0010.png', is_file=True)
-        viewer.add_col('iceconcNASATeamSH_case_scripts_JFM_years0001-0010.png', is_file=True)
-        viewer.add_col('iceconcNASATeamSH_case_scripts_JAS_years0001-0010.png', is_file=True)
-        viewer.add_row('Ice Conc.')
-        viewer.add_col('Northern Hemisphere Sea-ice')
-        viewer.add_col('iceconcBootstrapSH_case_scripts_ANN_years0001-0010.png', is_file=True)
-        viewer.add_col('iceconcBootstrapSH_case_scripts_JFM_years0001-0010.png', is_file=True)
-        viewer.add_col('iceconcBootstrapSH_case_scripts_JAS_years0001-0010.png', is_file=True)
-        viewer.add_row('Ice Thick.')
-        viewer.add_col('Northern Hemisphere Sea-ice')
-        viewer.add_col('icethickSH_case_scripts_FM_years0001-0010.png', is_file=True)
-        viewer.add_col('icethickSH_case_scripts_ON_years0001-0010.png', is_file=True)
-
-        viewer.generate_viewer(prompt_user=False)
-
     def execute(self, batch=False):
         """
         Perform the actual work
@@ -374,6 +246,9 @@ class CoupledDiagnostic(object):
             message = 'Coupled_diag job already computed, skipping'
             self.event_list.push(message=message)
             return 0
+        else:
+            self.status = JobStatus.PENDING
+
         self.start_time = datetime.now()
         # create symlinks to the input data
         setup_status = self.setup_input_directory()

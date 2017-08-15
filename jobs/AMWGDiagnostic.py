@@ -219,8 +219,6 @@ class AMWGDiagnostic(object):
         """
         Perform the actual work
         """
-        if debug:
-            print "starting amwg job"
         # First check if the job has already been completed
         if self.postvalidate():
             self.status = JobStatus.COMPLETED
@@ -228,9 +226,9 @@ class AMWGDiagnostic(object):
             self.event_list.push(message=message)
             logging.info(message)
             return 0
-        if debug:
-            print 'amwg not done yet, setting up for computing'
-            print pformat(self.config)
+        else:
+            self.status = JobStatus.PENDING
+
         self.start_time = datetime.now()
         # setup the output directory
         run_dir = self.config.get('run_directory')
@@ -317,7 +315,7 @@ class AMWGDiagnostic(object):
                     type=self.get_type(),
                     id=self.job_id,
                     state=self.status)
-                logging.info('## ' + message)
+                logging.info(message)
                 self.event_list.push(message=message)
 
         return self.job_id

@@ -29,7 +29,7 @@ def check_config_white_space(filepath):
             index = line.find('=')
             if index == -1:
                 continue
-            if line[index + 1] != ' '
+            if line[index + 1] != ' ':
                 break
     return line_index
 
@@ -74,9 +74,6 @@ def setup_globus(endpoints, no_ui=False, **kwargs):
     """
     message_sent = False
     display_event = kwargs.get('display_event')
-    # if not no_ui and not display_event:
-    #     logging.error('Attempting to connect in ui mode, but no display_event given')
-    #     return False
     
     if no_ui:
         mailer = Mailer(
@@ -124,13 +121,13 @@ def setup_globus(endpoints, no_ui=False, **kwargs):
     while not activated: 
         activated = True
         for endpoint in endpoints:
-            msg = '## activating endpoint {}'.format(endpoint)
+            msg = 'activating endpoint {}'.format(endpoint)
             logging.info(msg)
             r = client.endpoint_autoactivate(endpoint, if_expires_in=3600)
-            logging.info('## ' + r['code'])
+            logging.info(r['code'])
             if r["code"] == "AutoActivationFailed":
                 activated = False
-                logging.info('## endpoint autoactivation failed, going to manual')
+                logging.info('endpoint autoactivation failed, going to manual')
                 server_document = client.endpoint_server_list(endpoint)
                 for server in server_document['DATA']:
                     hostname = server["hostname"]
@@ -267,8 +264,10 @@ def start_ready_job_sets(job_sets, thread_list, debug, event, event_list):
                                 ready = True
                                 break
                 else:
+                    # print '{job} is ready'.format(job=job.get_type())
                     ready = True
                 if not ready:
+                    # print '{job} is not ready'.format(job=job.get_type())
                     continue
                 # if the job isnt a climo, and the job that it depends on is done, start it
                 if job.status == JobStatus.VALID:
@@ -294,7 +293,7 @@ def start_ready_job_sets(job_sets, thread_list, debug, event, event_list):
                         id=job.job_id,
                         status=job.status,
                         type=job.get_type())
-                    logging.error('## ' + message)
+                    logging.error(message)
 
 def cmd_exists(cmd):
     return any(os.access(os.path.join(path, cmd), os.X_OK) for path in os.environ["PATH"].split(os.pathsep))
@@ -344,6 +343,7 @@ def monitor_job(job, job_set, event=None, debug=False, batch_type='slurm', event
     Monitor the slurm job, and update the status to 'complete' when it finishes
     This function should only be called from within a thread
     """
+    print 'starting {job}'.format(job=job.get_type())
     job.start_time = datetime.now()
     job_id = job.execute(batch='slurm')
 
@@ -370,7 +370,7 @@ def monitor_job(job, job_set, event=None, debug=False, batch_type='slurm', event
     event_list.push(
         message=message,
         data=job)
-    logging.info('## ' + message)
+    logging.info(message)
 
     exit_list = [JobStatus.VALID, JobStatus.SUBMITTED, JobStatus.RUNNING, JobStatus.PENDING]
     none_exit_list = [JobStatus.RUNNING, JobStatus.PENDING, JobStatus.SUBMITTED]
@@ -440,7 +440,7 @@ def monitor_job(job, job_set, event=None, debug=False, batch_type='slurm', event
                     id=job.job_id,
                     status=status,
                     type=job.get_type())
-                logging.info('##' + message)
+                logging.info(message)
 
             # wait for 10 seconds, or if the kill_thread event has been set, exit
             if thread_sleep(10, event):
@@ -494,7 +494,7 @@ def setup_local_hosting(job, event_list, img_src, generate=False):
         job.generateIndex(output_dir=host_dir)
         os.chdir(prev_dir)
 
-    subprocess.call(['chmod', '-R', '777', outter_dir])
+    subprocess.call(['chmod', '-R', '755', outter_dir])
 
     host_location = os.path.join(
         job.config.get('host_prefix'),
@@ -774,10 +774,6 @@ def create_symlink_dir(src_dir, src_list, dst):
     """
     if not src_list:
         return
-    message = "creating symlink directory at {dst} with files {src_list}".format(
-        dst=dst,
-        src_list=pformat(src_list))
-    logging.info(message)
     if not os.path.exists(dst):
         os.makedirs(dst)
     for src_file in src_list:

@@ -166,7 +166,7 @@ class Timeseries(object):
                         type=self.get_type(),
                         id=self.job_id,
                         state=self.status)
-                    logging.info('## ' + message)
+                    logging.info(message)
                     self.event_list.push(message=message)
 
                 else:
@@ -179,7 +179,7 @@ class Timeseries(object):
                     type=self.get_type(),
                     id=self.job_id,
                     state=self.status)
-                logging.info('## ' + message)
+                logging.info(message)
                 self.event_list.push(message=message)
                 self.job_id = 0
             return self.job_id
