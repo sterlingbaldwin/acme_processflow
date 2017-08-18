@@ -12,6 +12,7 @@ from subprocess import Popen, PIPE
 from time import sleep
 from time import strftime
 from datetime import datetime
+from uuid import uuid4
 
 from globus_cli.commands.login import do_link_login_flow, check_logged_in
 from globus_cli.services.transfer import get_client
@@ -21,6 +22,17 @@ from YearSet import YearSet
 from jobs.JobStatus import JobStatus
 from mailer import Mailer
 from string import Formatter
+
+def check_config_white_space(filepath):
+    line_index = 0
+    with open(filepath, 'r') as infile:
+        for line in infile.readline():
+            index = line.find('=')
+            if index == -1:
+                continue
+            if line[index + 1] != ' ':
+                break
+    return line_index
 
 def strfdelta(tdelta, fmt):
     f = Formatter()
@@ -63,9 +75,6 @@ def setup_globus(endpoints, no_ui=False, **kwargs):
     """
     message_sent = False
     display_event = kwargs.get('display_event')
-    # if not no_ui and not display_event:
-    #     logging.error('Attempting to connect in ui mode, but no display_event given')
-    #     return False
     
     if no_ui:
         mailer = Mailer(
@@ -113,13 +122,13 @@ def setup_globus(endpoints, no_ui=False, **kwargs):
     while not activated: 
         activated = True
         for endpoint in endpoints:
-            msg = '## activating endpoint {}'.format(endpoint)
+            msg = 'activating endpoint {}'.format(endpoint)
             logging.info(msg)
             r = client.endpoint_autoactivate(endpoint, if_expires_in=3600)
-            logging.info('## ' + r['code'])
+            logging.info(r['code'])
             if r["code"] == "AutoActivationFailed":
                 activated = False
-                logging.info('## endpoint autoactivation failed, going to manual')
+                logging.info('endpoint autoactivation failed, going to manual')
                 server_document = client.endpoint_server_list(endpoint)
                 for server in server_document['DATA']:
                     hostname = server["hostname"]
@@ -256,8 +265,10 @@ def start_ready_job_sets(job_sets, thread_list, debug, event, event_list):
                                 ready = True
                                 break
                 else:
+                    # print '{job} is ready'.format(job=job.get_type())
                     ready = True
                 if not ready:
+                    # print '{job} is not ready'.format(job=job.get_type())
                     continue
                 # if the job isnt a climo, and the job that it depends on is done, start it
                 if job.status == JobStatus.VALID:
@@ -283,7 +294,7 @@ def start_ready_job_sets(job_sets, thread_list, debug, event, event_list):
                         id=job.job_id,
                         status=job.status,
                         type=job.get_type())
-                    logging.error('## ' + message)
+                    logging.error(message)
 
 def cmd_exists(cmd):
     return any(os.access(os.path.join(path, cmd), os.X_OK) for path in os.environ["PATH"].split(os.pathsep))
@@ -301,7 +312,7 @@ def handle_completed_job(job, job_set, event_list):
         job_set.status = SetStatus.FAILED
         return
 
-    if job.get_type() == 'coupled_diag':
+    if job.get_type() == 'coupled_diags':
         img_dir = 'coupled_diagnostics_{casename}-obs'.format(
             casename=job.config.get('test_casename'))
         img_src = os.path.join(
@@ -309,8 +320,9 @@ def handle_completed_job(job, job_set, event_list):
             img_dir)
         setup_local_hosting(job, event_list, img_src)
     elif job.get_type() == 'amwg':
-        img_dir = 'year_set_{year}{casename}-obs'.format(
-            year=job.config.get('year_set'),
+        img_dir = '{start:04d}-{end:04d}{casename}-obs'.format(
+            start=job.config.get('start_year'),
+            end=job.config.get('end_year'),
             casename=job.config.get('test_casename'))
         img_src = os.path.join(
             job.config.get('test_path_diag'),
@@ -359,7 +371,7 @@ def monitor_job(job, job_set, event=None, debug=False, batch_type='slurm', event
     event_list.push(
         message=message,
         data=job)
-    logging.info('## ' + message)
+    logging.info(message)
 
     exit_list = [JobStatus.VALID, JobStatus.SUBMITTED, JobStatus.RUNNING, JobStatus.PENDING]
     none_exit_list = [JobStatus.RUNNING, JobStatus.PENDING, JobStatus.SUBMITTED]
@@ -429,7 +441,7 @@ def monitor_job(job, job_set, event=None, debug=False, batch_type='slurm', event
                     id=job.job_id,
                     status=status,
                     type=job.get_type())
-                logging.info('##' + message)
+                logging.info(message)
 
             # wait for 10 seconds, or if the kill_thread event has been set, exit
             if thread_sleep(10, event):
@@ -440,31 +452,20 @@ def setup_local_hosting(job, event_list, img_src, generate=False):
     Sets up the local directory for hosting diagnostic sets
     """
     msg = 'Setting up local hosting for {}'.format(job.get_type())
+    print msg
     event_list.push(
         message=msg,
         data=job)
-    outter_dir = os.path.join(
-        job.config.get('host_directory'),
-        job.config.get('run_id'))
-    if not os.path.exists(outter_dir):
-        os.makedirs(outter_dir)
-    host_dir = os.path.join(
-        outter_dir,
-        'year_set_{}'.format(str(job.config.get('year_set'))))
+    host_dir = job.config.get('web_dir')
+    if os.path.exists(host_dir):
+        host_dir += '_' + uuid4().hex[:8]
+        
     if not os.path.exists(img_src):
         msg = '{job} hosting failed, no image source at {path}'.format(
             job=job.get_type(),
             path=img_src)
         logging.error(msg)
         return
-    if os.path.exists(host_dir):
-        try:
-            msg = 'removing and replacing previous files from {}'.format(host_dir)
-            logging.info(msg)
-            rmtree(host_dir)
-        except Exception as e:
-            logging.error(format_debug(e))
-            print_debug(e)
     try:
         msg = 'copying images from {src} to {dst}'.format(src=img_src, dst=host_dir)
         logging.info(msg)
@@ -473,25 +474,16 @@ def setup_local_hosting(job, event_list, img_src, generate=False):
         logging.error(format_debug(e))
         msg = 'Error copying {} to host directory'.format(job.get_type())
         event_list.push(
-            message='Error copying coupled_diag to host_location',
+            message=msg,
             data=job)
         return
 
-    if generate:
-        prev_dir = os.getcwd()
-        os.chdir(host_dir)
-        job.generateIndex(output_dir=host_dir)
-        os.chdir(prev_dir)
+    temp = host_dir.split(os.sep)
+    index = temp.index(os.environ['USER']) + 1
+    subprocess.call(['chmod', '-R', '755', os.sep.join(temp[:index])])
 
-    subprocess.call(['chmod', '-R', '777', outter_dir])
-
-    host_location = os.path.join(
-        job.config.get('host_prefix'),
-        job.config.get('run_id'),
-        'year_set_{}'.format(str(job.config.get('year_set'))),
-        'index.html')
     msg = '{job} hosted at {url}'.format(
-        url=host_location,
+        url=job.config.get('host_url'),
         job=job.get_type())
     event_list.push(
         message=msg,
@@ -763,10 +755,6 @@ def create_symlink_dir(src_dir, src_list, dst):
     """
     if not src_list:
         return
-    message = "creating symlink directory at {dst} with files {src_list}".format(
-        dst=dst,
-        src_list=pformat(src_list))
-    logging.info(message)
     if not os.path.exists(dst):
         os.makedirs(dst)
     for src_file in src_list:
