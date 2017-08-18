@@ -63,6 +63,17 @@ class Timeseries(object):
             'oversubscribe': '--oversubscribe'
         }
         self.prevalidate(config)
+    
+    def __str__(self):
+        return pformat({
+            'type': self.type,
+            'config': self.config,
+            'status': self.status,
+            'depends_on': self.depends_on,
+            'uuid': self.uuid,
+            'job_id': self.job_id,
+            'year_set': self.year_set
+        })
 
     def get_type(self):
         """

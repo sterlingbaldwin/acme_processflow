@@ -12,6 +12,7 @@ from subprocess import Popen, PIPE
 from time import sleep
 from time import strftime
 from datetime import datetime
+from uuid import uuid4
 
 from globus_cli.commands.login import do_link_login_flow, check_logged_in
 from globus_cli.services.transfer import get_client
@@ -311,7 +312,7 @@ def handle_completed_job(job, job_set, event_list):
         job_set.status = SetStatus.FAILED
         return
 
-    if job.get_type() == 'coupled_diag':
+    if job.get_type() == 'coupled_diags':
         img_dir = 'coupled_diagnostics_{casename}-obs'.format(
             casename=job.config.get('test_casename'))
         img_src = os.path.join(
@@ -319,8 +320,9 @@ def handle_completed_job(job, job_set, event_list):
             img_dir)
         setup_local_hosting(job, event_list, img_src)
     elif job.get_type() == 'amwg':
-        img_dir = 'year_set_{year}{casename}-obs'.format(
-            year=job.config.get('year_set'),
+        img_dir = '{start:04d}-{end:04d}{casename}-obs'.format(
+            start=job.config.get('start_year'),
+            end=job.config.get('end_year'),
             casename=job.config.get('test_casename'))
         img_src = os.path.join(
             job.config.get('test_path_diag'),
@@ -343,7 +345,6 @@ def monitor_job(job, job_set, event=None, debug=False, batch_type='slurm', event
     Monitor the slurm job, and update the status to 'complete' when it finishes
     This function should only be called from within a thread
     """
-    print 'starting {job}'.format(job=job.get_type())
     job.start_time = datetime.now()
     job_id = job.execute(batch='slurm')
 
@@ -451,31 +452,20 @@ def setup_local_hosting(job, event_list, img_src, generate=False):
     Sets up the local directory for hosting diagnostic sets
     """
     msg = 'Setting up local hosting for {}'.format(job.get_type())
+    print msg
     event_list.push(
         message=msg,
         data=job)
-    outter_dir = os.path.join(
-        job.config.get('host_directory'),
-        job.config.get('run_id'))
-    if not os.path.exists(outter_dir):
-        os.makedirs(outter_dir)
-    host_dir = os.path.join(
-        outter_dir,
-        'year_set_{}'.format(str(job.config.get('year_set'))))
+    host_dir = job.config.get('web_dir')
+    if os.path.exists(host_dir):
+        host_dir += '_' + uuid4().hex[:8]
+        
     if not os.path.exists(img_src):
         msg = '{job} hosting failed, no image source at {path}'.format(
             job=job.get_type(),
             path=img_src)
         logging.error(msg)
         return
-    if os.path.exists(host_dir):
-        try:
-            msg = 'removing and replacing previous files from {}'.format(host_dir)
-            logging.info(msg)
-            rmtree(host_dir)
-        except Exception as e:
-            logging.error(format_debug(e))
-            print_debug(e)
     try:
         msg = 'copying images from {src} to {dst}'.format(src=img_src, dst=host_dir)
         logging.info(msg)
@@ -484,25 +474,16 @@ def setup_local_hosting(job, event_list, img_src, generate=False):
         logging.error(format_debug(e))
         msg = 'Error copying {} to host directory'.format(job.get_type())
         event_list.push(
-            message='Error copying coupled_diag to host_location',
+            message=msg,
             data=job)
         return
 
-    if generate:
-        prev_dir = os.getcwd()
-        os.chdir(host_dir)
-        job.generateIndex(output_dir=host_dir)
-        os.chdir(prev_dir)
+    temp = host_dir.split(os.sep)
+    index = temp.index(os.environ['USER']) + 1
+    subprocess.call(['chmod', '-R', '755', os.sep.join(temp[:index])])
 
-    subprocess.call(['chmod', '-R', '755', outter_dir])
-
-    host_location = os.path.join(
-        job.config.get('host_prefix'),
-        job.config.get('run_id'),
-        'year_set_{}'.format(str(job.config.get('year_set'))),
-        'index.html')
     msg = '{job} hosted at {url}'.format(
-        url=host_location,
+        url=job.config.get('host_url'),
         job=job.get_type())
     event_list.push(
         message=msg,

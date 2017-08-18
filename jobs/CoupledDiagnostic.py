@@ -32,12 +32,13 @@ class CoupledDiagnostic(object):
         self.inputs = {
             'mpaso_regions_file': '',
             'web_dir': '',
+            'host_url': '',
             'mpas_am_dir': '',
             'rpt_dir': '',
             'mpas_cice_dir': '',
             'mpas_o_dir': '',
             'streams_dir': '',
-            'host_prefix': '',
+            'host_url_prefix': '',
             'host_directory': '',
             'run_id': '',
             'year_set': '',
@@ -70,7 +71,8 @@ class CoupledDiagnostic(object):
             'output_base_dir': '',
             'run_scripts_path': '',
             'mpas_rst_dir': '',
-            'run_ocean': ''
+            'run_ocean': '',
+            'experiment': ''
         }
         self.slurm_args = {
             'num_cores': '-n 16', # 16 cores
@@ -105,12 +107,13 @@ class CoupledDiagnostic(object):
     def __str__(self):
         return pformat({
             'type': self.type,
+            'config': self.config,
             'status': self.status,
             'depends_on': self.depends_on,
             'uuid': self.uuid,
             'job_id': self.job_id,
             'year_set': self.year_set
-        }, indent=4)
+        })
 
     def get_type(self):
         return self.type
@@ -127,12 +130,6 @@ class CoupledDiagnostic(object):
         self.depends_on = config.get('depends_on')
         self.year_set = config.get('year_set')
         self.status = JobStatus.VALID
-
-        web_dir = outter_dir = os.path.join(
-            self.config.get('host_directory'),
-            self.config.get('run_id'),
-            'year_set_{}'.format(self.year_set))
-        self.config['web_dir'] = web_dir
 
         if not os.path.exists(self.config.get('run_scripts_path')):
             os.makedirs(self.config.get('run_scripts_path'))
