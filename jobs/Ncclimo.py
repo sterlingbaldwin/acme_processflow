@@ -60,7 +60,7 @@ class Climo(object):
             'num_cores': '-n 16', # 16 cores
             'run_time': '-t 0-05:00', # 2 hours run time
             'num_machines': '-N 1', # run on one machine
-            'oversubscribe': '--oversubscribe'
+            # 'oversubscribe': '--oversubscribe'
         }
         self.prevalidate(config)
 
@@ -223,8 +223,8 @@ class Climo(object):
             'status': self.status,
             'depends_on': self.depends_on,
             'uuid': self.uuid,
-            'job_id': self.job_id
-        }, indent=4)
+            'job_id': self.job_id,
+        })
 
     def prevalidate(self, config):
         """

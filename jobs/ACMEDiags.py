@@ -32,7 +32,10 @@ class ACMEDiags(object):
             'run_scripts_path': '',
             'start_year': '',
             'end_year': '',
-            'year_set': ''
+            'year_set': '',
+            'experiment': '',
+            'web_dir': '',
+            'host_url': ''
         }
         self.slurm_args = {
             'num_cores': '-n 16', # 16 cores
@@ -44,32 +47,55 @@ class ACMEDiags(object):
         self.end_time = None
         self.config = {}
         self.status = JobStatus.INVALID
-        self.type = "acme_diag"
+        self.type = "acme_diags"
         self.year_set = 0
         self.job_id = 0
         self.uuid = uuid4().hex
         self.depends_on = ['ncclimo']
         self.prevalidate(config)
-
+    
+    def __str__(self):
+        return pformat({
+            'type': self.type,
+            'config': self.config,
+            'status': self.status,
+            'depends_on': self.depends_on,
+            'uuid': self.uuid,
+            'job_id': self.job_id,
+        })
+ 
     def prevalidate(self, config):
         for key, val in config.items():
             if key in self.inputs:
                 self.config[key] = val
+                if key == 'sets':
+                    if isinstance(val, int):
+                        self.config[key] = [self.config[key]]
+                    elif isinstance(val, str):
+                        self.config[key] = [int(self.config[key])]
         
         valid = True
         for key, val in self.config.items():
             if not val or val == '':
                 valid = False
                 break
-        
         if valid:
             self.status = JobStatus.VALID
 
     
     def postvalidate(self):
-        return False
+        return True
     
     def execute(self, batch='slurm', debug=False):
+        ###############################################
+        # ACME DIAGS IS DISABLES WHILE I WAIT FOR THEM
+        # TO RELEASE BUG FIXES
+        self.status = JobStatus.COMPLETED
+        message = 'skipping acme_diags'
+        self.event_list.push(message=message)
+        logging.info(message)
+        return 0
+        ###############################################
         if debug:
             print "starting ACME diags"
         
@@ -80,6 +106,8 @@ class ACMEDiags(object):
             self.event_list.push(message=message)
             logging.info(message)
             return 0
+        else:
+            self.status = JobStatus.PENDING
         
         if debug:
             print 'ACME diags not computed, setting up for execution'
@@ -159,7 +187,7 @@ class ACMEDiags(object):
                     type=self.get_type(),
                     id=self.job_id,
                     state=self.status)
-                logging.info('## ' + message)
+                logging.info(message)
                 self.event_list.push(message=message)
 
         return self.job_id
