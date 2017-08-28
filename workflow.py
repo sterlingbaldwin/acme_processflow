@@ -39,14 +39,10 @@ from lib.util import *
 # setup argument parser
 parser = argparse.ArgumentParser()
 parser.add_argument('-c', '--config', help='Path to configuration file.')
-parser.add_argument('-v', '--debug', help='Run in debug mode.', action='store_true')
-# parser.add_argument('-d', '--daemon', help='Run in daemon mode.', action='store_true')
 parser.add_argument('-n', '--no-ui', help='Turn off the GUI.', action='store_true')
-parser.add_argument('-r', '--dry-run', help='Do all setup, but dont submit jobs.', action='store_true')
 parser.add_argument('-l', '--log', help='Path to logging output file.')
 parser.add_argument('-u', '--no-cleanup', help='Don\'t perform pre or post run cleanup. This will leave all run scripts in place.', action='store_true')
 parser.add_argument('-m', '--no-monitor', help='Don\'t run the remote monitor or move any files over globus.', action='store_true')
-# parser.add_argument('-V', '--viewer', help='Turn on generation for output_viewer style web pages.', action='store_true')
 parser.add_argument('-s', '--size', help='The maximume size in gigabytes of a single transfer, defaults to 100. Must be larger then the largest single file.')
 
 # check for NCL
@@ -69,17 +65,12 @@ def setup(parser, display_event, **kwargs):
         parser (argparse.ArgumentParser): The parser object
         display_event (Threadding_event): The event to turn the display on and off
     """
-    global debug
     file_list = kwargs.get('file_list')
     file_name_list = kwargs.get('file_name_list')
     job_sets = kwargs.get('job_sets')
 
     all_data = False
     args = parser.parse_args()
-
-    if args.debug:
-        debug = True
-        print_message('Running in debug mode', 'ok')
     
     # check if globus config exists and is valid, if not remove it
     globus_config = os.path.join(os.path.expanduser('~'), '.globus.cfg')
@@ -93,7 +84,11 @@ def setup(parser, display_event, **kwargs):
     if not args.config:
         parser.print_help()
         sys.exit()
-    try:
+    try: 
+        line_index = check_config_white_space(args.config)
+        if line_index != 0:
+            print 'ERROR: line {num} does not have a space after the \'=\', white space is required. Please add a space and run again.'
+            sys.exit(-1)
         config = ConfigObj(args.config)
         set_frequency = config.get('global').get('set_frequency')
         if not isinstance(set_frequency, list):
@@ -250,11 +245,6 @@ def setup(parser, display_event, **kwargs):
         else:
             config['global']['ui'] = True
 
-    if args.dry_run:
-        config['global']['dry_run'] = True
-    else:
-        config['global']['dry_run'] = False
-
     if args.no_cleanup:
         config['global']['no_cleanup'] = True
     else:
@@ -271,13 +261,7 @@ def setup(parser, display_event, **kwargs):
     else:
         config['transfer']['size'] = 100
     
-    # if args.viewer:
-    #     print 'Turning on output_viewer mode'
-    #     config['global']['viewer'] = True
-    # else:
-    #     config['global']['viewer'] = False
-    
-    config['global']['run_id'] = uuid4().hex[:5]
+    config['global']['run_id'] = uuid4().hex[:6]
 
     # setup logging
     if args.log:
@@ -368,7 +352,7 @@ def add_jobs(year_set):
         src_list=climo_file_list,
         dst=climo_temp_dir)
 
-    g_config = config.get('global')
+    global_config = config.get('global')
     # first initialize the climo job
     if not required_jobs['ncclimo']:
         required_jobs['ncclimo'] = True
@@ -436,34 +420,45 @@ def add_jobs(year_set):
         logging.info(msg)
         year_set.add_job(timeseries)
 
-    if not required_jobs['coupled_diag']:
-        required_jobs['coupled_diag'] = True
+    if not required_jobs['coupled_diags']:
+        required_jobs['coupled_diags'] = True
+        coupled_config = config.get('coupled_diags')
+
         coupled_project_dir = os.path.join(
             config.get('global').get('output_path'),
             'coupled_diags',
-            'year_set_' + str(year_set.set_number))
+            '{:04d}-{:04d}'.format(year_set.set_start_year, year_set.set_end_year))
         if not os.path.exists(coupled_project_dir):
             os.makedirs(coupled_project_dir)
-
-        host_prefix = os.path.join(
+        
+        web_directory = os.path.join(
+            config.get('global').get('host_directory'),
+            os.environ['USER'],
+            config.get('global').get('experiment'),
+            config.get('coupled_diags').get('host_directory'),
+            '{:04d}-{:04d}'.format(year_set.set_start_year, year_set.set_end_year))
+        host_url = '/'.join([
             config.get('global').get('img_host_server'),
-            config.get('coupled_diags').get('host_prefix'))
+            os.environ['USER'],
+            config.get('global').get('experiment'),
+            config.get('coupled_diags').get('host_url_prefix'),
+            '{:04d}-{:04d}'.format(year_set.set_start_year, year_set.set_end_year)])
 
-        c_config = config.get('coupled_diags')
-        coupled_diag_config = {
-            'rpt_dir': g_config.get('rpt_dir'),
-            'run_ocean': c_config.get('run_ocean', False),
-            'mpaso_regions_file': c_config.get('mpaso_regions_file'),
+        coupled_diaglobal_config = {
+            'web_dir': web_directory,
+            'host_url': host_url,
+            'experiment': config.get('global').get('experiment'),
+            'rpt_dir': global_config.get('rpt_dir'),
+            'run_ocean': coupled_config.get('run_ocean', False),
+            'mpaso_regions_file': coupled_config.get('mpaso_regions_file'),
             'run_scripts_path': config.get('global').get('run_scripts_path'),
             'output_base_dir': coupled_project_dir,
-            'mpas_am_dir': g_config.get('mpas_dir'),
-            'mpas_cice_dir': g_config.get('mpas_cice_dir'),
-            'mpas_cice_in_dir': g_config.get('mpas_cice-in_dir'),
-            'mpas_o_dir': g_config.get('mpas_o-in_dir'),
-            'mpas_rst_dir': g_config.get('mpas_rst_dir'),
-            'streams_dir': g_config.get('streams_dir'),
-            'host_prefix': host_prefix,
-            'host_directory': c_config.get('host_directory'),
+            'mpas_am_dir': global_config.get('mpas_dir'),
+            'mpas_cice_dir': global_config.get('mpas_cice_dir'),
+            'mpas_cice_in_dir': global_config.get('mpas_cice-in_dir'),
+            'mpas_o_dir': global_config.get('mpas_o-in_dir'),
+            'mpas_rst_dir': global_config.get('mpas_rst_dir'),
+            'streams_dir': global_config.get('streams_dir'),
             'run_id': config.get('global').get('run_id'),
             'dataset_name': dataset_name,
             'year_set': year_set.set_number,
@@ -473,32 +468,32 @@ def add_jobs(year_set):
             'end_year': year_set.set_end_year,
             'nco_path': config.get('ncclimo').get('ncclimo_path'),
             'coupled_project_dir': coupled_project_dir,
-            'test_casename': g_config.get('experiment'),
-            'test_native_res': c_config.get('test_native_res'),
+            'test_casename': global_config.get('experiment'),
+            'test_native_res': coupled_config.get('test_native_res'),
             'test_archive_dir': diag_temp_dir,
             'test_begin_yr_climo': year_set.set_start_year,
             'test_end_yr_climo': year_set.set_end_year,
             'test_begin_yr_ts': year_set.set_start_year,
             'test_end_yr_ts': year_set.set_end_year,
-            'ref_case': c_config.get('ref_case'),
-            'ref_archive_dir': c_config.get('ref_archive_dir'),
-            'mpas_meshfile': c_config.get('mpas_meshfile'),
-            'mpas_remapfile': c_config.get('mpas_remapfile'),
-            'pop_remapfile': c_config.get('pop_remapfile'),
-            'remap_files_dir': c_config.get('remap_files_dir'),
-            'GPCP_regrid_wgt_file': c_config.get('gpcp_regrid_wgt_file'),
-            'CERES_EBAF_regrid_wgt_file': c_config.get('ceres_ebaf_regrid_wgt_file'),
-            'ERS_regrid_wgt_file': c_config.get('ers_regrid_wgt_file'),
-            'coupled_diags_home': c_config.get('coupled_diags_home'),
+            'ref_case': coupled_config.get('ref_case'),
+            'ref_archive_dir': coupled_config.get('ref_archive_dir'),
+            'mpas_meshfile': coupled_config.get('mpas_meshfile'),
+            'mpas_remapfile': coupled_config.get('mpas_remapfile'),
+            'pop_remapfile': coupled_config.get('pop_remapfile'),
+            'remap_files_dir': coupled_config.get('remap_files_dir'),
+            'GPCP_regrid_wgt_file': coupled_config.get('gpcp_regrid_wgt_file'),
+            'CERES_EBAF_regrid_wgt_file': coupled_config.get('ceres_ebaf_regrid_wgt_file'),
+            'ERS_regrid_wgt_file': coupled_config.get('ers_regrid_wgt_file'),
+            'coupled_diags_home': coupled_config.get('coupled_diags_home'),
             'coupled_template_path': os.path.join(os.path.abspath(os.path.dirname(__file__)), 'resources', 'run_AIMS_template.csh'),
             'rendered_output_path': os.path.join(coupled_project_dir, 'run_AIMS.csh'),
-            'obs_ocndir': c_config.get('obs_ocndir'),
-            'obs_seaicedir': c_config.get('obs_seaicedir'),
-            'obs_sstdir': c_config.get('obs_sstdir'),
-            'depends_on': [], # 'climo'
-            'yr_offset': c_config.get('yr_offset')
+            'obs_ocndir': coupled_config.get('obs_ocndir'),
+            'obs_seaicedir': coupled_config.get('obs_seaicedir'),
+            'obs_sstdir': coupled_config.get('obs_sstdir'),
+            'depends_on': [],
+            'yr_offset': coupled_config.get('yr_offset')
         }
-        coupled_diag = CoupledDiagnostic(coupled_diag_config, event_list)
+        coupled_diag = CoupledDiagnostic(coupled_diaglobal_config, event_list)
         msg = 'Adding CoupledDiagnostic job to the job list: {}'.format(str(coupled_diag))
         logging.info(msg)
         year_set.add_job(coupled_diag)
@@ -507,28 +502,40 @@ def add_jobs(year_set):
         required_jobs['amwg'] = True
         amwg_project_dir = os.path.join(
             config.get('global').get('output_path'),
-            'amwg_diags',
-            'year_set_{}'.format(year_set.set_number))
+            'amwg',
+            '{:04d}-{:04d}'.format(year_set.set_start_year, year_set.set_end_year))
         if not os.path.exists(amwg_project_dir):
             os.makedirs(amwg_project_dir)
-
-        host_prefix ='{server}/{prefix}'.format(
-            server=config.get('global').get('img_host_server', 'https://acme-viewer.llnl.gov'),
-            prefix=config.get('amwg').get('host_prefix'))
 
         amwg_temp_dir = os.path.join(config['global']['tmp_path'], 'amwg', year_set_str)
         if not os.path.exists(diag_temp_dir):
             os.makedirs(diag_temp_dir)
         template_path = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'resources', 'amwg_template.csh')
+
+        web_directory = os.path.join(
+            config.get('global').get('host_directory'),
+            os.environ['USER'],
+            config.get('global').get('experiment'),
+            config.get('amwg').get('host_directory'),
+            '{:04d}-{:04d}'.format(year_set.set_start_year, year_set.set_end_year))
+        host_url = '/'.join([
+            config.get('global').get('img_host_server'),
+            os.environ['USER'],
+            config.get('global').get('experiment'),
+            config.get('amwg').get('host_url_prefix'),
+            '{:04d}-{:04d}'.format(year_set.set_start_year, year_set.set_end_year)])
+
         amwg_config = {
+            'web_dir': web_directory,
+            'host_url': host_url,
+            'experiment': config.get('global').get('experiment'),
             'run_scripts_path': config.get('global').get('run_scripts_path'),
             'run_id': config.get('global').get('run_id'),
             'host_directory': config.get('amwg').get('host_directory'),
-            'host_prefix': host_prefix,
             'dataset_name': dataset_name,
             'diag_home': config.get('amwg').get('diag_home'),
             'test_path': amwg_project_dir + os.sep,
-            'test_casename': g_config.get('experiment'),
+            'test_casename': global_config.get('experiment'),
             'test_path_history': climo_temp_dir + os.sep,
             'regrided_climo_path': regrid_output_dir,
             'test_path_climo': amwg_temp_dir,
@@ -541,7 +548,7 @@ def add_jobs(year_set):
             'depends_on': ['ncclimo']
         }
         amwg_diag = AMWGDiagnostic(amwg_config, event_list)
-        msg = 'Adding AMWGDiagnostic job to the job list: {}'.format(str(amwg_config))
+        msg = 'Adding AMWGDiagnostic job to the job list: {}'.format(str(amwg_diag))
         logging.info(msg)
         year_set.add_job(amwg_diag)
     
@@ -557,7 +564,7 @@ def add_jobs(year_set):
         
         host_prefix = '{server}/{prefix}'.format(
             server=config.get('global').get('img_host_server', 'https://acme-viewer.llnl.gov'),
-            prefix=config.get('acme_diag').get('host_prefix'))
+            prefix=config.get('acme_diags').get('host_url_prefix'))
         
         acme_diags_temp_dir = os.path.join(
             config.get('global').get('tmp_path'),
@@ -567,8 +574,25 @@ def add_jobs(year_set):
         if not os.path.exists(acme_diags_temp_dir):
             os.makedirs(acme_diags_temp_dir)
         template_path = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'resources', 'acme_diags_template.py')
-        acme_config = config.get('acme_diag')
+        acme_config = config.get('acme_diags')
+
+        web_directory = os.path.join(
+            config.get('global').get('host_directory'),
+            os.environ['USER'],
+            config.get('global').get('experiment'),
+            config.get('acme_diags').get('host_directory'),
+            '{:04d}-{:04d}'.format(year_set.set_start_year, year_set.set_end_year))
+        host_url = '/'.join([
+            config.get('global').get('img_host_server'),
+            os.environ['USER'],
+            config.get('global').get('experiment'),
+            config.get('acme_diags').get('host_url_prefix'),
+            '{:04d}-{:04d}'.format(year_set.set_start_year, year_set.set_end_year)])
+
         acme_diags_config = {
+            'web_dir': web_directory,
+            'host_url': host_url,
+            'experiment': config.get('global').get('experiment'),
             'regrided_climo_path': regrid_output_dir,
             'reference_data_path': acme_config.get('reference_data_path'),
             'test_data_path': acme_diags_temp_dir,
@@ -683,7 +707,7 @@ def monitor_check(monitor, config, file_list, event_list, display_event):
     #sys.exit()
 
     t_config = config.get('transfer')
-    g_config = config.get('global')
+    global_config = config.get('global')
     m_config = config.get('monitor')
 
     transfer_config = {
@@ -691,8 +715,8 @@ def monitor_check(monitor, config, file_list, event_list, display_event):
         'file_list': checked_new_files,
         'source_endpoint': t_config.get('source_endpoint'),
         'destination_endpoint': t_config.get('destination_endpoint'),
-        'source_path': g_config.get('source_path'),
-        'destination_path': g_config.get('data_cache_path') + '/',
+        'source_path': global_config.get('source_path'),
+        'destination_path': global_config.get('data_cache_path') + '/',
         'recursive': 'False',
         'pattern': config.get('global').get('patterns'),
         'ncclimo_path': config.get('ncclimo').get('ncclimo_path'),
@@ -1411,7 +1435,7 @@ if __name__ == "__main__":
                         if config['global']['set_jobs'].get('coupled_diag') \
                            or config['global']['set_jobs'].get('amwg') \
                            or config['global']['set_jobs'].get('acme_diag'):
-                            diag_msg = 'Your diagnostics can be found here:'
+                            diag_msg = 'Your diagnostics can be found here:\n'
                             for evt in event_list.list:
                                 if 'hosted' in evt.message:
                                     diag_msg += evt.message + '\n'

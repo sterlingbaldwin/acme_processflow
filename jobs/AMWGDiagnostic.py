@@ -41,20 +41,15 @@ class AMWGDiagnostic(object):
             test_path_history: path to the directory holding your history files
             test_path_climo: path to directory holding climo files
             test_path_diag: the output path for the diagnostics to go
-            control: what type to use for the control set, either OBS for observations, or USER for another model
-                the following are only set with control==USER
-                cntl_casename: the case_name of the control case
-                cntl_filetype: either monthly_history or time_series
-                cntl_path_history: path to the control history file
-                cntl_path_climo: path to the control climo files
+
         """
         self.event_list = event_list
         self.status = JobStatus.INVALID
         self.start_time = None
         self.end_time = None
         self.inputs = {
-            'host_directory': '',
-            'host_prefix': '',
+            'web_dir': '',
+            'host_url': '',
             'run_id': '',
             'diag_home': '',
             'test_casename': '',
@@ -70,7 +65,8 @@ class AMWGDiagnostic(object):
             'run_directory': '',
             'template_path': '',
             'dataset_name': '',
-            'run_scripts_path': ''
+            'run_scripts_path': '',
+            'experiment': ''
         }
         self.type = 'amwg'
         self.outputs = {}
@@ -85,6 +81,16 @@ class AMWGDiagnostic(object):
             'oversubscribe': '--oversubscribe'
         }
         self.prevalidate(config)
+    
+    def __str__(self):
+        return pformat({
+            'type': self.type,
+            'config': self.config,
+            'status': self.status,
+            'depends_on': self.depends_on,
+            'uuid': self.uuid,
+            'job_id': self.job_id,
+        })
 
     def get_type(self):
         """
@@ -203,9 +209,10 @@ class AMWGDiagnostic(object):
             self.config.get('test_path_diag').split(os.sep)[:-1])
         year_set = 'year_set_{0}'.format(
             self.config.get('year_set'))
-        web_dir = '{base}/{year_set}{casename}-obs'.format(
+        web_dir = '{base}/{start:04d}-{end:04d}{casename}-obs'.format(
             base=base,
-            year_set=year_set,
+            start=self.config.get('start_year'),
+            end=self.config.get('end_year'),
             casename=self.config.get('test_casename'))
         if os.path.exists(web_dir):
             all_files = []
@@ -219,8 +226,6 @@ class AMWGDiagnostic(object):
         """
         Perform the actual work
         """
-        if debug:
-            print "starting amwg job"
         # First check if the job has already been completed
         if self.postvalidate():
             self.status = JobStatus.COMPLETED
@@ -228,9 +233,9 @@ class AMWGDiagnostic(object):
             self.event_list.push(message=message)
             logging.info(message)
             return 0
-        if debug:
-            print 'amwg not done yet, setting up for computing'
-            print pformat(self.config)
+        else:
+            self.status = JobStatus.PENDING
+
         self.start_time = datetime.now()
         # setup the output directory
         run_dir = self.config.get('run_directory')
@@ -317,7 +322,7 @@ class AMWGDiagnostic(object):
                     type=self.get_type(),
                     id=self.job_id,
                     state=self.status)
-                logging.info('## ' + message)
+                logging.info(message)
                 self.event_list.push(message=message)
 
         return self.job_id
