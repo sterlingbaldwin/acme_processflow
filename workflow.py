@@ -599,23 +599,24 @@ def monitor_check(monitor, config, file_list, event_list, display_event):
     spawn the jobs for that set.
 
     inputs:
-        monitor: a monitor object setup with a remote directory and an SSH session
+        monitor: a monitor object setup with a remote directory and an globus session
     """
     global job_sets
     global active_transfers
     global transfer_list
-    # if there are already three or more transfers in progress
-    # hold off on starting any new ones until they complete
+
     if active_transfers >= 2:
         return
     event_list.push(message="Running check for remote files")
-    monitor.check()
+    status, msg = monitor.check()
+    if not status:
+        event_list.push(message=msg)
+        return
     new_files = monitor.new_files
     patterns = config.get('global').get('patterns')
     for file_info in new_files:
         for folder, file_type in patterns.items():
             if re.search(pattern=file_type, string=file_info['filename']):
-            # if file_type in file_info['filename']:
                 file_info['type'] = folder
                 break
 
