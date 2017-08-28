@@ -32,21 +32,11 @@ class Monitor(object):
             dst (str): An email address destination for prompts
             event_list (Event_list): A list of events for pushing updates into
             display_event (Threadding_event): A Threadding_event to turn off the display for user prompts
+            client (globus client): The globus client to use for file transfers
         """
         self.source_endpoint = kwargs.get('source_endpoint')
-        if not self.source_endpoint:
-            return None
         self.remote_dir = kwargs.get('remote_dir')
-        if not self.remote_dir:
-            return None
-        self.patterns = []
-        for pattern in kwargs.get('patterns'):
-            pattern = pattern.replace('YYYY', '[0-9][0-9][0-9][0-9]')
-            pattern = pattern.replace('MM', '[0-9][0-9]')
-            pattern = pattern.replace('DD', '[0-9][0-9]')
-            self.patterns.append(pattern)
-        if not self.patterns:
-            return None
+        self.patterns = kwargs.get('patterns')
         self.no_ui = kwargs.get('no_ui', False)
         self.src = kwargs.get('src')
         self.dst = kwargs.get('dst')
@@ -86,25 +76,18 @@ class Monitor(object):
         else:
             return (True, result['message'])
 
-    @property
-    def known_files(self):
-        return self._known_files
-
-    @known_files.setter
-    def known_files(self, files):
-        self._known_files = files
-
     def check(self):
         """
         Checks to remote_dir for any files that arent in the known files list
         """
         status, message = self.connect()
         if not status:
-            logging.error('Unable to connect to globus endpoint: %s', message)
-            return False
+            msg = 'Unable to connect to globus endpoint: {}'.format(message)
+            logging.error(msg)
+            return False, msg
         self.new_files = []
         fail_count = 0
-        while True:
+        while fail_count < 10:
             try:
                 res = get_ls(
                     self.client,
@@ -113,23 +96,31 @@ class Monitor(object):
                     False, 0, False)
             except:
                 fail_count += 1
-                if fail_count > 10:
-                    logging.error('Unable to get remote directory contents after 10 tries')
-                    return False
-                sleep(2)
+                if fail_count >= 10:
+                    msg = 'Unable to get remote directory contents after 10 tries'
+                    logging.error(msg)
+                    return False, msg
             else:
                 break
-        for f in res:
-            for p in self.patterns:
-                if not re.search(pattern=p, string=f['name']):
+        for file_info in res:
+            for pattern in self.patterns:
+                if not re.search(pattern=pattern, string=file_info['name']):
                     continue
-                new_file = {
-                    'filename': f['name'],
-                    'date': f['last_modified'],
-                    'size': f['size']
-                }
-                self.new_files.append(new_file)
+                self.new_files.append({
+                    'filename': file_info['name'],
+                    'date': file_info['last_modified'],
+                    'size': file_info['size']})
                 break
+        return True, 'success'
+
+    @property
+    def known_files(self):
+        return self._known_files
+
+    @known_files.setter
+    def known_files(self, files):
+        self._known_files = files
+
     @property
     def new_files(self):
         return self._new_files
