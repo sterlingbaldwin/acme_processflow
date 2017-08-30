@@ -17,6 +17,7 @@ def setup(parser, display_event, **kwargs):
         parser (argparse.ArgumentParser): The parser object
         display_event (Threadding_event): The event to turn the display on and off
     """
+    file_type_map = kwargs['file_type_map']
 
     # Setup the parser
     args = parser.parse_args() 
@@ -86,16 +87,6 @@ def setup(parser, display_event, **kwargs):
     for freq in set_frequency:
         new_freqs.append(int(freq))
     set_frequency = new_freqs
-    
-    file_type_map = {
-        'MPAS_AM': ('mpas_dir', 1),
-        'MPAS_CICE': ('mpas_cice_dir', 1),
-        'ATM': ('atm_dir', 1),
-        'MPAS_RST': ('mpas_rst_dir', 0),
-        'MPAS_O_IN': ('mpas_o-in_dir', 0),
-        'MPAS_CICE_IN': ('mpas_cice-in_dir', 0),
-        'STREAMS': ('streams_dir', 0)
-    }
 
     # setup config for file type directories
     for key, val in config['global']['patterns'].items():
@@ -155,6 +146,7 @@ def setup(parser, display_event, **kwargs):
     event_list.push(message=line)
     file_list = setup_file_list(
         file_list=file_list,
+        file_name_list=file_name_list,
         patterns=config['global']['patterns'],
         sim_start_year=sim_start_year,
         sim_end_year=sim_end_year,
@@ -164,7 +156,8 @@ def setup(parser, display_event, **kwargs):
     all_data = check_for_inplace_data(
         file_list=kwargs.get('file_list'),
         file_name_list=kwargs.get('file_name_list'),
-        config=config)
+        config=config,
+        file_type_map=file_type_map)
 
     if all_data:
         print "All data is present, skipping globus setup"
@@ -209,23 +202,32 @@ def setup(parser, display_event, **kwargs):
     
     return config
 
-def setup_file_list(file_list, patterns, sim_start_year, sim_end_year, file_type_map):
+def setup_file_list(**kwargs):
+    file_list = kwargs['file_list']
+    file_name_list = kwargs['file_name_list']
+    patterns = kwargs['patterns']
+    sim_start_year = kwargs['sim_start_year']
+    sim_end_year = kwargs['sim_end_year']
+    file_type_map = kwargs['file_type_map']
+
     for key, val in patterns.items():
-    file_list[key] = {}
-    file_name_list[key] = {}
-    if key in file_type_map:
-        if file_type_map[key][1]:
-            for year in range(sim_start_year, sim_end_year + 1):
-                for month in range(1, 13):
-                    file_key = str(year) + '-' + str(month)
-                    file_list[key][file_key] = SetStatus.NO_DATA
-                    file_name_list[key][file_key] = ''
-        else:
-            file_list[key][file_type_map[key]] = SetStatus.NO_DATA
+        file_list[key] = {}
+        file_name_list[key] = {}
+        if key in file_type_map:
+            if file_type_map[key][1]:
+                for year in range(sim_start_year, sim_end_year + 1):
+                    for month in range(1, 13):
+                        file_key = str(year) + '-' + str(month)
+                        file_list[key][file_key] = SetStatus.NO_DATA
+                        file_name_list[key][file_key] = ''
+            else:
+                if file_type_map[key][2]:
+                    file_list[key][file_type_map[key][2]] = SetStatus.NO_DATA
 
-    file_list[key]['rpointer.ocn'] = SetStatus.NO_DATA
-    file_list[key]['rpointer.atm'] = SetStatus.NO_DATA
-    file_list[key]['streams.ocean'] = SetStatus.NO_DATA
-    file_list[key]['streams.cice'] = SetStatus.NO_DATA
+    file_list['RPT']['rpointer.ocn'] = SetStatus.NO_DATA
+    file_list['RPT']['rpointer.atm'] = SetStatus.NO_DATA
+    file_list['STREAMS']['streams.ocean'] = SetStatus.NO_DATA
+    file_list['STREAMS']['streams.cice'] = SetStatus.NO_DATA
 
+    from pprint import pformat
     return file_list

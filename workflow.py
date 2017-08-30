@@ -55,6 +55,18 @@ if not os.environ.get('NCARG_ROOT'):
 # create global Event_list
 event_list = Event_list()
 
+# Map for keeping track of file types
+file_type_map = {
+    'MPAS_AM': ('mpas_dir', 1, None),
+    'MPAS_CICE': ('mpas_cice_dir', 1, None),
+    'ATM': ('atm_dir', 1, None),
+    'MPAS_RST': ('mpas_rst_dir', 0, 'mpaso.rst.0003-01-01_00000.nc'),
+    'MPAS_O_IN': ('mpas_o-in_dir', 0, 'mpas-o_in'),
+    'MPAS_CICE_IN': ('mpas_cice-in_dir', 0, 'mpas-cice_in'),
+    'STREAMS': ('streams_dir', 0, None),
+    'RPT': ('rpt_dir', 0, None)
+}
+
 def add_jobs(year_set):
     """
     Initializes and adds all the jobs to the year_set
@@ -970,7 +982,8 @@ if __name__ == "__main__":
         file_list=file_list,
         file_name_list=file_name_list,
         job_sets=job_sets,
-        event_list=event_list) 
+        event_list=event_list,
+        file_type_map=file_type_map) 
     
     # for section in config:
     #     print section
@@ -1062,7 +1075,8 @@ if __name__ == "__main__":
     all_data = check_for_inplace_data(
         file_list=file_list,
         file_name_list=file_name_list,
-        config=config)
+        config=config,
+        file_type_map=file_type_map)
     check_year_sets(
         job_sets=job_sets,
         file_list=file_list,
@@ -1176,7 +1190,8 @@ if __name__ == "__main__":
             all_data = check_for_inplace_data(
                 file_list=file_list,
                 file_name_list=file_name_list,
-                config=config)
+                config=config,
+                file_type_map=file_type_map)
             check_year_sets(
                 job_sets=job_sets,
                 file_list=file_list,
@@ -1224,9 +1239,8 @@ if __name__ == "__main__":
                 event_list.push(message=message)
                 sleep(5)
                 display_event.set()
-                sleep(2)
                 print_message(message, 'ok')
-                logging.info("## All processes complete")
+                logging.info("All processes complete")
                 sys.exit(0)
             sleep(10)
             loop_count += 1

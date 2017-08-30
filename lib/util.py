@@ -496,25 +496,25 @@ def setup_local_hosting(job, event_list, img_src, generate=False):
         message=msg,
         data=job)
 
-def check_for_inplace_data(file_list, file_name_list, config):
+def check_for_inplace_data(file_list, file_name_list, config, file_type_map):
     """
     Checks the data cache for any files that might alread   y be in place,
     updates the file_list and job_sets accordingly
     """
-    cache_path = config.get('global').get('data_cache_path')
-    sim_end_year = int(config.get('global').get('simulation_end_year'))
+    cache_path = config['global']['data_cache_path']
+    sim_end_year = int(config['global']['simulation_end_year'])
     if not os.path.exists(cache_path):
         os.makedirs(cache_path)
         return False
     
-    patterns = config.get('global').get('patterns')
+    patterns = config['global']['patterns']
     input_dirs = [os.path.join(cache_path, key) for key, val in patterns.items()]
     for input_dir in input_dirs:
         file_type = input_dir.split(os.sep)[-1]
         for input_file in os.listdir(input_dir):
             input_file_path = os.path.join(input_dir, input_file)
             file_key = ""
-            if file_type in ['ATM', 'MPAS_AM', 'MPAS_CICE', 'MPAS_RST']:
+            if file_type_map[file_type][1]:
                 file_key = filename_to_file_list_key(filename=input_file)
                 index = file_key.find('-')
                 year = int(file_key[:index])
@@ -522,29 +522,14 @@ def check_for_inplace_data(file_list, file_name_list, config):
                     continue
                 if not file_list[file_type][file_key] == SetStatus.IN_TRANSIT:
                     file_list[file_type][file_key] = SetStatus.DATA_READY
-            elif file_type == 'MPAS_CICE_IN':
-                file_key = 'mpas-cice_in'
-                if os.path.exists(os.path.join(input_dir, input_file)) and \
-                   not file_list[file_type][file_key] == SetStatus.IN_TRANSIT:
-                    file_list[file_type][file_key] = SetStatus.DATA_READY
-            elif file_type == 'MPAS_O_IN':
-                file_key = 'mpas-o_in'
-                if os.path.exists(os.path.join(input_dir, input_file)) and \
-                   not file_list[file_type][file_key] == SetStatus.IN_TRANSIT:
-                    file_list[file_type][file_key] = SetStatus.DATA_READY
-            elif file_type == 'STREAMS':
-                for file_key in ['streams.cice', 'streams.ocean']:
-                    file_name_list[file_type][file_key] = input_file
-                    if os.path.exists(os.path.join(input_dir, input_file)) and \
-                       not file_list[file_type][file_key] == SetStatus.IN_TRANSIT:
-                        file_list[file_type][file_key] = SetStatus.DATA_READY
-            elif file_type == 'RPT':
-                for file_key in ['rpointer.ocn', 'rpointer.atm']:
-                    file_name_list[file_type][file_key] = input_file
-                    if os.path.exists(os.path.join(input_dir, input_file)) and \
-                       not file_list[file_type][file_key] == SetStatus.IN_TRANSIT:
-                        file_list[file_type][file_key] = SetStatus.DATA_READY
-            file_name_list[file_type][file_key] = input_file
+                file_name_list[file_type][file_key] = input_file
+            else:
+                for file_key in file_list[file_type]:
+                    if file_key == input_file:
+                        if os.path.exists(os.path.join(input_dir, input_file)) and \
+                        not file_list[file_type][file_key] == SetStatus.IN_TRANSIT:
+                            file_list[file_type][file_key] = SetStatus.DATA_READY
+                        file_name_list[file_type][file_key] = input_file
 
     for key, val in patterns.items():
         for file_key in file_list[key]:
