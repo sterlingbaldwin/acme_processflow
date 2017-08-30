@@ -25,14 +25,21 @@ from string import Formatter
 
 def check_config_white_space(filepath):
     line_index = 0
+    found = False
     with open(filepath, 'r') as infile:
-        for line in infile.readline():
+        for line in infile.readlines():
+            line_index += 1
             index = line.find('=')
             if index == -1:
+                found = False
                 continue
             if line[index + 1] != ' ':
+                found = True
                 break
-    return line_index
+    if found:
+        return line_index
+    else:
+        return 0
 
 def strfdelta(tdelta, fmt):
     f = Formatter()

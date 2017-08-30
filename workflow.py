@@ -19,7 +19,6 @@ from time import sleep
 from uuid import uuid4
 from pprint import pformat
 from datetime import datetime
-from configobj import ConfigObj
 from jobs.Transfer import Transfer
 from jobs.Ncclimo import Climo
 from jobs.Timeseries import Timeseries
@@ -29,11 +28,10 @@ from jobs.ACMEDiags import ACMEDiags
 from jobs.JobStatus import JobStatus
 
 from lib.Monitor import Monitor
-from lib.YearSet import YearSet
-from lib.YearSet import SetStatus
+from lib.YearSet import YearSet, SetStatus
 from lib.mailer import Mailer
-from lib.events import Event
-from lib.events import Event_list
+from lib.events import Event, Event_list
+from lib.setup import setup
 from lib.util import *
 
 # setup argument parser
@@ -56,234 +54,6 @@ if not os.environ.get('NCARG_ROOT'):
 
 # create global Event_list
 event_list = Event_list()
-
-def setup(parser, display_event, **kwargs):
-    """
-    Parse the commandline arguments, and setup the master config dict
-
-    Parameters:
-        parser (argparse.ArgumentParser): The parser object
-        display_event (Threadding_event): The event to turn the display on and off
-    """
-    file_list = kwargs.get('file_list')
-    file_name_list = kwargs.get('file_name_list')
-    job_sets = kwargs.get('job_sets')
-
-    all_data = False
-    args = parser.parse_args()
-    
-    # check if globus config exists and is valid, if not remove it
-    globus_config = os.path.join(os.path.expanduser('~'), '.globus.cfg')
-    if os.path.exists(globus_config):
-        try:
-            conf = ConfigObj(globus_config)
-        except:
-            os.remove(globus_config)
-
-    # read through the config file and setup the config dict
-    if not args.config:
-        parser.print_help()
-        sys.exit()
-    try: 
-        line_index = check_config_white_space(args.config)
-        if line_index != 0:
-            print 'ERROR: line {num} does not have a space after the \'=\', white space is required. Please add a space and run again.'
-            sys.exit(-1)
-        config = ConfigObj(args.config)
-        set_frequency = config.get('global').get('set_frequency')
-        if not isinstance(set_frequency, list):
-            config['global']['set_frequency'] = [int(set_frequency)]
-        new_freqs = []
-        for freq in set_frequency:
-            if not isinstance(freq, int):
-                new_freqs.append(int(freq))
-            else:
-                new_freqs.append(freq)
-        set_frequency = new_freqs
-    except Exception as e:
-        print_debug(e)
-        print "Error parsing config file {}".format(args.config)
-        parser.print_help()
-        sys.exit()
-    
-    # setup config for file type directories
-    for key, val in config.get('global').get('patterns').items():
-        new_dir = os.path.join(
-            config['global']['data_cache_path'],
-            key)
-        if not os.path.exists(new_dir):
-            os.makedirs(new_dir)
-        if key == 'MPAS_AM':
-            config['global']['mpas_dir'] = new_dir
-        elif key == 'MPAS_CICE':
-            config['global']['mpas_cice_dir'] = new_dir
-        elif key == 'ATM':
-            config['global']['atm_dir'] = new_dir
-        elif key == 'MPAS_RST':
-            config['global']['mpas_rst_dir'] = new_dir
-        elif key == 'RPT':
-            config['global']['rpt_dir'] = new_dir
-        elif key == 'MPAS_O_IN':
-            config['global']['mpas_o-in_dir'] = new_dir
-        elif key == 'MPAS_CICE_IN':
-            config['global']['mpas_cice-in_dir'] = new_dir
-        elif key == 'STREAMS':
-            config['global']['streams_dir'] = new_dir
-        else:
-            if not config.get('global').get('other_data'):
-                config['global']['other_data'] = []
-            config['global']['other_data'].append(new_dir)
-
-    if not os.path.exists(config['global']['output_path']):
-        os.makedirs(config['global']['output_path'])
-    if not os.path.exists(config['global']['data_cache_path']):
-        os.makedirs(config['global']['data_cache_path'])
-
-    # setup run_scipts_path
-    config['global']['run_scripts_path'] = os.path.join(
-        config['global']['output_path'],
-        'run_scripts')
-
-    # setup tmp_path
-    config['global']['tmp_path'] = os.path.join(
-        config['global']['output_path'],
-        'tmp')
-    
-    # compute number of expected year_sets
-    sim_start_year = int(config.get('global').get('simulation_start_year'))
-    sim_end_year = int(config.get('global').get('simulation_end_year'))
-    number_of_sim_years = sim_end_year - (sim_start_year - 1)
-    frequencies = config.get('global').get('set_frequency')
-    line = 'Initializing year sets'
-    event_list.push(message=line)
-    for freq in frequencies:
-        freq = int(freq)
-        year_set = number_of_sim_years / freq
-
-        # initialize the job_sets dict
-        for i in range(1, year_set + 1):
-            set_start_year = sim_start_year + ((i - 1) * freq)
-            set_end_year = set_start_year + freq - 1
-            new_set = YearSet(
-                set_number=len(job_sets) + 1,
-                start_year=set_start_year,
-                end_year=set_end_year)
-            job_sets.append(new_set)
-    
-
-    # initialize the file_list
-    line = 'Initializing file list'
-    event_list.push(message=line)
-    for key, val in config.get('global').get('patterns').items():
-        file_list[key] = {}
-        file_name_list[key] = {}
-        if key in ['ATM', 'MPAS_AM', 'MPAS_CICE']:
-            for year in range(sim_start_year, sim_end_year + 1):
-                for month in range(1, 13):
-                    file_key = str(year) + '-' + str(month)
-                    file_list[key][file_key] = SetStatus.NO_DATA
-                    file_name_list[key][file_key] = ''
-        elif key == 'MPAS_CICE_IN':
-            file_list[key]['mpas-cice_in'] = SetStatus.NO_DATA
-        elif key == 'MPAS_O_IN':
-            file_list[key]['mpas-o_in'] = SetStatus.NO_DATA
-        elif key == 'RPT':
-            file_list[key]['rpointer.ocn'] = SetStatus.NO_DATA
-            file_list[key]['rpointer.atm'] = SetStatus.NO_DATA
-        elif key == 'MPAS_RST':
-            for year in range(2, number_of_sim_years + 1):
-                file_key = '{year}-1'.format(year=year)
-                file_list[key][file_key] = SetStatus.NO_DATA
-        elif key == 'STREAMS':
-            file_list[key]['streams.ocean'] = SetStatus.NO_DATA
-            file_list[key]['streams.cice'] = SetStatus.NO_DATA
-    
-    if not file_list is None and \
-       not file_name_list is None:
-        all_data = check_for_inplace_data(
-            file_list=kwargs.get('file_list'),
-            file_name_list=kwargs.get('file_name_list'),
-            config=config)
-
-    if not all_data:
-        endpoints = [endpoint for endpoint in config['transfer'].values()]
-        if args.no_ui:
-            print 'Running in no-ui mode'
-            config['global']['ui'] = False
-            addr = config.get('global').get('email')
-            if not addr:
-                print 'When running in no-ui mode, you must enter an email address.'
-                sys.exit()
-            setup_globus(
-                endpoints=endpoints,
-                no_ui=True,
-                src=config.get('global').get('email'),
-                dst=config.get('global').get('email'),
-                event_list=event_list)
-        else:
-            output_path = config.get('global').get('output_path')
-            error_output = os.path.join(
-                output_path,
-                'workflow.error')
-            if not os.path.exists(output_path):
-                os.makedirs(output_path)
-            sys.stderr = open(error_output, 'w')
-            config['global']['ui'] = True
-            msg = '## activating endpoints {}'.format(' '.join(endpoints))
-            logging.info(msg)
-            if not setup_globus(
-                endpoints=endpoints,
-                display_event=display_event,
-                no_ui=False):
-                print "Globus setup error"
-                return -1
-            print 'Globus setup complete'
-    else:
-        print "All data is present, skipping globus setup"
-        if args.no_ui:
-            config['global']['ui'] = False
-        else:
-            config['global']['ui'] = True
-
-    if args.no_cleanup:
-        config['global']['no_cleanup'] = True
-    else:
-        config['global']['no_cleanup'] = False
-
-    if args.no_monitor:
-        config['global']['no_monitor'] = True
-        print "Turning off remote monitoring"
-    else:
-        config['global']['no_monitor'] = False
-    
-    if args.size:
-        config['transfer']['size'] = args.size
-    else:
-        config['transfer']['size'] = 100
-    
-    config['global']['run_id'] = uuid4().hex[:6]
-
-    # setup logging
-    if args.log:
-        log_path = args.log
-    else:
-        log_path = os.path.join(
-            config.get('global').get('output_path'),
-            'workflow.log')
-    logging.basicConfig(
-        format='%(asctime)s:%(levelname)s: %(message)s',
-        datefmt='%m/%d/%Y %I:%M:%S %p',
-        filename=log_path,
-        filemode='w',
-        level=logging.DEBUG)
-    
-    input_config_path = os.path.join(config['global'].get('data_cache_path'), 'run.cfg')
-    if not os.path.exists(input_config_path):
-        copyfile(
-            src=args.config,
-            dst=input_config_path)
-    
-    return config
 
 def add_jobs(year_set):
     """
@@ -1199,7 +969,8 @@ if __name__ == "__main__":
         display_event,
         file_list=file_list,
         file_name_list=file_name_list,
-        job_sets=job_sets)
+        job_sets=job_sets,
+        event_list=event_list) 
     
     # for section in config:
     #     print section
