@@ -153,23 +153,12 @@ def setup(parser, display_event, **kwargs):
     # initialize the file_list
     line = 'Initializing file list'
     event_list.push(message=line)
-    for key, val in config['global']['patterns'].items():
-        file_list[key] = {}
-        file_name_list[key] = {}
-        if key in file_type_map:
-            if file_type_map[key][1]:
-                for year in range(sim_start_year, sim_end_year + 1):
-                    for month in range(1, 13):
-                        file_key = str(year) + '-' + str(month)
-                        file_list[key][file_key] = SetStatus.NO_DATA
-                        file_name_list[key][file_key] = ''
-            else:
-                file_list[key][file_type_map[key]] = SetStatus.NO_DATA
-
-    file_list[key]['rpointer.ocn'] = SetStatus.NO_DATA
-    file_list[key]['rpointer.atm'] = SetStatus.NO_DATA
-    file_list[key]['streams.ocean'] = SetStatus.NO_DATA
-    file_list[key]['streams.cice'] = SetStatus.NO_DATA
+    file_list = setup_file_list(
+        file_list=file_list,
+        patterns=config['global']['patterns'],
+        sim_start_year=sim_start_year,
+        sim_end_year=sim_end_year,
+        file_type_map=file_type_map)
     
     # check if we have all the data already, if not setup globus
     all_data = check_for_inplace_data(
@@ -219,3 +208,24 @@ def setup(parser, display_event, **kwargs):
     config['global']['run_id'] = uuid4().hex[:6]
     
     return config
+
+def setup_file_list(file_list, patterns, sim_start_year, sim_end_year, file_type_map):
+    for key, val in patterns.items():
+    file_list[key] = {}
+    file_name_list[key] = {}
+    if key in file_type_map:
+        if file_type_map[key][1]:
+            for year in range(sim_start_year, sim_end_year + 1):
+                for month in range(1, 13):
+                    file_key = str(year) + '-' + str(month)
+                    file_list[key][file_key] = SetStatus.NO_DATA
+                    file_name_list[key][file_key] = ''
+        else:
+            file_list[key][file_type_map[key]] = SetStatus.NO_DATA
+
+    file_list[key]['rpointer.ocn'] = SetStatus.NO_DATA
+    file_list[key]['rpointer.atm'] = SetStatus.NO_DATA
+    file_list[key]['streams.ocean'] = SetStatus.NO_DATA
+    file_list[key]['streams.cice'] = SetStatus.NO_DATA
+
+    return file_list
