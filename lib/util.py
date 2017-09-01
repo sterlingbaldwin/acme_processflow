@@ -400,6 +400,8 @@ def monitor_job(job, job_set, event=None, debug=False, batch_type='slurm', event
     This function should only be called from within a thread
     """
     t = threading.current_thread()
+    tid = t.ident
+    msg = 'THEAD {} STARTING {}'.format(tid, t.name)
     job.start_time = datetime.now()
     job_id = job.execute(batch='slurm')
 
@@ -408,6 +410,7 @@ def monitor_job(job, job_set, event=None, debug=False, batch_type='slurm', event
         job.set_status(JobStatus.COMPLETED)
         job.postvalidate()
         if job.status == JobStatus.COMPLETED:
+            print '*** ALREADY DONE WITH {}'.format(job.get_type())
             handle_completed_job(job, job_set, event_list)
             return
 
@@ -478,20 +481,18 @@ def monitor_job(job, job_set, event=None, debug=False, batch_type='slurm', event
             elif job_status == 'FAILED':
                 job.end_time = datetime.now()
                 status = JobStatus.FAILED
+                msg = 'Job {0} has failed'.format(job_id)
+                event_list.push(
+                    message=msg,
+                    data=job)
+                return
             elif job_status == 'COMPLETED':
                 job.end_time = datetime.now()
                 status = JobStatus.COMPLETED
                 handle_completed_job(job, job_set, event_list)
+                return
 
             if status and status != job.status:
-                if status == JobStatus.FAILED:
-                    msg = 'Job {0} has failed'.format(job_id)
-                    event_list.push(
-                        message=msg,
-                        data=job)
-                    if debug:
-                        print_message(msg)
-
                 job.status = status
                 message = "{type}: {id} status changed to {status}".format(
                     id=job.job_id,
@@ -764,6 +765,26 @@ def render(variables, input_path, output_path, delimiter='%%'):
         else:
             rendered_string = line
         outfile.write(rendered_string)
+
+def is_all_done(job_sets):
+    """
+    Check if all job_sets are done, and all processing has been completed
+
+    return -1 if still running
+    return 0 if a jobset failed
+    return 1 if all complete
+    """
+
+    # First check for pending jobs
+    for job_set in job_sets:
+        if job_set.status != SetStatus.COMPLETED and \
+           job_set.status != SetStatus.FAILED:
+            return -1
+    # all job sets are either complete or failed
+    for job_set in job_sets:
+        if job_set.status != SetStatus.COMPLETED:
+            return 0
+    return 1
 
 def filename_to_file_list_key(filename):
     """

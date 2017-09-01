@@ -484,13 +484,8 @@ def monitor_check(monitor, config, file_list, event_list, display_event):
         if status == SetStatus.NO_DATA:
             checked_new_files.append(new_file)
 
-    # if there are any new files
     if not checked_new_files:
         return
-    else:
-        pass
-        #print pformat(checked_new_files)
-    #sys.exit()
 
     t_config = config.get('transfer')
     global_config = config.get('global')
@@ -637,16 +632,7 @@ def handle_transfer(transfer_job, f_list, event, event_list):
             elif item_type == 'RPT':
                 file_key = 'rpointer.ocn' if 'ocn' in item_name else 'rpointer.atm'
             file_list[item_type][file_key] = SetStatus.DATA_READY
-
-def is_all_done():
-    """
-    Check if all job_sets are done, and all processing has been completed
-    """
-    for job_set in job_sets:
-        if job_set.status != SetStatus.COMPLETED:
-            return False
-    return True
-
+    
 def cleanup():
     """
     Clean up temp files created during the run
@@ -1158,10 +1144,12 @@ if __name__ == "__main__":
                 job_sets=job_sets,
                 state_path=state_path,
                 ui_mode=config.get('global').get('ui'))
-            if is_all_done():
+            status = is_all_done(job_sets)
+            if status >= 0:
+                print 'status: ' + str(status)
                 if not config.get('global').get('no-cleanup', False):
                     cleanup()
-                message = 'All processing complete'
+                message = 'All processing complete' if status == 1 else "One or more job failed"
                 emailaddr = config.get('global').get('email')
                 if emailaddr:
                     event_list.push(message='Sending notification email to ' + emailaddr)
@@ -1174,9 +1162,15 @@ if __name__ == "__main__":
                             for evt in event_list.list:
                                 if 'hosted' in evt.message:
                                     diag_msg += evt.message + '\n'
-                        msg = 'Processing job {id} has completed successfully\n\n{diag}'.format(
-                            id=config.get('global').get('run_id'),
-                            diag=diag_msg)
+                        if status == 1:
+                            msg = 'Post processing jobs have completed successfully\n\n{diag}'.format(
+                                id=config.get('global').get('run_id'),
+                                diag=diag_msg)
+                        else:
+                            msg = 'One or more job failed\n\n'
+                            with open(state_path, 'r') as state_file:
+                                for line in state_file.readlines():
+                                    msg += line
 
                         m = Mailer(src=emailaddr, dst=emailaddr)
                         m.send(
@@ -1187,7 +1181,9 @@ if __name__ == "__main__":
                 event_list.push(message=message)
                 sleep(5)
                 display_event.set()
-                print_message(message, 'ok')
+                print_type = 'ok' if status == 1 else 'error'
+                print_message(message, print_type)
+                sleep(2)
                 logging.info("All processes complete")
                 for t in thread_list:
                     thread_kill_event.set()
