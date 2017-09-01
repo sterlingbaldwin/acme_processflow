@@ -142,8 +142,8 @@ class Timeseries(object):
             # Submitting the job to SLURM
             expected_name = 'timeseries_set_{year_set}_{start}_{end}_{uuid}'.format(
                 year_set=self.year_set,
-                start=self.config.get('start_year'),
-                end=self.config.get('end_year'),
+                start='{:04d}'.format(self.config.get('start_year')),
+                end='{:04d}'.format(self.config.get('end_year')),
                 uuid=self.uuid[:5])
             run_script = os.path.join(self.config.get('run_scripts_path'), expected_name)
 

@@ -273,8 +273,8 @@ class CoupledDiagnostic(object):
 
         expected_name = 'coupled_diag_set_{set}_{start}_{end}_{uuid}'.format(
             set=self.config.get('year_set'),
-            start=self.config.get('test_begin_yr_climo'),
-            end=self.config.get('test_end_yr_climo'),
+            start='{:04d}'.format(self.config.get('test_begin_yr_climo')),
+            end='{:04d}'.format(self.config.get('test_end_yr_climo')),
             uuid=self.uuid[:5])
 
         run_script = os.path.join(self.config.get('run_scripts_path'), expected_name)
