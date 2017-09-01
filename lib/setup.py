@@ -71,6 +71,7 @@ def setup(parser, display_event, **kwargs):
         filename=log_path,
         filemode='w',
         level=logging.INFO)
+    logging.getLogger('globus_sdk').setLevel(logging.WARNING)
     
     # Copy the config into the input directory for safe keeping
     input_config_path = os.path.join(config['global'].get('data_cache_path'), 'run.cfg')

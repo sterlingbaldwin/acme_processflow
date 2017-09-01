@@ -411,6 +411,7 @@ def monitor_check(monitor, config, file_list, event_list, display_event):
     global active_transfers
     global transfer_list
 
+    # Only allow 2 transfers at once
     if active_transfers >= 2:
         return
     event_list.push(message="Running check for remote files")
@@ -419,6 +420,8 @@ def monitor_check(monitor, config, file_list, event_list, display_event):
         event_list.push(message=msg)
         return
     new_files = monitor.new_files
+
+    # extract file type information
     patterns = config.get('global').get('patterns')
     for file_info in new_files:
         for folder, file_type in patterns.items():

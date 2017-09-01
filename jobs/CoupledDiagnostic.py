@@ -173,6 +173,8 @@ class CoupledDiagnostic(object):
 
         if not climo_temp_path or not os.path.exists(climo_temp_path):
             self.status = JobStatus.INVALID
+            msg = '{} does not exist'.format(climo_temp_path)
+            logging.error(mgs)
             return False
 
         run_dir = os.path.join(
@@ -195,7 +197,9 @@ class CoupledDiagnostic(object):
                 all_years = []
                 mpas_path = self.config.get(mpas_dir)
                 if not mpas_path:
-                    self.event_list.push(message='Run ocean set to 1, but no mpas files included. Invalid configuration')
+                    msg = 'Run ocean set to 1, but no mpas files included. Invalid configuration'
+                    self.event_list.push(message=msg)
+                    logging.error(mgs)
                     self.status = JobStatus.INVALID
                     return 2
                 for mpas in os.listdir(mpas_path):
@@ -213,6 +217,9 @@ class CoupledDiagnostic(object):
                         all_years.append(year)
 
             if len(all_years) < (set_end_year - set_start_year):
+                msg = 'len({all_years}) < ({set_end_year} - {set_start_year})'.format(
+                    all_years=all_years, set_end_year=set_end_year, set_start_year=set_start_year)
+                loggig.error(msg)
                 return False
             create_symlink_dir(
                 src_dir=mpas_path,
@@ -226,6 +233,8 @@ class CoupledDiagnostic(object):
                 continue
             src_list = os.listdir(path)
             if not src_list:
+                msg = '{} is empty'.format(path)
+                logging.error(msg)
                 return False
             create_symlink_dir(
                 src_dir=path,

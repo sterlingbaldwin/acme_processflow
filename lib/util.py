@@ -348,12 +348,16 @@ def handle_completed_job(job, job_set, event_list):
 
     t = threading.current_thread()
     tid = t.ident
+    msg = 'Handling completion for thread {} with id {}'.format(
+        t.name, tid)
+    logging.info(msg)
     # First check that we have the expected output
     if not job.postvalidate():
         message = '{0} completed but doesnt have expected output, setting status to failed'.format(job.get_type())
         event_list.push(
             message=message,
             data=job)
+        logging.error(message)
         job.status = JobStatus.FAILED
         job_set.status = SetStatus.FAILED
         return
@@ -529,7 +533,6 @@ def setup_local_hosting(job, event_list, img_src, generate=False):
         return
     try:
         msg = 'copying images from {src} to {dst}'.format(src=img_src, dst=host_dir)
-        print msg
         logging.info(msg)
         # copytree(src=img_src, dst=host_dir)
         create_symlink_dir(
@@ -550,12 +553,6 @@ def setup_local_hosting(job, event_list, img_src, generate=False):
     msg = 'Changing permissions on image_dir {}'.format(host_dir)
     logging.info(msg)
 
-    # print image_dir, host_dir
-    # p = Popen(['find', image_dir], stdout=PIPE)
-    # images = p.communicate()[0].split('\n')
-    # for image in images:
-    #     if image:
-    #         os.chmod(image, 755)
     subprocess.call(['chmod', '-R', '755', img_src])
 
     msg = '{job} hosted at {url}'.format(
