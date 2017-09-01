@@ -7,7 +7,8 @@ from configobj import ConfigObj
 from YearSet import YearSet, SetStatus
 from util import (check_config_white_space, 
                   check_for_inplace_data,
-                  setup_globus)
+                  setup_globus,
+                  check_globus)
 
 def setup(parser, display_event, **kwargs):
     """
@@ -69,7 +70,7 @@ def setup(parser, display_event, **kwargs):
         datefmt='%m/%d/%Y %I:%M:%S %p',
         filename=log_path,
         filemode='w',
-        level=logging.DEBUG)
+        level=logging.INFO)
     
     # Copy the config into the input directory for safe keeping
     input_config_path = os.path.join(config['global'].get('data_cache_path'), 'run.cfg')
@@ -81,12 +82,14 @@ def setup(parser, display_event, **kwargs):
     # Make sure the set_frequency is a list of ints
     set_frequency = config['global']['set_frequency']
     if not isinstance(set_frequency, list):
-        config['global']['set_frequency'] = [int(set_frequency)]
-    # These are sometimes strings which break things later
-    new_freqs = []
-    for freq in set_frequency:
-        new_freqs.append(int(freq))
-    set_frequency = new_freqs
+        set_frequency = [int(set_frequency)]
+    else:
+        # These are sometimes strings which break things later
+        new_freqs = []
+        for freq in set_frequency:
+            new_freqs.append(int(freq))
+        set_frequency = new_freqs
+    config['global']['set_frequency'] = set_frequency
 
     # setup config for file type directories
     for key, val in config['global']['patterns'].items():
@@ -192,7 +195,17 @@ def setup(parser, display_event, **kwargs):
             if not setup_success:
                 print "Globus setup error"
                 return -1
-            print 'Globus setup complete'
+            print 'Globus authentication complete'
+        print 'Checking file access on globus transfer nodes'
+        setup_success, endpoint = check_globus(
+            source_endpoint=config['transfer']['source_endpoint'],
+            source_path=config['global']['source_path'],
+            destination_endpoint=config['transfer']['destination_endpoint'],
+            destination_path=config['global']['data_cache_path'])
+        if not setup_success:
+            print 'ERROR! Unable to access {} globus node'.format(endpoint['type'])
+            print 'The node may be down, or you may not have access to the requested directory'
+            sys.exit(-1)
 
     config['global']['ui'] = False if args.no_ui else True
     config['global']['no_cleanup'] = True if args.no_cleanup else False

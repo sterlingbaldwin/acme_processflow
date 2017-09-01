@@ -15,6 +15,7 @@ from datetime import datetime
 from uuid import uuid4
 
 from globus_cli.commands.login import do_link_login_flow, check_logged_in
+from globus_cli.commands.ls import _get_ls_res as get_ls
 from globus_cli.services.transfer import get_client
 
 from YearSet import SetStatus
@@ -22,6 +23,39 @@ from YearSet import YearSet
 from jobs.JobStatus import JobStatus
 from mailer import Mailer
 from string import Formatter
+
+def check_globus(**kwargs):
+    """
+    Check that the globus endpoints are not only active but will return information
+    about the paths we're interested in.
+
+    Im assuming that the endpoints have already been activated
+    """
+    try:
+        endpoints = [{
+            'type': 'source',
+            'id': kwargs['source_endpoint'],
+            'path': kwargs['source_path']
+        }, {
+            'type': 'destination',
+            'id': kwargs['destination_endpoint'],
+            'path': kwargs['destination_path']
+        }]
+    except Exception as e:
+        print_debug(e)
+
+    client = get_client()
+    try:
+        for endpoint in endpoints:
+            res = get_ls(
+                client,
+                endpoint['path'],
+                endpoint['id'],
+                False, 0, False)
+    except:
+        return False, endpoint
+    else:
+        return True, None
 
 def check_config_white_space(filepath):
     line_index = 0
@@ -140,7 +174,7 @@ def setup_globus(endpoints, no_ui=False, **kwargs):
                 for server in server_document['DATA']:
                     hostname = server["hostname"]
                     break
-                message = '{server} requires manual activation, please open the following URL in a browser to activate the endpoint:\n'.format(
+                message = '\n{server} requires manual activation, please open the following URL in a browser to activate the endpoint:\n'.format(
                     server=hostname)
                 message += "https://www.globus.org/app/endpoints/{endpoint}/activate \n\n".format(endpoint=endpoint)
                 if no_ui:
@@ -288,6 +322,7 @@ def start_ready_job_sets(job_sets, thread_list, debug, event, event_list):
                                 event_list)
                             thread = threading.Thread(
                                 target=monitor_job,
+                                name='monitor_job for {}'.format(job.get_type()),
                                 args=args)
                             thread_list.append(thread)
                             thread.start()
@@ -310,6 +345,10 @@ def handle_completed_job(job, job_set, event_list):
     """
     Perform post execution tasks
     """
+
+    t = threading.current_thread()
+    tid = t.ident
+    # First check that we have the expected output
     if not job.postvalidate():
         message = '{0} completed but doesnt have expected output, setting status to failed'.format(job.get_type())
         event_list.push(
@@ -319,6 +358,7 @@ def handle_completed_job(job, job_set, event_list):
         job_set.status = SetStatus.FAILED
         return
 
+    # Finally host the files
     if job.get_type() == 'coupled_diags':
         img_dir = 'coupled_diagnostics_{casename}-obs'.format(
             casename=job.config.get('test_casename'))
@@ -336,22 +376,26 @@ def handle_completed_job(job, job_set, event_list):
             '..',
             img_dir)
         setup_local_hosting(job, event_list, img_src)
+    
+    # Second check if the whole set is done
     job_set_done = True
-    for job in job_set.jobs:
-        if job.status != JobStatus.COMPLETED:
+    for k in job_set.jobs:
+        if k.status != JobStatus.COMPLETED:
             job_set_done = False
             break
-        if job.status == JobStatus.FAILED:
+        if k.status == JobStatus.FAILED:
             job_set.status = SetStatus.FAILED
             return
     if job_set_done:
         job_set.status = SetStatus.COMPLETED
+    
 
 def monitor_job(job, job_set, event=None, debug=False, batch_type='slurm', event_list=None):
     """
     Monitor the slurm job, and update the status to 'complete' when it finishes
     This function should only be called from within a thread
     """
+    t = threading.current_thread()
     job.start_time = datetime.now()
     job_id = job.execute(batch='slurm')
 
@@ -389,7 +433,6 @@ def monitor_job(job, job_set, event=None, debug=False, batch_type='slurm', event
         if job.status not in exit_list:
             if job.status == JobStatus.INVALID:
                 return
-            
             # if the job is done, or there has been an error, exit
             if job.status == JobStatus.FAILED:
                 job_set.status = SetStatus.FAILED
@@ -398,6 +441,7 @@ def monitor_job(job, job_set, event=None, debug=False, batch_type='slurm', event
             if job.status == JobStatus.COMPLETED:
                 handle_completed_job(job, job_set, event_list)
                 return
+
         # Job is running
         elif job.status in none_exit_list and job_id != 0:
             cmd = ['scontrol', 'show', 'job', str(job_id)]
@@ -433,6 +477,7 @@ def monitor_job(job, job_set, event=None, debug=False, batch_type='slurm', event
             elif job_status == 'COMPLETED':
                 job.end_time = datetime.now()
                 status = JobStatus.COMPLETED
+                handle_completed_job(job, job_set, event_list)
 
             if status and status != job.status:
                 if status == JobStatus.FAILED:
@@ -459,13 +504,22 @@ def setup_local_hosting(job, event_list, img_src, generate=False):
     Sets up the local directory for hosting diagnostic sets
     """
     msg = 'Setting up local hosting for {}'.format(job.get_type())
-    print msg
+    # print msg
+    # print job
+
+
+    t = threading.current_thread()
+    tid = t.ident
     event_list.push(
         message=msg,
         data=job)
+    logging.info(msg)
     host_dir = job.config.get('web_dir')
+    url = job.config.get('host_url')
     if os.path.exists(host_dir):
-        host_dir += '_' + uuid4().hex[:8]
+        new_id = uuid4().hex[:8]
+        host_dir += '_' + new_id
+        url += '_' + new_id
         
     if not os.path.exists(img_src):
         msg = '{job} hosting failed, no image source at {path}'.format(
@@ -475,8 +529,13 @@ def setup_local_hosting(job, event_list, img_src, generate=False):
         return
     try:
         msg = 'copying images from {src} to {dst}'.format(src=img_src, dst=host_dir)
+        print msg
         logging.info(msg)
-        copytree(src=img_src, dst=host_dir)
+        # copytree(src=img_src, dst=host_dir)
+        create_symlink_dir(
+            src_dir=img_src,
+            src_list=os.listdir(img_src),
+            dst=host_dir)
     except Exception as e:
         logging.error(format_debug(e))
         msg = 'Error copying {} to host directory'.format(job.get_type())
@@ -486,15 +545,26 @@ def setup_local_hosting(job, event_list, img_src, generate=False):
         return
 
     temp = host_dir.split(os.sep)
-    index = temp.index(os.environ['USER']) + 1
-    subprocess.call(['chmod', '-R', '755', os.sep.join(temp[:index])])
+    index = temp.index(os.environ['USER']) + 2
+    image_dir = os.sep.join(temp[:index])
+    msg = 'Changing permissions on image_dir {}'.format(host_dir)
+    logging.info(msg)
+
+    # print image_dir, host_dir
+    # p = Popen(['find', image_dir], stdout=PIPE)
+    # images = p.communicate()[0].split('\n')
+    # for image in images:
+    #     if image:
+    #         os.chmod(image, 755)
+    subprocess.call(['chmod', '-R', '755', img_src])
 
     msg = '{job} hosted at {url}'.format(
-        url=job.config.get('host_url'),
+        url=url,
         job=job.get_type())
     event_list.push(
         message=msg,
         data=job)
+    logging.info(msg)
 
 def check_for_inplace_data(file_list, file_name_list, config, file_type_map):
     """
