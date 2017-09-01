@@ -582,6 +582,7 @@ def monitor_check(monitor, config, file_list, event_list, display_event):
         try:
             thread = threading.Thread(
                 target=handle_transfer,
+                name='handle_transfer',
                 args=(
                     transfer,
                     checked_new_files,
@@ -983,13 +984,15 @@ if __name__ == "__main__":
         file_name_list=file_name_list,
         job_sets=job_sets,
         event_list=event_list,
-        file_type_map=file_type_map) 
-    
+        file_type_map=file_type_map)
+
     # for section in config:
     #     print section
     #     for item in config[section]:
     #         print '\t', item, config[section][item]
     # sys.exit()
+
+
     # A list of files that have been transfered
     transfer_list = []
 
@@ -1022,55 +1025,6 @@ if __name__ == "__main__":
             display_event.set()
             sys.exit()
 
-    # compute number of expected year_sets
-    sim_start_year = int(config.get('global').get('simulation_start_year'))
-    sim_end_year = int(config.get('global').get('simulation_end_year'))
-    number_of_sim_years = sim_end_year - (sim_start_year - 1)
-    frequencies = config.get('global').get('set_frequency')
-    job_sets = []
-    line = 'Initializing year sets'
-    event_list.push(message=line)
-    for freq in frequencies:
-        freq = int(freq)
-        year_set = number_of_sim_years / freq
-
-        # initialize the job_sets dict
-        for i in range(1, year_set + 1):
-            set_start_year = sim_start_year + ((i - 1) * freq)
-            set_end_year = set_start_year + freq - 1
-            new_set = YearSet(
-                set_number=len(job_sets) + 1,
-                start_year=set_start_year,
-                end_year=set_end_year)
-            job_sets.append(new_set)
-
-    # initialize the file_list
-    line = 'Initializing file list'
-    event_list.push(message=line)
-    for key, val in config.get('global').get('patterns').items():
-        file_list[key] = {}
-        file_name_list[key] = {}
-        if key in ['ATM', 'MPAS_AM', 'MPAS_CICE']:
-            for year in range(sim_start_year, sim_end_year + 1):
-                for month in range(1, 13):
-                    file_key = str(year) + '-' + str(month)
-                    file_list[key][file_key] = SetStatus.NO_DATA
-                    file_name_list[key][file_key] = ''
-        elif key == 'MPAS_CICE_IN':
-            file_list[key]['mpas-cice_in'] = SetStatus.NO_DATA
-        elif key == 'MPAS_O_IN':
-            file_list[key]['mpas-o_in'] = SetStatus.NO_DATA
-        elif key == 'RPT':
-            file_list[key]['rpointer.ocn'] = SetStatus.NO_DATA
-            file_list[key]['rpointer.atm'] = SetStatus.NO_DATA
-        elif key == 'MPAS_RST':
-            for year in range(2, number_of_sim_years + 1):
-                file_key = '{year}-1'.format(year=year)
-                file_list[key][file_key] = SetStatus.NO_DATA
-        elif key == 'STREAMS':
-            file_list[key]['streams.ocean'] = SetStatus.NO_DATA
-            file_list[key]['streams.cice'] = SetStatus.NO_DATA
-
     # Check for any data already on the System
     all_data = check_for_inplace_data(
         file_list=file_list,
@@ -1099,17 +1053,8 @@ if __name__ == "__main__":
             display_event.set()
             for t in thread_list:
                 thread_kill_event.set()
-                t.join()
+                t.join(timeout=1.0)
             sys.exit()
-
-    if all_data:
-        # print_message('All data is local, disabling remote monitor', 'ok')
-        line = 'All data is local, disabling remote monitor'
-        event_list.push(message=line)
-    else:
-        # print_message('More data needed, enabling remote monitor', 'ok')
-        line = 'More data needed, enabling remote monitor'
-        event_list.push(message=line)
 
     # If all the data is local, dont start the monitor
     if all_data or config.get('global').get('no_monitor', False):
@@ -1165,7 +1110,7 @@ if __name__ == "__main__":
             display_event.set()
             for t in thread_list:
                 thread_kill_event.set()
-                t.join()
+                t.join(timeout=1.0)
             sleep(1)
             print line
             print message
@@ -1241,6 +1186,9 @@ if __name__ == "__main__":
                 display_event.set()
                 print_message(message, 'ok')
                 logging.info("All processes complete")
+                for t in thread_list:
+                    thread_kill_event.set()
+                    t.join(timeout=1.0)
                 sys.exit(0)
             sleep(10)
             loop_count += 1
@@ -1250,4 +1198,4 @@ if __name__ == "__main__":
         display_event.set()
         for t in thread_list:
             thread_kill_event.set()
-            t.join()
+            t.join(timeout=1.0)
