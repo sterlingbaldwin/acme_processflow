@@ -410,7 +410,6 @@ def monitor_job(job, job_set, event=None, debug=False, batch_type='slurm', event
         job.set_status(JobStatus.COMPLETED)
         job.postvalidate()
         if job.status == JobStatus.COMPLETED:
-            print '*** ALREADY DONE WITH {}'.format(job.get_type())
             handle_completed_job(job, job_set, event_list)
             return
 

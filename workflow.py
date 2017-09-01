@@ -1146,7 +1146,6 @@ if __name__ == "__main__":
                 ui_mode=config.get('global').get('ui'))
             status = is_all_done(job_sets)
             if status >= 0:
-                print 'status: ' + str(status)
                 if not config.get('global').get('no-cleanup', False):
                     cleanup()
                 message = 'All processing complete' if status == 1 else "One or more job failed"
@@ -1154,15 +1153,15 @@ if __name__ == "__main__":
                 if emailaddr:
                     event_list.push(message='Sending notification email to ' + emailaddr)
                     try:
-                        diag_msg = ''
-                        if config['global']['set_jobs'].get('coupled_diag') \
-                           or config['global']['set_jobs'].get('amwg') \
-                           or config['global']['set_jobs'].get('acme_diag'):
-                            diag_msg = 'Your diagnostics can be found here:\n'
-                            for evt in event_list.list:
-                                if 'hosted' in evt.message:
-                                    diag_msg += evt.message + '\n'
                         if status == 1:
+                            diag_msg = ''
+                            if config['global']['set_jobs'].get('coupled_diag') or \
+                               config['global']['set_jobs'].get('amwg') or \
+                               config['global']['set_jobs'].get('acme_diag'):
+                                diag_msg = 'Your diagnostics can be found here:\n'
+                                for evt in event_list.list:
+                                    if 'hosted' in evt.message:
+                                        diag_msg += evt.message + '\n'
                             msg = 'Post processing jobs have completed successfully\n\n{diag}'.format(
                                 id=config.get('global').get('run_id'),
                                 diag=diag_msg)
