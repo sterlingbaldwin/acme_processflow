@@ -99,6 +99,7 @@ def add_jobs(year_set):
                 else:
                     required_jobs[job_type] = True
 
+    print required_jobs
     year_set_str = 'year_set_{}'.format(year_set.set_number)
     dataset_name = '{time}_{set}_{start}_{end}'.format(
         time=time.strftime("%d-%m-%Y"),
