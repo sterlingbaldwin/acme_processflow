@@ -1,6 +1,7 @@
 import sys
 import os
 import logging
+import json
 from uuid import uuid4
 
 from configobj import ConfigObj
@@ -57,6 +58,20 @@ def setup(parser, display_event, **kwargs):
         print "Error parsing config file {}".format(args.config)
         parser.print_help()
         sys.exit()
+    
+    # run validator for config file
+    template_path = os.path.join(
+        os.path.dirname(__file__),
+        '..',
+        'resources',
+        'config_template.json')
+    with open(template_path, 'r') as template_file:
+        template = json.load(template_file)
+    valid, messages = verify_config(config, template)
+    if not valid:
+        for message in messages:
+            print message
+        sys.exit(-1)
     
     # setup logging
     if args.log:
@@ -245,3 +260,29 @@ def setup_file_list(**kwargs):
 
     from pprint import pformat
     return file_list
+
+def verify_config(config, template):
+    messages = []
+    valid = True
+    print 'checking for no bogus config items'
+    for key, val in config.items():
+        print key
+        if key not in template:
+            msg = '{key} is not a valid config option, is it misspelled?'.format(key=key)
+            messages.append(msg)
+            valid = False
+    print 'checking config has all required elements'
+    for key, val in template.items():
+        print key
+        if key not in config:
+            msg = '{key} is missing from your config'.format(key=key)
+            messages.append(msg)
+            valid = False
+        for item in val:
+            print item
+            if item not in config[key]:
+                msg = '{key} requires {val} but it is missing from your config'.format(
+                    key=key, val=item)
+                messages.append(msg)
+                valid = False
+    return valid, messages
