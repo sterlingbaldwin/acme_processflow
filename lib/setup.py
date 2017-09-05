@@ -264,22 +264,17 @@ def setup_file_list(**kwargs):
 def verify_config(config, template):
     messages = []
     valid = True
-    print 'checking for no bogus config items'
     for key, val in config.items():
-        print key
         if key not in template:
             msg = '{key} is not a valid config option, is it misspelled?'.format(key=key)
             messages.append(msg)
             valid = False
-    print 'checking config has all required elements'
     for key, val in template.items():
-        print key
         if key not in config:
             msg = '{key} is missing from your config'.format(key=key)
             messages.append(msg)
             valid = False
         for item in val:
-            print item
             if item not in config[key]:
                 msg = '{key} requires {val} but it is missing from your config'.format(
                     key=key, val=item)
