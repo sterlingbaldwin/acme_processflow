@@ -16,4 +16,4 @@ if [ -d $OUTPUT_DIR ]; then
 fi
 
 echo "starting tests"
-python $WORKFLOW_DIR/workflow.py -c $WORKFLOW_DIR/tests/test_run.cfg --no-ui &
+python $WORKFLOW_DIR/workflow.py -c $WORKFLOW_DIR/test/test_run.cfg --no-ui &
