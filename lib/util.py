@@ -17,12 +17,61 @@ from uuid import uuid4
 from globus_cli.commands.login import do_link_login_flow, check_logged_in
 from globus_cli.commands.ls import _get_ls_res as get_ls
 from globus_cli.services.transfer import get_client
+from globus_sdk import TransferData
 
 from YearSet import SetStatus
 from YearSet import YearSet
 from jobs.JobStatus import JobStatus
 from mailer import Mailer
 from string import Formatter
+
+def transfer_directory(**kwargs):
+    """
+    Transfer all the contents from source_endpoint:src_path to destination_endpoint:dst_path
+    
+    parameters:
+        source_endpoint (str) the globus UUID for the source files
+        destination_endpoint (str) the globus UUID for the destination
+        src_path (str) the path to the source directory to copy
+        dst_path (str) the path on the destination directory
+    """
+    source_endpoint = kwargs['source_endpoint']
+    destination_endpoint = kwargs['destination_endpoint']
+    src_path = kwargs['src_path']
+    dst_path = kwargs['dst_path']
+    event_list = kwargs['event_list']
+
+    client = get_client()
+    transfer = TransferData(
+        client,
+        source_endpoint,
+        destination_endpoint,
+        sync_level='checksum')
+    transfer.add_item(
+        source_path=src_path,
+        destination_path=dst_path,
+        recursive=True)
+    try:
+        result = client.submit_transfer(transfer)
+        task_id = result['task_id']
+    except:
+        return False
+    
+    directory_name = src_path.split(os.sep)[-1]
+    msg = '{dir} transfer starting'.format(dir=directory_name)
+    event_list.push(message=msg)
+    while True:
+        status = client.get_task(task_id).get('status')
+        if status == 'SUCCEEDED':
+            msg = '{dir} transfer complete'.format(dir=directory_name)
+            return True
+        elif status == 'FAILED':
+            msg = '{dir} transfer FAILED'.format(dir=directory_name)
+            return False
+        else:
+            event_list.push(message=msg)
+            sleep(5)
+    
 
 def check_globus(**kwargs):
     """
