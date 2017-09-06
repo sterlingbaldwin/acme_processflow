@@ -572,7 +572,7 @@ def monitor_check(monitor, config, file_list, event_list, display_event):
         data=transfer)
     message = "Starting file transfer with file_list: {file_list}".format(
         file_list=pformat(transfer.file_list))
-    logging.info('## ' + message)
+    logging.info(message)
 
     if config.get('global').get('dry_run', False):
         return

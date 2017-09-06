@@ -295,16 +295,23 @@ def start_ready_job_sets(job_sets, thread_list, debug, event, event_list):
     """
     for job_set in job_sets:
         # if the job state is ready, but hasnt started yet
-        if job_set.status == SetStatus.DATA_READY or job_set.status == SetStatus.RUNNING:
+        if job_set.status  in [SetStatus.DATA_READY, SetStatus.RUNNING]:
             for job in job_set.jobs:
                 if job.depends_on:
                     ready = False
+                    dep = ''
                     for dependancy in job.depends_on:
                         for djob in job_set.jobs:
-                            if djob.get_type() == dependancy \
-                               and djob.status == JobStatus.COMPLETED:
-                                ready = True
+                            if djob.get_type() == dependancy:
+                                if djob.status == JobStatus.COMPLETED:
+                                    ready = True
+                                else:
+                                    dep = djob
                                 break
+                    if not ready:
+                        msg = '{job} is waiting on {dep}'.format(
+                            job=job.get_type(), dep=dep.get_type())
+                        logging.info(msg)
                 else:
                     # print '{job} is ready'.format(job=job.get_type())
                     ready = True
@@ -361,6 +368,8 @@ def handle_completed_job(job, job_set, event_list):
         job.status = JobStatus.FAILED
         job_set.status = SetStatus.FAILED
         return
+    else:
+        job.status = JobStatus.COMPLETED
 
     # Finally host the files
     if job.get_type() == 'coupled_diags':
