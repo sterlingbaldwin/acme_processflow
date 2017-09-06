@@ -15,6 +15,7 @@ from datetime import datetime
 from uuid import uuid4
 
 from globus_cli.commands.login import do_link_login_flow, check_logged_in
+from globus_cli.commands.ls import _get_ls_res as get_ls
 from globus_cli.services.transfer import get_client
 
 from YearSet import SetStatus
@@ -23,16 +24,56 @@ from jobs.JobStatus import JobStatus
 from mailer import Mailer
 from string import Formatter
 
+def check_globus(**kwargs):
+    """
+    Check that the globus endpoints are not only active but will return information
+    about the paths we're interested in.
+
+    Im assuming that the endpoints have already been activated
+    """
+    try:
+        endpoints = [{
+            'type': 'source',
+            'id': kwargs['source_endpoint'],
+            'path': kwargs['source_path']
+        }, {
+            'type': 'destination',
+            'id': kwargs['destination_endpoint'],
+            'path': kwargs['destination_path']
+        }]
+    except Exception as e:
+        print_debug(e)
+
+    client = get_client()
+    try:
+        for endpoint in endpoints:
+            res = get_ls(
+                client,
+                endpoint['path'],
+                endpoint['id'],
+                False, 0, False)
+    except:
+        return False, endpoint
+    else:
+        return True, None
+
 def check_config_white_space(filepath):
     line_index = 0
+    found = False
     with open(filepath, 'r') as infile:
-        for line in infile.readline():
+        for line in infile.readlines():
+            line_index += 1
             index = line.find('=')
             if index == -1:
+                found = False
                 continue
             if line[index + 1] != ' ':
+                found = True
                 break
-    return line_index
+    if found:
+        return line_index
+    else:
+        return 0
 
 def strfdelta(tdelta, fmt):
     f = Formatter()
@@ -133,7 +174,7 @@ def setup_globus(endpoints, no_ui=False, **kwargs):
                 for server in server_document['DATA']:
                     hostname = server["hostname"]
                     break
-                message = '{server} requires manual activation, please open the following URL in a browser to activate the endpoint:\n'.format(
+                message = '\n{server} requires manual activation, please open the following URL in a browser to activate the endpoint:\n'.format(
                     server=hostname)
                 message += "https://www.globus.org/app/endpoints/{endpoint}/activate \n\n".format(endpoint=endpoint)
                 if no_ui:
@@ -254,16 +295,23 @@ def start_ready_job_sets(job_sets, thread_list, debug, event, event_list):
     """
     for job_set in job_sets:
         # if the job state is ready, but hasnt started yet
-        if job_set.status == SetStatus.DATA_READY or job_set.status == SetStatus.RUNNING:
+        if job_set.status  in [SetStatus.DATA_READY, SetStatus.RUNNING]:
             for job in job_set.jobs:
                 if job.depends_on:
                     ready = False
+                    dep = ''
                     for dependancy in job.depends_on:
                         for djob in job_set.jobs:
-                            if djob.get_type() == dependancy \
-                               and djob.status == JobStatus.COMPLETED:
-                                ready = True
+                            if djob.get_type() == dependancy:
+                                if djob.status == JobStatus.COMPLETED:
+                                    ready = True
+                                else:
+                                    dep = djob
                                 break
+                    if not ready:
+                        msg = '{job} is waiting on {dep}'.format(
+                            job=job.get_type(), dep=dep.get_type())
+                        logging.info(msg)
                 else:
                     # print '{job} is ready'.format(job=job.get_type())
                     ready = True
@@ -281,6 +329,7 @@ def start_ready_job_sets(job_sets, thread_list, debug, event, event_list):
                                 event_list)
                             thread = threading.Thread(
                                 target=monitor_job,
+                                name='monitor_job for {}'.format(job.get_type()),
                                 args=args)
                             thread_list.append(thread)
                             thread.start()
@@ -303,15 +352,26 @@ def handle_completed_job(job, job_set, event_list):
     """
     Perform post execution tasks
     """
+
+    t = threading.current_thread()
+    tid = t.ident
+    msg = 'Handling completion for thread {} with id {}'.format(
+        t.name, tid)
+    logging.info(msg)
+    # First check that we have the expected output
     if not job.postvalidate():
         message = '{0} completed but doesnt have expected output, setting status to failed'.format(job.get_type())
         event_list.push(
             message=message,
             data=job)
+        logging.error(message)
         job.status = JobStatus.FAILED
         job_set.status = SetStatus.FAILED
         return
+    else:
+        job.status = JobStatus.COMPLETED
 
+    # Finally host the files
     if job.get_type() == 'coupled_diags':
         img_dir = 'coupled_diagnostics_{casename}-obs'.format(
             casename=job.config.get('test_casename'))
@@ -329,22 +389,28 @@ def handle_completed_job(job, job_set, event_list):
             '..',
             img_dir)
         setup_local_hosting(job, event_list, img_src)
+    
+    # Second check if the whole set is done
     job_set_done = True
-    for job in job_set.jobs:
-        if job.status != JobStatus.COMPLETED:
+    for k in job_set.jobs:
+        if k.status != JobStatus.COMPLETED:
             job_set_done = False
             break
-        if job.status == JobStatus.FAILED:
+        if k.status == JobStatus.FAILED:
             job_set.status = SetStatus.FAILED
             return
     if job_set_done:
         job_set.status = SetStatus.COMPLETED
+    
 
 def monitor_job(job, job_set, event=None, debug=False, batch_type='slurm', event_list=None):
     """
     Monitor the slurm job, and update the status to 'complete' when it finishes
     This function should only be called from within a thread
     """
+    t = threading.current_thread()
+    tid = t.ident
+    msg = 'THEAD {} STARTING {}'.format(tid, t.name)
     job.start_time = datetime.now()
     job_id = job.execute(batch='slurm')
 
@@ -382,7 +448,6 @@ def monitor_job(job, job_set, event=None, debug=False, batch_type='slurm', event
         if job.status not in exit_list:
             if job.status == JobStatus.INVALID:
                 return
-            
             # if the job is done, or there has been an error, exit
             if job.status == JobStatus.FAILED:
                 job_set.status = SetStatus.FAILED
@@ -391,6 +456,7 @@ def monitor_job(job, job_set, event=None, debug=False, batch_type='slurm', event
             if job.status == JobStatus.COMPLETED:
                 handle_completed_job(job, job_set, event_list)
                 return
+
         # Job is running
         elif job.status in none_exit_list and job_id != 0:
             cmd = ['scontrol', 'show', 'job', str(job_id)]
@@ -423,19 +489,18 @@ def monitor_job(job, job_set, event=None, debug=False, batch_type='slurm', event
             elif job_status == 'FAILED':
                 job.end_time = datetime.now()
                 status = JobStatus.FAILED
+                msg = 'Job {0} has failed'.format(job_id)
+                event_list.push(
+                    message=msg,
+                    data=job)
+                return
             elif job_status == 'COMPLETED':
                 job.end_time = datetime.now()
                 status = JobStatus.COMPLETED
+                handle_completed_job(job, job_set, event_list)
+                return
 
             if status and status != job.status:
-                if status == JobStatus.FAILED:
-                    msg = 'Job {0} has failed'.format(job_id)
-                    event_list.push(
-                        message=msg,
-                        data=job)
-                    if debug:
-                        print_message(msg)
-
                 job.status = status
                 message = "{type}: {id} status changed to {status}".format(
                     id=job.job_id,
@@ -452,13 +517,22 @@ def setup_local_hosting(job, event_list, img_src, generate=False):
     Sets up the local directory for hosting diagnostic sets
     """
     msg = 'Setting up local hosting for {}'.format(job.get_type())
-    print msg
+    # print msg
+    # print job
+
+
+    t = threading.current_thread()
+    tid = t.ident
     event_list.push(
         message=msg,
         data=job)
+    logging.info(msg)
     host_dir = job.config.get('web_dir')
+    url = job.config.get('host_url')
     if os.path.exists(host_dir):
-        host_dir += '_' + uuid4().hex[:8]
+        new_id = uuid4().hex[:8]
+        host_dir += '_' + new_id
+        url += '_' + new_id
         
     if not os.path.exists(img_src):
         msg = '{job} hosting failed, no image source at {path}'.format(
@@ -469,7 +543,11 @@ def setup_local_hosting(job, event_list, img_src, generate=False):
     try:
         msg = 'copying images from {src} to {dst}'.format(src=img_src, dst=host_dir)
         logging.info(msg)
-        copytree(src=img_src, dst=host_dir)
+        # copytree(src=img_src, dst=host_dir)
+        create_symlink_dir(
+            src_dir=img_src,
+            src_list=os.listdir(img_src),
+            dst=host_dir)
     except Exception as e:
         logging.error(format_debug(e))
         msg = 'Error copying {} to host directory'.format(job.get_type())
@@ -479,35 +557,40 @@ def setup_local_hosting(job, event_list, img_src, generate=False):
         return
 
     temp = host_dir.split(os.sep)
-    index = temp.index(os.environ['USER']) + 1
-    subprocess.call(['chmod', '-R', '755', os.sep.join(temp[:index])])
+    index = temp.index(os.environ['USER']) + 2
+    image_dir = os.sep.join(temp[:index])
+    msg = 'Changing permissions on image_dir {}'.format(host_dir)
+    logging.info(msg)
+
+    subprocess.call(['chmod', '-R', '755', img_src])
 
     msg = '{job} hosted at {url}'.format(
-        url=job.config.get('host_url'),
+        url=url,
         job=job.get_type())
     event_list.push(
         message=msg,
         data=job)
+    logging.info(msg)
 
-def check_for_inplace_data(file_list, file_name_list, config):
+def check_for_inplace_data(file_list, file_name_list, config, file_type_map):
     """
     Checks the data cache for any files that might alread   y be in place,
     updates the file_list and job_sets accordingly
     """
-    cache_path = config.get('global').get('data_cache_path')
-    sim_end_year = int(config.get('global').get('simulation_end_year'))
+    cache_path = config['global']['data_cache_path']
+    sim_end_year = int(config['global']['simulation_end_year'])
     if not os.path.exists(cache_path):
         os.makedirs(cache_path)
         return False
     
-    patterns = config.get('global').get('patterns')
+    patterns = config['global']['patterns']
     input_dirs = [os.path.join(cache_path, key) for key, val in patterns.items()]
     for input_dir in input_dirs:
         file_type = input_dir.split(os.sep)[-1]
         for input_file in os.listdir(input_dir):
             input_file_path = os.path.join(input_dir, input_file)
             file_key = ""
-            if file_type in ['ATM', 'MPAS_AM', 'MPAS_CICE', 'MPAS_RST']:
+            if file_type_map[file_type][1]:
                 file_key = filename_to_file_list_key(filename=input_file)
                 index = file_key.find('-')
                 year = int(file_key[:index])
@@ -515,29 +598,14 @@ def check_for_inplace_data(file_list, file_name_list, config):
                     continue
                 if not file_list[file_type][file_key] == SetStatus.IN_TRANSIT:
                     file_list[file_type][file_key] = SetStatus.DATA_READY
-            elif file_type == 'MPAS_CICE_IN':
-                file_key = 'mpas-cice_in'
-                if os.path.exists(os.path.join(input_dir, input_file)) and \
-                   not file_list[file_type][file_key] == SetStatus.IN_TRANSIT:
-                    file_list[file_type][file_key] = SetStatus.DATA_READY
-            elif file_type == 'MPAS_O_IN':
-                file_key = 'mpas-o_in'
-                if os.path.exists(os.path.join(input_dir, input_file)) and \
-                   not file_list[file_type][file_key] == SetStatus.IN_TRANSIT:
-                    file_list[file_type][file_key] = SetStatus.DATA_READY
-            elif file_type == 'STREAMS':
-                for file_key in ['streams.cice', 'streams.ocean']:
-                    file_name_list[file_type][file_key] = input_file
-                    if os.path.exists(os.path.join(input_dir, input_file)) and \
-                       not file_list[file_type][file_key] == SetStatus.IN_TRANSIT:
-                        file_list[file_type][file_key] = SetStatus.DATA_READY
-            elif file_type == 'RPT':
-                for file_key in ['rpointer.ocn', 'rpointer.atm']:
-                    file_name_list[file_type][file_key] = input_file
-                    if os.path.exists(os.path.join(input_dir, input_file)) and \
-                       not file_list[file_type][file_key] == SetStatus.IN_TRANSIT:
-                        file_list[file_type][file_key] = SetStatus.DATA_READY
-            file_name_list[file_type][file_key] = input_file
+                file_name_list[file_type][file_key] = input_file
+            else:
+                for file_key in file_list[file_type]:
+                    if file_key == input_file:
+                        if os.path.exists(os.path.join(input_dir, input_file)) and \
+                        not file_list[file_type][file_key] == SetStatus.IN_TRANSIT:
+                            file_list[file_type][file_key] = SetStatus.DATA_READY
+                        file_name_list[file_type][file_key] = input_file
 
     for key, val in patterns.items():
         for file_key in file_list[key]:
@@ -705,6 +773,26 @@ def render(variables, input_path, output_path, delimiter='%%'):
         else:
             rendered_string = line
         outfile.write(rendered_string)
+
+def is_all_done(job_sets):
+    """
+    Check if all job_sets are done, and all processing has been completed
+
+    return -1 if still running
+    return 0 if a jobset failed
+    return 1 if all complete
+    """
+
+    # First check for pending jobs
+    for job_set in job_sets:
+        if job_set.status != SetStatus.COMPLETED and \
+           job_set.status != SetStatus.FAILED:
+            return -1
+    # all job sets are either complete or failed
+    for job_set in job_sets:
+        if job_set.status != SetStatus.COMPLETED:
+            return 0
+    return 1
 
 def filename_to_file_list_key(filename):
     """

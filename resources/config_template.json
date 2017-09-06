@@ -1,0 +1,63 @@
+{
+    "global": [
+        "output_path",
+        "data_cache_path",
+        "source_path",
+        "simulation_start_year",
+        "simulation_end_year",
+        "set_frequency",
+        "experiment",
+        "batch_system_type",
+        "img_host_server",
+        "email",
+        "host_directory",
+        "patterns",
+        "set_jobs"
+    ],
+    "acme_diags": [
+        "host_directory",
+        "host_url_prefix",
+        "backend",
+        "diff_colormap",
+        "seasons",
+        "reference_data_path",
+        "sets"
+    ],
+    "transfer": [
+        "destination_endpoint",
+        "source_endpoint"
+    ],
+    "amwg": [
+        "diag_home",
+        "host_directory",
+        "host_url_prefix"
+    ],
+    "ncclimo": [
+        "regrid_map_path",
+        "var_list"
+    ],
+    "coupled_diags": [
+        "host_directory",
+        "host_url_prefix",
+        "coupled_diags_home",
+        "run_ocean",
+        "mpas_meshfile",
+        "mpas_remapfile",
+        "pop_remapfile",
+        "remap_files_dir",
+        "gpcp_regrid_wgt_file",
+        "ceres_ebaf_regrid_wgt_file",
+        "ers_regrid_wgt_file",
+        "obs_ocndir",
+        "obs_seaicedir",
+        "obs_sstdir",
+        "obs_iceareaNH",
+        "obs_iceareaSH",
+        "obs_icevolNH",
+        "mpaso_regions_file",
+        "test_native_res",
+        "ref_case",
+        "ref_archive_dir",
+        "ref_case_dir"
+    ]
+}

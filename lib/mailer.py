@@ -1,5 +1,4 @@
 import smtplib
-import logging
 from email.mime.text import MIMEText
 
 class Mailer(object):
@@ -40,6 +39,10 @@ class Mailer(object):
         message['From'] = self.src
         message['To'] = self.dst
 
-        self.smtp.sendmail(self.src, self.dst, message.as_string())
-        self.smtp.quit()
-        return True
+        try:
+            self.smtp.sendmail(self.src, self.dst, message.as_string())
+            self.smtp.quit()
+        except:
+            return False
+        else:
+            return True
