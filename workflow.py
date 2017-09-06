@@ -1109,6 +1109,36 @@ if __name__ == "__main__":
             line = 'Connected'
             logging.info(line)
             event_list.push(message=line)
+    
+    # check if the case_scripts directory is present
+    # if its not, transfer it over
+    case_scripts_dir = os.path.join(
+        config['global']['data_cache_path'], 'case_scripts')
+    if not os.path.exists(case_scripts_dir):
+        msg = 'case_scripts not local, transfering remote copy'
+        event_list.push(message=msg)
+        logging.info(msg)
+        head, _ = os.path.split(config['global']['source_path'])
+        src_path = os.path.join(head, 'case_scripts')
+        while True:
+            try:
+                args = {
+                    'source_endpoint': config['transfer']['source_endpoint'],
+                    'destination_endpoint': config['transfer']['destination_endpoint'],
+                    'src_path': src_path,
+                    'dst_path': case_scripts_dir,
+                    'event_list': event_list
+                }
+                thread = threading.Thread(
+                    target=transfer_directory,
+                    name='transfer_directory',
+                    kwargs=args)
+            except:
+                sleep(1)
+            else:
+                thread_list.append(thread)
+                thread.start()
+                break
 
     # Main loop
     try:
