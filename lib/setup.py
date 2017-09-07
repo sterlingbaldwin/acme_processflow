@@ -61,8 +61,8 @@ def setup(parser, display_event, **kwargs):
     
     # run validator for config file
     template_path = os.path.join(
-        os.path.dirname(__file__),
-        '..',
+        sys.prefix,
+        'acme_workflow',
         'resources',
         'config_template.json')
     with open(template_path, 'r') as template_file:
