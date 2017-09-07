@@ -2,7 +2,7 @@ import sys
 from setuptools import find_packages, setup
 
 data_files = [('resources', [
-                    'acme_diags_tempalte.py',
+                    'acme_diags_template.py',
                     'amwg_template.csh',
                     'config_template.json',
                     'run_AIMS_template.csh'])]
