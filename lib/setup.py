@@ -62,6 +62,7 @@ def setup(parser, display_event, **kwargs):
     # run validator for config file
     template_path = os.path.join(
         sys.prefix,
+        'share',
         'acme_workflow',
         'resources',
         'config_template.json')
