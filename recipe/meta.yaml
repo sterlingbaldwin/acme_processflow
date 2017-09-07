@@ -1,12 +1,14 @@
 package:
   name: processflow
-  version: "0.3"
+  version: {{ environ['VERSION'] }}
 
 source:
   git_url: git://github.com/ACME-Climate/acme_workflow
 
 build:
   script: python setup.py install
+  number: "2"
+  string: {{ environ['BUILD_NAME'] }}
 
 requirements:
   build:

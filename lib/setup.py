@@ -74,6 +74,19 @@ def setup(parser, display_event, **kwargs):
             print message
         sys.exit(-1)
     
+    # Copy the config into the input directory for safe keeping
+    input_config_path = os.path.join(config['global'].get('data_cache_path'), 'run.cfg')
+    if not os.path.exists(input_config_path):
+        copyfile(
+            src=args.config,
+            dst=input_config_path)
+    
+    # setup output and cache directories
+    if not os.path.exists(config['global']['output_path']):
+        os.makedirs(config['global']['output_path'])
+    if not os.path.exists(config['global']['data_cache_path']):
+        os.makedirs(config['global']['data_cache_path'])
+    
     # setup logging
     if args.log:
         log_path = args.log
@@ -88,13 +101,6 @@ def setup(parser, display_event, **kwargs):
         filemode='w',
         level=logging.INFO)
     logging.getLogger('globus_sdk').setLevel(logging.WARNING)
-    
-    # Copy the config into the input directory for safe keeping
-    input_config_path = os.path.join(config['global'].get('data_cache_path'), 'run.cfg')
-    if not os.path.exists(input_config_path):
-        copyfile(
-            src=args.config,
-            dst=input_config_path)
 
     # Make sure the set_frequency is a list of ints
     set_frequency = config['global']['set_frequency']
@@ -121,12 +127,6 @@ def setup(parser, display_event, **kwargs):
             if not config.get('global').get('other_data'):
                 config['global']['other_data'] = []
             config['global']['other_data'].append(new_dir)
-
-    # setup output and cache directories
-    if not os.path.exists(config['global']['output_path']):
-        os.makedirs(config['global']['output_path'])
-    if not os.path.exists(config['global']['data_cache_path']):
-        os.makedirs(config['global']['data_cache_path'])
 
     # setup run_scipts_path
     config['global']['run_scripts_path'] = os.path.join(
