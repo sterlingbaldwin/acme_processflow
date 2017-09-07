@@ -249,6 +249,7 @@ requirements:
     - configobj
     - globus-sdk
     - globus-cli
+    - jmespath
 
 about:
     home: https://github.com/ACME-Climate/acme_workflow
