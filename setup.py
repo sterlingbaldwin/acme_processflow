@@ -2,10 +2,10 @@ import sys
 from setuptools import find_packages, setup
 
 data_files = [(sys.prefix + '/share/acme_workflow/resources', [
-                    'acme_workflow/resources/acme_diags_template.py',
-                    'acme_workflow/resources/amwg_template.csh',
-                    'acme_workflow/resources/config_template.json',
-                    'acme_workflow/resources/run_AIMS_template.csh'])]
+                    'resources/acme_diags_template.py',
+                    'resources/amwg_template.csh',
+                    'resources/config_template.json',
+                    'resources/run_AIMS_template.csh'])]
 
 setup(
     name="acme_workflow",
