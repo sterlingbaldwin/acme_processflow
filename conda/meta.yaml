@@ -246,6 +246,9 @@ requirements:
     - zonalmeans
     - cdat_info
     - vcs
+    - configobj
+    - globus-sdk
+    - globus-cli
 
 about:
     home: https://github.com/ACME-Climate/acme_workflow
