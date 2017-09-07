@@ -3,3 +3,4 @@ tmp
 config\.json
 \.vscode/
 \.remote-sync\.json
+dist
