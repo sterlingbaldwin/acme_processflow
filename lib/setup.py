@@ -140,7 +140,7 @@ def setup(parser, display_event, **kwargs):
     tmp_path = os.path.join(
         config['global']['output_path'],
         'tmp')
-    config['global']['tmp_path'] = tmp
+    config['global']['tmp_path'] = tmp_path
     if not os.path.exists(tmp_path):
         os.makedirs(tmp_path)
     
