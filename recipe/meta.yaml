@@ -7,7 +7,6 @@ source:
 
 build:
   script: python setup.py install
-  number: "2"
   string: {{ environ['BUILD_NAME'] }}
 
 requirements:
