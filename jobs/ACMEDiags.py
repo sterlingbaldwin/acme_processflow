@@ -81,6 +81,9 @@ class ACMEDiags(object):
                 break
         if valid:
             self.status = JobStatus.VALID
+        
+        if not os.path.exists(self.config.get('run_scripts_path')):
+            os.makedirs(self.config.get('run_scripts_path'))
 
     
     def postvalidate(self):

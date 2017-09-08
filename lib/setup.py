@@ -129,14 +129,20 @@ def setup(parser, display_event, **kwargs):
             config['global']['other_data'].append(new_dir)
 
     # setup run_scipts_path
-    config['global']['run_scripts_path'] = os.path.join(
+    run_script_path = os.path.join(
         config['global']['output_path'],
         'run_scripts')
+    config['global']['run_scripts_path'] = run_script_path
+    if not os.path.exists(run_script_path):
+        os.makedirs(run_script_path)
 
     # setup tmp_path
-    config['global']['tmp_path'] = os.path.join(
+    tmp_path = os.path.join(
         config['global']['output_path'],
         'tmp')
+    config['global']['tmp_path'] = tmp
+    if not os.path.exists(tmp_path):
+        os.makedirs(tmp_path)
     
     # setup the year_set list
     sim_start_year = int(config['global']['simulation_start_year'])

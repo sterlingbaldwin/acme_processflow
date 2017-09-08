@@ -244,6 +244,8 @@ class Climo(object):
                 break
 
         self.status = JobStatus.VALID if all_inputs else JobStatus.INVALID
+        if not os.path.exists(self.config.get('run_scripts_path')):
+            os.makedirs(self.config.get('run_scripts_path'))
         return 0
 
     def postvalidate(self):
