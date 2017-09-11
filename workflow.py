@@ -226,6 +226,13 @@ def add_jobs(year_set):
             config.get('coupled_diags').get('host_url_prefix'),
             '{:04d}-{:04d}'.format(year_set.set_start_year, year_set.set_end_year)])
 
+        template_path = os.path.join(
+            sys.prefix,
+            'share',
+            'acme_workflow',
+            'resources',
+            'run_AIMS_template.csh')
+
         coupled_diaglobal_config = {
             'web_dir': web_directory,
             'host_url': host_url,
@@ -267,7 +274,7 @@ def add_jobs(year_set):
             'CERES_EBAF_regrid_wgt_file': coupled_config.get('ceres_ebaf_regrid_wgt_file'),
             'ERS_regrid_wgt_file': coupled_config.get('ers_regrid_wgt_file'),
             'coupled_diags_home': coupled_config.get('coupled_diags_home'),
-            'coupled_template_path': os.path.join(os.path.abspath(os.path.dirname(__file__)), 'resources', 'run_AIMS_template.csh'),
+            'coupled_template_path': template_path,
             'rendered_output_path': os.path.join(coupled_project_dir, 'run_AIMS.csh'),
             'obs_ocndir': coupled_config.get('obs_ocndir'),
             'obs_seaicedir': coupled_config.get('obs_seaicedir'),
@@ -292,7 +299,12 @@ def add_jobs(year_set):
         amwg_temp_dir = os.path.join(config['global']['tmp_path'], 'amwg', year_set_str)
         if not os.path.exists(diag_temp_dir):
             os.makedirs(diag_temp_dir)
-        template_path = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'resources', 'amwg_template.csh')
+        template_path = os.path.join(
+            sys.prefix,
+            'share',
+            'acme_workflow',
+            'resources',
+            'amwg_template.csh')
 
         web_directory = os.path.join(
             config.get('global').get('host_directory'),
@@ -355,7 +367,7 @@ def add_jobs(year_set):
         
         if not os.path.exists(acme_diags_temp_dir):
             os.makedirs(acme_diags_temp_dir)
-        template_path = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'resources', 'acme_diags_template.py')
+
         acme_config = config.get('acme_diags')
 
         web_directory = os.path.join(
@@ -370,6 +382,14 @@ def add_jobs(year_set):
             config.get('global').get('experiment'),
             config.get('acme_diags').get('host_url_prefix'),
             '{:04d}-{:04d}'.format(year_set.set_start_year, year_set.set_end_year)])
+        
+        template_path = os.path.join(
+            sys.prefix,
+            'share',
+            'acme_workflow',
+            'resources',
+            'acme_diags_template.py')
+        
 
         acme_diags_config = {
             'web_dir': web_directory,

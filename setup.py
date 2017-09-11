@@ -9,7 +9,7 @@ data_files = [(sys.prefix + '/share/acme_workflow/resources', [
 
 setup(
     name="acme_workflow",
-    version="0.3.6b",
+    version="0.3.9",
     author="Sterling Baldwin",
     author_email="baldwin32@llnl.gov",
     description="ACME Automated Workflow.",
