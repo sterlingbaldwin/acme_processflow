@@ -39,7 +39,7 @@ class ACMEDiags(object):
         }
         self.slurm_args = {
             'num_cores': '-n 16', # 16 cores
-            'run_time': '-t 0-02:00', # 1 hour run time
+            'run_time': '-t 0-02:00', # 2 hour max run time
             'num_machines': '-N 1', # run on one machine
             'oversubscribe': '--oversubscribe'
         }
@@ -87,21 +87,10 @@ class ACMEDiags(object):
 
     
     def postvalidate(self):
-        return True
+        return False
     
     def execute(self, batch='slurm', debug=False):
-        ###############################################
-        # ACME DIAGS IS DISABLES WHILE I WAIT FOR THEM
-        # TO RELEASE BUG FIXES
-        self.status = JobStatus.COMPLETED
-        message = 'skipping acme_diags'
-        self.event_list.push(message=message)
-        logging.info(message)
-        return 0
-        ###############################################
-        if debug:
-            print "starting ACME diags"
-        
+
         # Check if the output already exists
         if self.postvalidate():
             self.status = JobStatus.COMPLETED
@@ -111,11 +100,7 @@ class ACMEDiags(object):
             return 0
         else:
             self.status = JobStatus.PENDING
-        
-        if debug:
-            print 'ACME diags not computed, setting up for execution'
-            print pformat(self.config)
-        
+
         # set start run time
         self.start_time = datetime.now()
 
@@ -133,7 +118,7 @@ class ACMEDiags(object):
             output_path=template_out)
         run_script_template_out = os.path.join(
             self.config.get('run_scripts_path'),
-            'acme_diags_{start}_{end}'.format(
+            'acme_diag_{start}_{end}'.format(
                 start=self.config.get('start_year'),
                 end=self.config.get('end_year')))
         copyfile(

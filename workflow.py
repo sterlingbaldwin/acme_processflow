@@ -352,7 +352,9 @@ def add_jobs(year_set):
         acme_diags_project_dir = os.path.join(
             config.get('global').get('output_path'),
             'acme_diags',
-            'year_set_{}'.format(year_set.set_number))
+            '{start:04d}-{end:04d}'.format(
+                start=year_set.set_start_year,
+                end=year_set.set_end_year))
         if not os.path.exists(acme_diags_project_dir):
             os.makedirs(acme_diags_project_dir)
         
@@ -375,13 +377,17 @@ def add_jobs(year_set):
             os.environ['USER'],
             config.get('global').get('experiment'),
             config.get('acme_diags').get('host_directory'),
-            '{:04d}-{:04d}'.format(year_set.set_start_year, year_set.set_end_year))
+            '{start:04d}-{end:04d}'.format(
+                start=year_set.set_start_year,
+                end=year_set.set_end_year))
         host_url = '/'.join([
             config.get('global').get('img_host_server'),
             os.environ['USER'],
             config.get('global').get('experiment'),
             config.get('acme_diags').get('host_url_prefix'),
-            '{:04d}-{:04d}'.format(year_set.set_start_year, year_set.set_end_year)])
+            '{start:04d}-{end:04d}'.format(
+                start=year_set.set_start_year,
+                end=year_set.set_end_year)])
         
         template_path = os.path.join(
             sys.prefix,
