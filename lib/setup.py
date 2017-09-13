@@ -59,13 +59,20 @@ def setup(parser, display_event, **kwargs):
         parser.print_help()
         sys.exit()
     
+    if args.resource_dir:
+        config['global']['resource_dir'] = args.resource_dir
+    else:
+        config['global']['resource_dir'] = os.path.join(
+            sys.prefix,
+            'share',
+            'acme_workflow',
+            'resources')
+    
     # run validator for config file
     template_path = os.path.join(
-        sys.prefix,
-        'share',
-        'acme_workflow',
-        'resources',
+        config['global']['resource_dir'],
         'config_template.json')
+
     with open(template_path, 'r') as template_file:
         template = json.load(template_file)
     valid, messages = verify_config(config, template)
