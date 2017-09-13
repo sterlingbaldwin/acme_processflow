@@ -251,6 +251,7 @@ requirements:
     - globus-sdk
     - globus-cli
     - jmespath
+    - mesalib
 
 about:
     home: https://github.com/ACME-Climate/acme_workflow
