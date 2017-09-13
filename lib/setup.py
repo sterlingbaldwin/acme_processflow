@@ -65,7 +65,7 @@ def setup(parser, display_event, **kwargs):
         config['global']['resource_dir'] = os.path.join(
             sys.prefix,
             'share',
-            'acme_workflow',
+            'processflow',
             'resources')
     
     # run validator for config file
