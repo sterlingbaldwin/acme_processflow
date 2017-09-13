@@ -27,7 +27,6 @@ class ACMEDiags(object):
             'backend': '',
             'sets': '',
             'results_dir': '',
-            'diff_colormap': '',
             'template_path': '',
             'run_scripts_path': '',
             'start_year': '',
@@ -81,23 +80,22 @@ class ACMEDiags(object):
                 break
         if valid:
             self.status = JobStatus.VALID
+        
+        if not os.path.exists(self.config.get('run_scripts_path')):
+            os.makedirs(self.config.get('run_scripts_path'))
 
     
     def postvalidate(self):
-        return True
+        if not os.path.exists(self.config['results_dir']):
+            return False
+        contents = os.listdir(self.config['results_dir'])
+        if 'viewer' not in contents:
+            return False
+        if 'index.html' not in os.listdir(os.path.join(self.config['results_dir'], 'viewer')):
+            return False
+        return True        
     
     def execute(self, batch='slurm', debug=False):
-        ###############################################
-        # ACME DIAGS IS DISABLES WHILE I WAIT FOR THEM
-        # TO RELEASE BUG FIXES
-        self.status = JobStatus.COMPLETED
-        message = 'skipping acme_diags'
-        self.event_list.push(message=message)
-        logging.info(message)
-        return 0
-        ###############################################
-        if debug:
-            print "starting ACME diags"
         
         # Check if the output already exists
         if self.postvalidate():
@@ -108,10 +106,6 @@ class ACMEDiags(object):
             return 0
         else:
             self.status = JobStatus.PENDING
-        
-        if debug:
-            print 'ACME diags not computed, setting up for execution'
-            print pformat(self.config)
         
         # set start run time
         self.start_time = datetime.now()
@@ -148,10 +142,10 @@ class ACMEDiags(object):
             dst=self.config.get('test_data_path'))
         
         # setup sbatch script
-        expected_name = 'acme_diag_set_{set}_{start}_{end}_{uuid}'.format(
+        expected_name = 'acme_diag_set_{start:04d}_{end:04d}_{uuid}'.format(
             set=self.config.get('year_set'),
-            start='{:04d}'.format(self.config.get('start_year')),
-            end='{:04d}'.format(self.config.get('end_year')),
+            start=self.config.get('start_year'),
+            end=self.config.get('end_year'),
             uuid=self.uuid[:5])
         run_script = os.path.join(self.config.get('run_scripts_path'), expected_name)
         if debug:

@@ -234,6 +234,8 @@ class Timeseries(object):
         for i in config:
             if i in self.inputs:
                 self.config[i] = config.get(i)
+        if not os.path.exists(self.config.get('run_scripts_path')):
+            os.makedirs(self.config.get('run_scripts_path'))
         self.status = JobStatus.VALID
 
     def postvalidate(self):

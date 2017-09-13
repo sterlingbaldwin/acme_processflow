@@ -1,12 +1,13 @@
 package:
   name: processflow
-  version: "0.3"
+  version: {{ environ['VERSION'] }}
 
 source:
   git_url: git://github.com/ACME-Climate/acme_workflow
 
 build:
   script: python setup.py install
+  string: {{ environ['BUILD_NAME'] }}
 
 requirements:
   build:
@@ -249,6 +250,7 @@ requirements:
     - configobj
     - globus-sdk
     - globus-cli
+    - jmespath
 
 about:
     home: https://github.com/ACME-Climate/acme_workflow

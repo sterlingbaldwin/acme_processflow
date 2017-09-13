@@ -42,6 +42,7 @@ parser.add_argument('-l', '--log', help='Path to logging output file.')
 parser.add_argument('-u', '--no-cleanup', help='Don\'t perform pre or post run cleanup. This will leave all run scripts in place.', action='store_true')
 parser.add_argument('-m', '--no-monitor', help='Don\'t run the remote monitor or move any files over globus.', action='store_true')
 parser.add_argument('-s', '--size', help='The maximume size in gigabytes of a single transfer, defaults to 100. Must be larger then the largest single file.')
+parser.add_argument('-r', '--resource-dir', help='Path to custom resource directory')
 
 # check for NCL
 if not os.environ.get('NCARG_ROOT'):
@@ -226,6 +227,10 @@ def add_jobs(year_set):
             config.get('coupled_diags').get('host_url_prefix'),
             '{:04d}-{:04d}'.format(year_set.set_start_year, year_set.set_end_year)])
 
+        template_path = os.path.join(
+            config['global']['resource_dir'],
+            'run_AIMS_template.csh')
+
         coupled_diaglobal_config = {
             'web_dir': web_directory,
             'host_url': host_url,
@@ -267,7 +272,7 @@ def add_jobs(year_set):
             'CERES_EBAF_regrid_wgt_file': coupled_config.get('ceres_ebaf_regrid_wgt_file'),
             'ERS_regrid_wgt_file': coupled_config.get('ers_regrid_wgt_file'),
             'coupled_diags_home': coupled_config.get('coupled_diags_home'),
-            'coupled_template_path': os.path.join(os.path.abspath(os.path.dirname(__file__)), 'resources', 'run_AIMS_template.csh'),
+            'coupled_template_path': template_path,
             'rendered_output_path': os.path.join(coupled_project_dir, 'run_AIMS.csh'),
             'obs_ocndir': coupled_config.get('obs_ocndir'),
             'obs_seaicedir': coupled_config.get('obs_seaicedir'),
@@ -292,7 +297,9 @@ def add_jobs(year_set):
         amwg_temp_dir = os.path.join(config['global']['tmp_path'], 'amwg', year_set_str)
         if not os.path.exists(diag_temp_dir):
             os.makedirs(diag_temp_dir)
-        template_path = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'resources', 'amwg_template.csh')
+        template_path = os.path.join(
+            config['global']['resource_dir'],
+            'amwg_template.csh')
 
         web_directory = os.path.join(
             config.get('global').get('host_directory'),
@@ -340,7 +347,7 @@ def add_jobs(year_set):
         acme_diags_project_dir = os.path.join(
             config.get('global').get('output_path'),
             'acme_diags',
-            'year_set_{}'.format(year_set.set_number))
+            '{:04d}-{:04d}'.format(year_set.set_start_year, year_set.set_end_year))
         if not os.path.exists(acme_diags_project_dir):
             os.makedirs(acme_diags_project_dir)
         
@@ -355,7 +362,7 @@ def add_jobs(year_set):
         
         if not os.path.exists(acme_diags_temp_dir):
             os.makedirs(acme_diags_temp_dir)
-        template_path = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'resources', 'acme_diags_template.py')
+
         acme_config = config.get('acme_diags')
 
         web_directory = os.path.join(
@@ -370,6 +377,11 @@ def add_jobs(year_set):
             config.get('global').get('experiment'),
             config.get('acme_diags').get('host_url_prefix'),
             '{:04d}-{:04d}'.format(year_set.set_start_year, year_set.set_end_year)])
+        
+        template_path = os.path.join(
+            config['global']['resource_dir'],
+            'acme_diags_template.py')
+        
 
         acme_diags_config = {
             'web_dir': web_directory,
@@ -383,7 +395,6 @@ def add_jobs(year_set):
             'backend': acme_config.get('backend'),
             'sets': acme_config.get('sets'),
             'results_dir': acme_diags_project_dir,
-            'diff_colormap': acme_config.get('diff_colormap'),
             'template_path': template_path,
             'run_scripts_path': config.get('global').get('run_scripts_path'),
             'end_year': year_set.set_end_year,
@@ -1178,6 +1189,7 @@ if __name__ == "__main__":
             if status >= 0:
                 if not config.get('global').get('no-cleanup', False):
                     cleanup()
+                sleep(5)
                 message = 'All processing complete' if status == 1 else "One or more job failed"
                 emailaddr = config.get('global').get('email')
                 if emailaddr:
@@ -1201,22 +1213,21 @@ if __name__ == "__main__":
                                 for line in state_file.readlines():
                                     msg += line
 
-                        m = Mailer(src=emailaddr, dst=emailaddr)
+                        m = Mailer(src='processflowbot@llnl.gov', dst=emailaddr)
                         m.send(
                             status=message,
                             msg=msg)
                     except Exception as e:
                         logging.error(format_debug(e))
                 event_list.push(message=message)
-                sleep(5)
                 display_event.set()
                 print_type = 'ok' if status == 1 else 'error'
                 print_message(message, print_type)
-                sleep(2)
                 logging.info("All processes complete")
                 for t in thread_list:
                     thread_kill_event.set()
                     t.join(timeout=1.0)
+                sleep(2)
                 sys.exit(0)
             sleep(10)
             loop_count += 1

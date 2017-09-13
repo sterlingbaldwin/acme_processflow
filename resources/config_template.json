@@ -18,7 +18,6 @@
         "host_directory",
         "host_url_prefix",
         "backend",
-        "diff_colormap",
         "seasons",
         "reference_data_path",
         "sets"

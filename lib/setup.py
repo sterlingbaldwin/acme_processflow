@@ -59,12 +59,20 @@ def setup(parser, display_event, **kwargs):
         parser.print_help()
         sys.exit()
     
+    if args.resource_dir:
+        config['global']['resource_dir'] = args.resource_dir
+    else:
+        config['global']['resource_dir'] = os.path.join(
+            sys.prefix,
+            'share',
+            'acme_workflow',
+            'resources')
+    
     # run validator for config file
     template_path = os.path.join(
-        os.path.dirname(__file__),
-        '..',
-        'resources',
+        config['global']['resource_dir'],
         'config_template.json')
+
     with open(template_path, 'r') as template_file:
         template = json.load(template_file)
     valid, messages = verify_config(config, template)
@@ -72,6 +80,19 @@ def setup(parser, display_event, **kwargs):
         for message in messages:
             print message
         sys.exit(-1)
+    
+    # Copy the config into the input directory for safe keeping
+    input_config_path = os.path.join(config['global'].get('data_cache_path'), 'run.cfg')
+    if not os.path.exists(input_config_path):
+        copyfile(
+            src=args.config,
+            dst=input_config_path)
+    
+    # setup output and cache directories
+    if not os.path.exists(config['global']['output_path']):
+        os.makedirs(config['global']['output_path'])
+    if not os.path.exists(config['global']['data_cache_path']):
+        os.makedirs(config['global']['data_cache_path'])
     
     # setup logging
     if args.log:
@@ -87,13 +108,6 @@ def setup(parser, display_event, **kwargs):
         filemode='w',
         level=logging.INFO)
     logging.getLogger('globus_sdk').setLevel(logging.WARNING)
-    
-    # Copy the config into the input directory for safe keeping
-    input_config_path = os.path.join(config['global'].get('data_cache_path'), 'run.cfg')
-    if not os.path.exists(input_config_path):
-        copyfile(
-            src=args.config,
-            dst=input_config_path)
 
     # Make sure the set_frequency is a list of ints
     set_frequency = config['global']['set_frequency']
@@ -121,21 +135,21 @@ def setup(parser, display_event, **kwargs):
                 config['global']['other_data'] = []
             config['global']['other_data'].append(new_dir)
 
-    # setup output and cache directories
-    if not os.path.exists(config['global']['output_path']):
-        os.makedirs(config['global']['output_path'])
-    if not os.path.exists(config['global']['data_cache_path']):
-        os.makedirs(config['global']['data_cache_path'])
-
     # setup run_scipts_path
-    config['global']['run_scripts_path'] = os.path.join(
+    run_script_path = os.path.join(
         config['global']['output_path'],
         'run_scripts')
+    config['global']['run_scripts_path'] = run_script_path
+    if not os.path.exists(run_script_path):
+        os.makedirs(run_script_path)
 
     # setup tmp_path
-    config['global']['tmp_path'] = os.path.join(
+    tmp_path = os.path.join(
         config['global']['output_path'],
         'tmp')
+    config['global']['tmp_path'] = tmp_path
+    if not os.path.exists(tmp_path):
+        os.makedirs(tmp_path)
     
     # setup the year_set list
     sim_start_year = int(config['global']['simulation_start_year'])

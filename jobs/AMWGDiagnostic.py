@@ -118,6 +118,9 @@ class AMWGDiagnostic(object):
 
         for depend in config.get('depends_on'):
             self.depends_on.append(depend)
+        
+        if not os.path.exists(self.config.get('run_scripts_path')):
+            os.makedirs(self.config.get('run_scripts_path'))
         self.status = JobStatus.VALID
 
     def get_set(self, filename):
