@@ -6,6 +6,7 @@ from uuid import uuid4
 
 from configobj import ConfigObj
 from YearSet import YearSet, SetStatus
+from shutil import copyfile
 from util import (check_config_white_space, 
                   check_for_inplace_data,
                   setup_globus,
