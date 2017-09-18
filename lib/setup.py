@@ -6,6 +6,7 @@ from uuid import uuid4
 
 from configobj import ConfigObj
 from YearSet import YearSet, SetStatus
+from shutil import copyfile
 from util import (check_config_white_space, 
                   check_for_inplace_data,
                   setup_globus,
@@ -59,13 +60,20 @@ def setup(parser, display_event, **kwargs):
         parser.print_help()
         sys.exit()
     
+    if args.resource_dir:
+        config['global']['resource_dir'] = args.resource_dir
+    else:
+        config['global']['resource_dir'] = os.path.join(
+            sys.prefix,
+            'share',
+            'processflow',
+            'resources')
+    
     # run validator for config file
     template_path = os.path.join(
-        sys.prefix,
-        'share',
-        'acme_workflow',
-        'resources',
+        config['global']['resource_dir'],
         'config_template.json')
+
     with open(template_path, 'r') as template_file:
         template = json.load(template_file)
     valid, messages = verify_config(config, template)

@@ -438,6 +438,9 @@ def handle_completed_job(job, job_set, event_list):
             '..',
             img_dir)
         setup_local_hosting(job, event_list, img_src)
+    elif job.get_type() == 'acme_diags':
+        img_src = job.config.get('results_dir')
+        setup_local_hosting(job, event_list, img_src)
     
     # Second check if the whole set is done
     job_set_done = True
@@ -566,9 +569,6 @@ def setup_local_hosting(job, event_list, img_src, generate=False):
     Sets up the local directory for hosting diagnostic sets
     """
     msg = 'Setting up local hosting for {}'.format(job.get_type())
-    # print msg
-    # print job
-
 
     t = threading.current_thread()
     tid = t.ident
@@ -611,11 +611,25 @@ def setup_local_hosting(job, event_list, img_src, generate=False):
     msg = 'Changing permissions on image_dir {}'.format(host_dir)
     logging.info(msg)
 
-    subprocess.call(['chmod', '-R', '755', img_src])
+    p = Popen(['chmod', '-R', '755', img_src], stdout=PIPE, stderr=PIPE)
+    out, err = p.communicate()
+    if err:
+        event_list.push(
+            message=err,
+            data=job    )
 
-    msg = '{job} hosted at {url}'.format(
-        url=url,
-        job=job.get_type())
+    if job.get_type() == 'amwg':
+        print '--------------------'
+        print 'AMWG SETUP AND HOSTED'
+        print '--------------------'
+    if job.get_type() == 'acme_diags':    
+        msg = '{job} hosted at {url}/viewer/index.html'.format(
+            url=url,
+            job=job.get_type())
+    else:
+        msg = '{job} hosted at {url}/index.html'.format(
+            url=url,
+            job=job.get_type())
     event_list.push(
         message=msg,
         data=job)

@@ -1,9 +1,9 @@
 # ACME Automated Workflow
 
-The acme_workflow performs post processing jobs automatically, removing many of the difficulties of performing 
+The processflow performs post processing jobs automatically, removing many of the difficulties of performing 
 diagnostics on model data. 
 
-[Documentation can be found here](https://acme-climate.github.io/acme_workflow/docs/html/index.html)
+[Documentation can be found here](https://acme-climate.github.io/acme_processflow/docs/html/index.html)
 
 
 # Usage<a name="usage"></a>

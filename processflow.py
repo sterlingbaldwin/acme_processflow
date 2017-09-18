@@ -43,6 +43,7 @@ parser.add_argument('-u', '--no-cleanup', help='Don\'t perform pre or post run c
 parser.add_argument('-m', '--no-monitor', help='Don\'t run the remote monitor or move any files over globus.', action='store_true')
 parser.add_argument('-s', '--size', help='The maximume size in gigabytes of a single transfer, defaults to 100. Must be larger then the largest single file.')
 parser.add_argument('-f', '--file-list', help='Turn on debug output of the internal file_list so you can see what the current state of the model files are', action='store_true')
+parser.add_argument('-r', '--resource-dir', help='Path to custom resource directory')
 
 # check for NCL
 if not os.environ.get('NCARG_ROOT'):
@@ -228,10 +229,7 @@ def add_jobs(year_set):
             '{:04d}-{:04d}'.format(year_set.set_start_year, year_set.set_end_year)])
 
         template_path = os.path.join(
-            sys.prefix,
-            'share',
-            'acme_workflow',
-            'resources',
+            config['global']['resource_dir'],
             'run_AIMS_template.csh')
 
         coupled_diaglobal_config = {
@@ -301,10 +299,7 @@ def add_jobs(year_set):
         if not os.path.exists(diag_temp_dir):
             os.makedirs(diag_temp_dir)
         template_path = os.path.join(
-            sys.prefix,
-            'share',
-            'acme_workflow',
-            'resources',
+            config['global']['resource_dir'],
             'amwg_template.csh')
 
         web_directory = os.path.join(
@@ -356,6 +351,7 @@ def add_jobs(year_set):
             '{start:04d}-{end:04d}'.format(
                 start=year_set.set_start_year,
                 end=year_set.set_end_year))
+
         if not os.path.exists(acme_diags_project_dir):
             os.makedirs(acme_diags_project_dir)
         
@@ -391,10 +387,7 @@ def add_jobs(year_set):
                 end=year_set.set_end_year)])
         
         template_path = os.path.join(
-            sys.prefix,
-            'share',
-            'acme_workflow',
-            'resources',
+            config['global']['resource_dir'],
             'acme_diags_template.py')
         
 
@@ -410,7 +403,6 @@ def add_jobs(year_set):
             'backend': acme_config.get('backend'),
             'sets': acme_config.get('sets'),
             'results_dir': acme_diags_project_dir,
-            'diff_colormap': acme_config.get('diff_colormap'),
             'template_path': template_path,
             'run_scripts_path': config.get('global').get('run_scripts_path'),
             'end_year': year_set.set_end_year,
@@ -1209,6 +1201,7 @@ if __name__ == "__main__":
             if status >= 0:
                 if not config.get('global').get('no-cleanup', False):
                     cleanup()
+                sleep(5)
                 message = 'All processing complete' if status == 1 else "One or more job failed"
                 emailaddr = config.get('global').get('email')
                 if emailaddr:
@@ -1232,22 +1225,21 @@ if __name__ == "__main__":
                                 for line in state_file.readlines():
                                     msg += line
 
-                        m = Mailer(src=emailaddr, dst=emailaddr)
+                        m = Mailer(src='processflowbot@llnl.gov', dst=emailaddr)
                         m.send(
                             status=message,
                             msg=msg)
                     except Exception as e:
                         logging.error(format_debug(e))
                 event_list.push(message=message)
-                sleep(5)
                 display_event.set()
                 print_type = 'ok' if status == 1 else 'error'
                 print_message(message, print_type)
-                sleep(2)
                 logging.info("All processes complete")
                 for t in thread_list:
                     thread_kill_event.set()
                     t.join(timeout=1.0)
+                sleep(2)
                 sys.exit(0)
             sleep(10)
             loop_count += 1

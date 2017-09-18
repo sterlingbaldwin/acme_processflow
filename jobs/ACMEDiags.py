@@ -27,7 +27,6 @@ class ACMEDiags(object):
             'backend': '',
             'sets': '',
             'results_dir': '',
-            'diff_colormap': '',
             'template_path': '',
             'run_scripts_path': '',
             'start_year': '',
@@ -87,10 +86,17 @@ class ACMEDiags(object):
 
     
     def postvalidate(self):
-        return False
+        if not os.path.exists(self.config['results_dir']):
+            return False
+        contents = os.listdir(self.config['results_dir'])
+        if 'viewer' not in contents:
+            return False
+        if 'index.html' not in os.listdir(os.path.join(self.config['results_dir'], 'viewer')):
+            return False
+        return True        
     
     def execute(self, batch='slurm', debug=False):
-
+        
         # Check if the output already exists
         if self.postvalidate():
             self.status = JobStatus.COMPLETED
@@ -100,7 +106,7 @@ class ACMEDiags(object):
             return 0
         else:
             self.status = JobStatus.PENDING
-
+        
         # set start run time
         self.start_time = datetime.now()
 
@@ -136,10 +142,10 @@ class ACMEDiags(object):
             dst=self.config.get('test_data_path'))
         
         # setup sbatch script
-        expected_name = 'acme_diag_set_{set}_{start}_{end}_{uuid}'.format(
+        expected_name = 'acme_diag_set_{start:04d}_{end:04d}_{uuid}'.format(
             set=self.config.get('year_set'),
-            start='{:04d}'.format(self.config.get('start_year')),
-            end='{:04d}'.format(self.config.get('end_year')),
+            start=self.config.get('start_year'),
+            end=self.config.get('end_year'),
             uuid=self.uuid[:5])
         run_script = os.path.join(self.config.get('run_scripts_path'), expected_name)
         if debug:
