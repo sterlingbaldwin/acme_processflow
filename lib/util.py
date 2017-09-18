@@ -687,7 +687,7 @@ def format_debug(e):
         lineno=traceback.tb_lineno(sys.exc_info()[2]),
         stack=traceback.print_tb(tb))
 
-def write_human_state(event_list, job_sets, state_path='run_state.txt', ui_mode=True):
+def write_human_state(event_list, job_sets, state_path='run_state.txt', ui_mode=True, **kwargs):
     """
     Writes out a human readable representation of the current execution state
 
@@ -752,6 +752,13 @@ def write_human_state(event_list, job_sets, state_path='run_state.txt', ui_mode=
     except Exception as e:
         logging.error(format_debug(e))
         return
+    
+    if kwargs.get('print_file_list'):
+        file_list = pformat(kwargs.get('file_list'))
+        head, _ = os.path.split(state_path)
+        file_list_path = os.path.join(head, 'output', 'file_list.txt')
+        with open(file_list_path, 'w') as fp:
+            fp.write(file_list)
 
 class colors:
     HEADER = '\033[95m'

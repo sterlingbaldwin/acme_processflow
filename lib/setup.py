@@ -74,6 +74,11 @@ def setup(parser, display_event, **kwargs):
             print message
         sys.exit(-1)
     
+    if not os.path.exists(config['global'].get('data_cache_path')):
+        os.makedirs(config['global'].get('data_cache_path'))
+    if not os.path.exists(config['global'].get('output_path')):
+        os.makedirs(config['global'].get('output_path')
+    
     # Copy the config into the input directory for safe keeping
     input_config_path = os.path.join(config['global'].get('data_cache_path'), 'run.cfg')
     if not os.path.exists(input_config_path):
@@ -235,6 +240,7 @@ def setup(parser, display_event, **kwargs):
     config['global']['no_monitor'] = True if args.no_monitor else False
     config['transfer']['size'] = args.size if args.size else 100
     config['global']['run_id'] = uuid4().hex[:6]
+    config['global']['print_file_list'] = True if args.file_list else False
     
     return config
 

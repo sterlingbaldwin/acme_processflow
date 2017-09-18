@@ -42,6 +42,7 @@ parser.add_argument('-l', '--log', help='Path to logging output file.')
 parser.add_argument('-u', '--no-cleanup', help='Don\'t perform pre or post run cleanup. This will leave all run scripts in place.', action='store_true')
 parser.add_argument('-m', '--no-monitor', help='Don\'t run the remote monitor or move any files over globus.', action='store_true')
 parser.add_argument('-s', '--size', help='The maximume size in gigabytes of a single transfer, defaults to 100. Must be larger then the largest single file.')
+parser.add_argument('-f', '--file-list', help='Turn on debug output of the internal file_list so you can see what the current state of the model files are', action='store_true')
 
 # check for NCL
 if not os.environ.get('NCARG_ROOT'):
@@ -1062,7 +1063,9 @@ if __name__ == "__main__":
             event_list=event_list,
             job_sets=job_sets,
             state_path=state_path,
-            ui_mode=config.get('global').get('ui'))
+            ui_mode=config.get('global').get('ui'),
+            print_file_list=config.get('global').get('print_file_list'),
+            file_list=file_list)
         if config.get('global').get('ui'):
             sleep(50)
             display_event.set()
@@ -1199,7 +1202,9 @@ if __name__ == "__main__":
                 event_list=event_list,
                 job_sets=job_sets,
                 state_path=state_path,
-                ui_mode=config.get('global').get('ui'))
+                ui_mode=config.get('global').get('ui'),
+                print_file_list=config.get('global').get('print_file_list'),
+                file_list=file_list)
             status = is_all_done(job_sets)
             if status >= 0:
                 if not config.get('global').get('no-cleanup', False):
