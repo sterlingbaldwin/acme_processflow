@@ -15,11 +15,11 @@ from datetime import datetime
 
 from lib.util import print_debug
 from lib.util import print_message
-from lib.util import check_slurm_job_submission
 from lib.events import Event_list
 from lib.util import cmd_exists
 from lib.util import get_climo_output_files
 from lib.util import raw_filename_cmp
+from lib.slurm import Slurm
 from JobStatus import JobStatus
 
 
@@ -157,42 +157,16 @@ class Timeseries(object):
                 batchfile.write(slurm_prefix)
                 batchfile.write(slurm_command)
 
-            # slurm_cmd = ['sbatch', run_script, '--oversubscribe']
-            slurm_cmd = ['sbatch', run_script, '--oversubscribe']
-            started = False
-            retry_count = 0
-            while not started and retry_count < 5:
-                while True:
-                    try:
-                        self.proc = Popen(slurm_cmd, stdout=PIPE, stderr=PIPE)
-                        break
-                    except:
-                        sleep(1)
-                _, _ = self.proc.communicate()
-                started, job_id = check_slurm_job_submission(expected_name)
-                if started:
-                    self.status = JobStatus.SUBMITTED
-                    self.job_id = job_id
-                    message = '{type} id: {id} changed state to {state}'.format(
-                        type=self.get_type(),
-                        id=self.job_id,
-                        state=self.status)
-                    logging.info(message)
-                    self.event_list.push(message=message)
+            slurm = Slurm()
+            self.job_id = slurm.batch(run_script, '--oversubscribe')
+            self.status = JobStatus.SUBMITTED
+            message = '{type} id: {id} changed state to {state}'.format(
+                type=self.type,
+                id=self.job_id,
+                state=self.status)
+            logging.info(message)
+            self.event_list.push(message=message)
 
-                else:
-                    logging.warning('Error starting climo job, trying again attempt %s', str(retry_count))
-                    retry_count += 1
-
-            if retry_count >= 5:
-                self.status = JobStatus.FAILED
-                message = '{type} id: {id} changed state to {state}'.format(
-                    type=self.get_type(),
-                    id=self.job_id,
-                    state=self.status)
-                logging.info(message)
-                self.event_list.push(message=message)
-                self.job_id = 0
             return self.job_id
 
     def set_status(self, status):

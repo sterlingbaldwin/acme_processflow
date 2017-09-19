@@ -21,9 +21,10 @@ from globus_sdk import TransferData
 
 from YearSet import SetStatus
 from YearSet import YearSet
-from jobs.JobStatus import JobStatus
+from jobs.JobStatus import JobStatus, StatusMap
 from mailer import Mailer
 from string import Formatter
+from slurm import Slurm
 
 def transfer_directory(**kwargs):
     """
@@ -320,18 +321,6 @@ def check_year_sets(job_sets, file_list, sim_start_year, sim_end_year, debug, ad
         if not data_ready and not non_zero_data:
             job_set.status = SetStatus.NO_DATA
 
-    # if debug:
-    #     for job_set in job_sets:
-    #         start_year = job_set.set_start_year
-    #         end_year = job_set.set_end_year
-    #         print_message('year_set: {0}: {1}'.format(job_set.set_number, job_set.status), 'ok')
-    #         for i in range(start_year, end_year + 1):
-    #             for j in range(1, 13):
-    #                 file_key = '{0}-{1}'.format(i, j)
-    #                 status = file_list[file_key]
-    #                 print_message('  {key}: {value}'.format(key=file_key, value=status), 'ok')
-
-
 def start_ready_job_sets(job_sets, thread_list, debug, event, event_list):
     """
     Iterates over the job sets checking for ready ready jobs, and starts them
@@ -473,6 +462,7 @@ def monitor_job(job, job_set, event=None, debug=False, batch_type='slurm', event
         if job.status == JobStatus.COMPLETED:
             handle_completed_job(job, job_set, event_list)
             return
+        return
 
     # If the job still needs aditional files to transfer, wait for the transfer to finish
     while job_id == -1:
@@ -482,7 +472,6 @@ def monitor_job(job, job_set, event=None, debug=False, batch_type='slurm', event
         job_id = job.execute(batch='slurm')
     
     # Prep for submitting the job
-    job.set_status(JobStatus.SUBMITTED)
     message = 'Submitted {0} for year_set {1}'.format(
         job.get_type(),
         job_set.set_number)
@@ -491,78 +480,33 @@ def monitor_job(job, job_set, event=None, debug=False, batch_type='slurm', event
         data=job)
     logging.info(message)
 
-    exit_list = [JobStatus.VALID, JobStatus.SUBMITTED, JobStatus.RUNNING, JobStatus.PENDING]
-    none_exit_list = [JobStatus.RUNNING, JobStatus.PENDING, JobStatus.SUBMITTED]
+    slurm = Slurm()
     while True:
+        # update the job state
+        job_status = slurm.showjob(job_id)['JobState']
+        job.set_status(StatusMap[job_status])
+
         # this check is here in case the loop is stuck and the thread needs to be canceled
         if event and event.is_set():
             return
-        if job.status not in exit_list:
-            if job.status == JobStatus.INVALID:
-                return
-            # if the job is done, or there has been an error, exit
-            if job.status == JobStatus.FAILED:
-                job_set.status = SetStatus.FAILED
-                return
-            # if the job has completed successfully, handle completion and exit
-            if job.status == JobStatus.COMPLETED:
-                handle_completed_job(job, job_set, event_list)
-                return
+        if job.status == JobStatus.INVALID:
+            return
+        if job.status == JobStatus.FAILED:
+            job.end_time = datetime.now()
+            msg = 'Job {0} has failed'.format(job_id)
+            event_list.push(
+                message=msg,
+                data=job)
+            job_set.status = SetStatus.FAILED
+            return
+        if job.status == JobStatus.COMPLETED:
+            job.end_time = datetime.now()
+            handle_completed_job(job, job_set, event_list)
+            return
 
-        # Job is running
-        elif job.status in none_exit_list and job_id != 0:
-            cmd = ['scontrol', 'show', 'job', str(job_id)]
-            while True:
-                try:
-                    out = Popen(cmd, stdout=PIPE, stderr=PIPE).communicate()[0]
-                except:
-                    sleep(1)
-                else:
-                    break
-            # loop through the scontrol output looking for the JobState field
-            job_status = None
-            for line in out.split('\n'):
-                for word in line.split():
-                    if 'JobState' in word:
-                        index = word.find('=')
-                        job_status = word[index + 1:]
-                        break
-                if job_status:
-                    break
-            if not job_status:
-                sleep(5)
-                continue
-
-            status = None
-            if job_status == 'RUNNING':
-                status = JobStatus.RUNNING
-            elif job_status == 'PENDING':
-                status = JobStatus.PENDING
-            elif job_status == 'FAILED':
-                job.end_time = datetime.now()
-                status = JobStatus.FAILED
-                msg = 'Job {0} has failed'.format(job_id)
-                event_list.push(
-                    message=msg,
-                    data=job)
-                return
-            elif job_status == 'COMPLETED':
-                job.end_time = datetime.now()
-                status = JobStatus.COMPLETED
-                handle_completed_job(job, job_set, event_list)
-                return
-
-            if status and status != job.status:
-                job.status = status
-                message = "{type}: {id} status changed to {status}".format(
-                    id=job.job_id,
-                    status=status,
-                    type=job.get_type())
-                logging.info(message)
-
-            # wait for 10 seconds, or if the kill_thread event has been set, exit
-            if thread_sleep(10, event):
-                return
+        # wait for 10 seconds, or if the kill_thread event has been set, exit
+        if thread_sleep(10, event):
+            return
 
 def setup_local_hosting(job, event_list, img_src, generate=False):
     """
@@ -611,7 +555,7 @@ def setup_local_hosting(job, event_list, img_src, generate=False):
     msg = 'Changing permissions on image_dir {}'.format(host_dir)
     logging.info(msg)
 
-    p = Popen(['chmod', '-R', '755', img_src], stdout=PIPE, stderr=PIPE)
+    p = Popen(['chmod', 'a+rX', img_src], stdout=PIPE, stderr=PIPE)
     out, err = p.communicate()
     if err:
         event_list.push(
@@ -701,7 +645,7 @@ def format_debug(e):
         lineno=traceback.tb_lineno(sys.exc_info()[2]),
         stack=traceback.print_tb(tb))
 
-def write_human_state(event_list, job_sets, state_path='run_state.txt', ui_mode=True, **kwargs):
+def write_human_state(event_list, job_sets, state_path='run_state.txt', ui_mode=True, print_file_list=False, file_list=None):
     """
     Writes out a human readable representation of the current execution state
 
@@ -767,12 +711,13 @@ def write_human_state(event_list, job_sets, state_path='run_state.txt', ui_mode=
         logging.error(format_debug(e))
         return
     
-    if kwargs.get('print_file_list'):
-        file_list = pformat(kwargs.get('file_list'))
+    if print_file_list:
         head, _ = os.path.split(state_path)
-        file_list_path = os.path.join(head, 'output', 'file_list.txt')
+        file_list_path = os.path.join(head, 'file_list.txt')
+        if not os.path.exists(head):
+            os.makedirs(head)
         with open(file_list_path, 'w') as fp:
-            fp.write(file_list)
+            fp.write(pformat(file_list))
 
 class colors:
     HEADER = '\033[95m'
@@ -1056,39 +1001,3 @@ def thread_sleep(seconds, event):
             return 1
         sleep(1)
     return 0
-
-def check_slurm_job_submission(expected_name):
-    """
-    Checks if a job with the expected_name is in the slurm queue
-    """
-    cmd = ['scontrol', 'show', 'job']
-    job_id = 0
-    found_job = False
-    while True:
-        while True:
-            try:
-                out = Popen(cmd, stdout=PIPE, stderr=PIPE).communicate()[0]
-                break
-            except:
-                sleep(1)
-        out = out.split('\n')
-        if 'error' in out[0]:
-            sleep(1)
-            msg = 'Error checking job status for {0}'.format(expected_name)
-            logging.warning(msg)
-            continue
-        for line in out:
-            for word in line.split():
-                if 'JobId' in word:
-                    index = word.find('=') + 1
-                    job_id = int(word[index:])
-                    # continue
-                if 'Name' in word:
-                    index = word.find('=') + 1
-                    if word[index:] == expected_name:
-                        found_job = True
-
-                if found_job and job_id != 0:
-                    return found_job, job_id
-        sleep(1)
-    return found_job, job_id

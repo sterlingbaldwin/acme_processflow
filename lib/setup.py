@@ -85,7 +85,7 @@ def setup(parser, display_event, **kwargs):
     if not os.path.exists(config['global'].get('data_cache_path')):
         os.makedirs(config['global'].get('data_cache_path'))
     if not os.path.exists(config['global'].get('output_path')):
-        os.makedirs(config['global'].get('output_path')
+        os.makedirs(config['global'].get('output_path'))
     
     # Copy the config into the input directory for safe keeping
     input_config_path = os.path.join(config['global'].get('data_cache_path'), 'run.cfg')
