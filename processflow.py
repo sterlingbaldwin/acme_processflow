@@ -178,10 +178,7 @@ def add_jobs(year_set):
         timeseries_output_dir = os.path.join(
             config.get('global').get('output_path'),
             'monthly',
-            '{}yr'.format(year_set.length),
-            '{start:04d}-{end:04d}'.format(
-                start=year_set.set_start_year,
-                end=year_set.set_end_year))
+            '{}yr'.format(year_set.length))
         if not os.path.exists(timeseries_output_dir):
             msg = 'Creating timeseries output directory'
             logging.info(msg)
@@ -955,6 +952,54 @@ def start_display(config, event):
     except KeyboardInterrupt as e:
         return
 
+def finishup(config, job_sets, state_path):
+    if not config.get('global').get('no-cleanup', False):
+        cleanup()
+    sleep(5)
+    message = 'All processing complete' if status == 1 else "One or more job failed"
+    emailaddr = config.get('global').get('email')
+    if emailaddr:
+        event_list.push(message='Sending notification email to {}'.format(emailaddr))
+        try:
+            if status == 1:
+                msg = 'Post processing jobs have completed successfully\n'
+                for job_set in job_sets:
+                    msg += '\nYearSet {start}-{end}: {status}\n'.format(
+                        start=job_set.set_start_year,
+                        end=job_set.set_end_year,
+                        status=job_set.status)
+                    for job in job_set.jobs:
+                        if job.get_type() in ['coupled_diags', 'amwg', 'acme_diags']:
+                            msg += '    > {job} hosted at {url}\n'.format(
+                                job=job.get_type(),
+                                url=job.config['host_url'])
+                        else:
+                            msg += '    > {job} output located {output}\n'.format(
+                                job=job.get_type(),
+                                output=job.config['output_directory'])
+            else:
+                msg = 'One or more job failed\n\n'
+                with open(state_path, 'r') as state_file:
+                    for line in state_file.readlines():
+                        msg += line
+
+            m = Mailer(src='processflowbot@llnl.gov', dst=emailaddr)
+            m.send(
+                status=message,
+                msg=msg)
+        except Exception as e:
+            logging.error(format_debug(e))
+    event_list.push(message=message)
+    display_event.set()
+    print_type = 'ok' if status == 1 else 'error'
+    print_message(message, print_type)
+    logging.info("All processes complete")
+    for t in thread_list:
+        thread_kill_event.set()
+        t.join(timeout=1.0)
+    sleep(2)
+    sys.exit(0)
+
 if __name__ == "__main__":
 
     # A list of all the expected files
@@ -1138,7 +1183,7 @@ if __name__ == "__main__":
     # if its not, transfer it over
     case_scripts_dir = os.path.join(
         config['global']['data_cache_path'], 'case_scripts')
-    if not os.path.exists(case_scripts_dir):
+    if not os.path.exists(case_scripts_dir) and not config['global']['no_monitor']:
         msg = 'case_scripts not local, transfering remote copy'
         event_list.push(message=msg)
         logging.info(msg)
@@ -1202,48 +1247,7 @@ if __name__ == "__main__":
                 file_list=file_list)
             status = is_all_done(job_sets)
             if status >= 0:
-                if not config.get('global').get('no-cleanup', False):
-                    cleanup()
-                sleep(5)
-                message = 'All processing complete' if status == 1 else "One or more job failed"
-                emailaddr = config.get('global').get('email')
-                if emailaddr:
-                    event_list.push(message='Sending notification email to ' + emailaddr)
-                    try:
-                        if status == 1:
-                            diag_msg = ''
-                            if config['global']['set_jobs'].get('coupled_diag') or \
-                               config['global']['set_jobs'].get('amwg') or \
-                               config['global']['set_jobs'].get('acme_diag'):
-                                diag_msg = 'Your diagnostics can be found here:\n'
-                                for evt in event_list.list:
-                                    if 'hosted' in evt.message:
-                                        diag_msg += evt.message + '\n'
-                            msg = 'Post processing jobs have completed successfully\n\n{diag}'.format(
-                                id=config.get('global').get('run_id'),
-                                diag=diag_msg)
-                        else:
-                            msg = 'One or more job failed\n\n'
-                            with open(state_path, 'r') as state_file:
-                                for line in state_file.readlines():
-                                    msg += line
-
-                        m = Mailer(src='processflowbot@llnl.gov', dst=emailaddr)
-                        m.send(
-                            status=message,
-                            msg=msg)
-                    except Exception as e:
-                        logging.error(format_debug(e))
-                event_list.push(message=message)
-                display_event.set()
-                print_type = 'ok' if status == 1 else 'error'
-                print_message(message, print_type)
-                logging.info("All processes complete")
-                for t in thread_list:
-                    thread_kill_event.set()
-                    t.join(timeout=1.0)
-                sleep(2)
-                sys.exit(0)
+                finishup(config, job_sets, state_path)
             sleep(10)
             loop_count += 1
     except KeyboardInterrupt as e:

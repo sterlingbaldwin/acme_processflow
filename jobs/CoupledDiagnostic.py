@@ -134,7 +134,6 @@ class CoupledDiagnostic(object):
         if not os.path.exists(self.config.get('run_scripts_path')):
             os.makedirs(self.config.get('run_scripts_path'))
 
-
     def postvalidate(self):
         """
         Check that what the job was supposed to do actually happened
