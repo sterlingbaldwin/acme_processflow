@@ -8,10 +8,10 @@ from datetime import datetime
 from shutil import copyfile
 
 from lib.util import render
-from lib.util import check_slurm_job_submission
 from lib.util import get_climo_output_files
 from lib.util import create_symlink_dir
 from lib.events import Event_list
+from lib.slurm import Slurm
 from JobStatus import JobStatus 
 
 
@@ -38,7 +38,7 @@ class ACMEDiags(object):
         }
         self.slurm_args = {
             'num_cores': '-n 16', # 16 cores
-            'run_time': '-t 0-02:00', # 1 hour run time
+            'run_time': '-t 0-02:00', # 2 hour max run time
             'num_machines': '-N 1', # run on one machine
             'oversubscribe': '--oversubscribe'
         }
@@ -104,8 +104,6 @@ class ACMEDiags(object):
             self.event_list.push(message=message)
             logging.info(message)
             return 0
-        else:
-            self.status = JobStatus.PENDING
         
         # set start run time
         self.start_time = datetime.now()
@@ -124,7 +122,7 @@ class ACMEDiags(object):
             output_path=template_out)
         run_script_template_out = os.path.join(
             self.config.get('run_scripts_path'),
-            'acme_diags_{start}_{end}'.format(
+            'acme_diag_{start}_{end}'.format(
                 start=self.config.get('start_year'),
                 end=self.config.get('end_year')))
         copyfile(
@@ -161,32 +159,20 @@ class ACMEDiags(object):
             batchfile.write(slurm_prefix)
             slurm_command = ' '.join(cmd)
             batchfile.write(slurm_command)
-        
-        slurm_cmd = ['sbatch', run_script, '--oversubscribe']
-        started = False
-        while not started:
-            while True:
-                try:
-                    self.proc = Popen(slurm_cmd, stdout=PIPE, stderr=PIPE) 
-                except:
-                    sleep(1)
-                else:
-                    break
-            output, err = self.proc.communicate()
-            started, job_id = check_slurm_job_submission(expected_name)
-            if started:
-                self.status = JobStatus.SUBMITTED
-                self.job_id = job_id
-                message = '{type} id: {id} changed state to {state}'.format(
-                    type=self.get_type(),
-                    id=self.job_id,
-                    state=self.status)
-                logging.info(message)
-                self.event_list.push(message=message)
+
+        slurm = Slurm()
+        self.job_id = slurm.batch(run_script, '--oversubscribe')
+        self.status = slurm.showjob(self.job_id).get('JobState')
+        message = '{type} id: {id} changed state to {state}'.format(
+            type=self.type,
+            id=self.job_id,
+            state=self.status)
+        logging.info(message)
+        self.event_list.push(message=message)
 
         return self.job_id
-        
-    
+
+
     def __str__(self):
         return pformat({
             'type': self.type,
@@ -196,9 +182,9 @@ class ACMEDiags(object):
             'job_id': self.job_id,
             'year_set': self.year_set
         }, indent=4)
-    
+
     def get_type(self):
         return self.type
-    
+
     def set_status(self, status):
         self.status = status

@@ -42,6 +42,7 @@ parser.add_argument('-l', '--log', help='Path to logging output file.')
 parser.add_argument('-u', '--no-cleanup', help='Don\'t perform pre or post run cleanup. This will leave all run scripts in place.', action='store_true')
 parser.add_argument('-m', '--no-monitor', help='Don\'t run the remote monitor or move any files over globus.', action='store_true')
 parser.add_argument('-s', '--size', help='The maximume size in gigabytes of a single transfer, defaults to 100. Must be larger then the largest single file.')
+parser.add_argument('-f', '--file-list', help='Turn on debug output of the internal file_list so you can see what the current state of the model files are', action='store_true')
 parser.add_argument('-r', '--resource-dir', help='Path to custom resource directory')
 
 # check for NCL
@@ -177,7 +178,10 @@ def add_jobs(year_set):
         timeseries_output_dir = os.path.join(
             config.get('global').get('output_path'),
             'monthly',
-            '{}yr'.format(year_set.length))
+            '{}yr'.format(year_set.length),
+            '{start:04d}-{end:04d}'.format(
+                start=year_set.set_start_year,
+                end=year_set.set_end_year))
         if not os.path.exists(timeseries_output_dir):
             msg = 'Creating timeseries output directory'
             logging.info(msg)
@@ -347,7 +351,10 @@ def add_jobs(year_set):
         acme_diags_project_dir = os.path.join(
             config.get('global').get('output_path'),
             'acme_diags',
-            '{:04d}-{:04d}'.format(year_set.set_start_year, year_set.set_end_year))
+            '{start:04d}-{end:04d}'.format(
+                start=year_set.set_start_year,
+                end=year_set.set_end_year))
+
         if not os.path.exists(acme_diags_project_dir):
             os.makedirs(acme_diags_project_dir)
         
@@ -370,13 +377,17 @@ def add_jobs(year_set):
             os.environ['USER'],
             config.get('global').get('experiment'),
             config.get('acme_diags').get('host_directory'),
-            '{:04d}-{:04d}'.format(year_set.set_start_year, year_set.set_end_year))
+            '{start:04d}-{end:04d}'.format(
+                start=year_set.set_start_year,
+                end=year_set.set_end_year))
         host_url = '/'.join([
             config.get('global').get('img_host_server'),
             os.environ['USER'],
             config.get('global').get('experiment'),
             config.get('acme_diags').get('host_url_prefix'),
-            '{:04d}-{:04d}'.format(year_set.set_start_year, year_set.set_end_year)])
+            '{start:04d}-{end:04d}'.format(
+                start=year_set.set_start_year,
+                end=year_set.set_end_year)])
         
         template_path = os.path.join(
             config['global']['resource_dir'],
@@ -1047,7 +1058,9 @@ if __name__ == "__main__":
             event_list=event_list,
             job_sets=job_sets,
             state_path=state_path,
-            ui_mode=config.get('global').get('ui'))
+            ui_mode=config.get('global').get('ui'),
+            print_file_list=config.get('global').get('print_file_list'),
+            file_list=file_list)
         if config.get('global').get('ui'):
             sleep(50)
             display_event.set()
@@ -1184,7 +1197,9 @@ if __name__ == "__main__":
                 event_list=event_list,
                 job_sets=job_sets,
                 state_path=state_path,
-                ui_mode=config.get('global').get('ui'))
+                ui_mode=config.get('global').get('ui'),
+                print_file_list=config.get('global').get('print_file_list'),
+                file_list=file_list)
             status = is_all_done(job_sets)
             if status >= 0:
                 if not config.get('global').get('no-cleanup', False):

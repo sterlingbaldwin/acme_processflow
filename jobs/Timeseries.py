@@ -15,11 +15,11 @@ from datetime import datetime
 
 from lib.util import print_debug
 from lib.util import print_message
-from lib.util import check_slurm_job_submission
 from lib.events import Event_list
 from lib.util import cmd_exists
 from lib.util import get_climo_output_files
 from lib.util import raw_filename_cmp
+from lib.slurm import Slurm
 from JobStatus import JobStatus
 
 
@@ -90,7 +90,7 @@ class Timeseries(object):
             message = 'Timeseries already computed, skipping'
             self.event_list.push(message=message)
             return 0
-        
+
         self.start_time = datetime.now()
         input_dir = self.config.get('input_directory')
         file_list = [os.path.join(input_dir, item) for item in os.listdir(input_dir)]
@@ -106,94 +106,36 @@ class Timeseries(object):
             '--map={}'.format(self.config.get('regrid_map_path')),
             ' '.join(file_list)
         ]
-        if not batch:
-            # Not running in batch mode
-            while True:
-                try:
-                    self.proc = Popen(
-                        cmd,
-                        stdout=PIPE,
-                        stderr=PIPE,
-                        shell=False)
-                    break
-                except:
-                    sleep(1)
-            self.status = JobStatus.RUNNING
-            done = 2
-            console_output = ''
-            while done != 0:
-                done = self.proc.poll()
-                lines = self.proc.stdout.readlines()
-                for line in lines:
-                    console_output += line
-                lines = self.proc.stderr.readlines()
-                for line in lines:
-                    console_output += line
-                print console_output
-                if done < 0:
-                    break
-                sleep(1)
-                self.outputs['console_output'] = console_output
-                print console_output
 
-            self.status = JobStatus.COMPLETED
-            return 0
-        else:
-            # Submitting the job to SLURM
-            expected_name = 'timeseries_set_{year_set}_{start}_{end}_{uuid}'.format(
-                year_set=self.year_set,
-                start='{:04d}'.format(self.config.get('start_year')),
-                end='{:04d}'.format(self.config.get('end_year')),
-                uuid=self.uuid[:5])
-            run_script = os.path.join(self.config.get('run_scripts_path'), expected_name)
+        # Submitting the job to SLURM
+        expected_name = 'timeseries_{start}_{end}_{uuid}'.format(
+            year_set=self.year_set,
+            start='{:04d}'.format(self.config.get('start_year')),
+            end='{:04d}'.format(self.config.get('end_year')),
+            uuid=self.uuid[:5])
+        run_script = os.path.join(self.config.get('run_scripts_path'), expected_name)
 
-            self.slurm_args['error_file'] = '-e {error_file}'.format(error_file=run_script + '.err')
-            self.slurm_args['output_file'] = '-o {output_file}'.format(output_file=run_script + '.out')
-            slurm_command = ' '.join(cmd)
+        self.slurm_args['error_file'] = '-e {error_file}'.format(error_file=run_script + '.err')
+        self.slurm_args['output_file'] = '-o {output_file}'.format(output_file=run_script + '.out')
+        slurm_command = ' '.join(cmd)
 
-            with open(run_script, 'w') as batchfile:
-                batchfile.write('#!/bin/bash\n')
-                slurm_prefix = '\n'.join(['#SBATCH ' + self.slurm_args[s] for s in self.slurm_args]) + '\n'
-                batchfile.write(slurm_prefix)
-                batchfile.write(slurm_command)
+        with open(run_script, 'w') as batchfile:
+            batchfile.write('#!/bin/bash\n')
+            slurm_prefix = '\n'.join(['#SBATCH ' + self.slurm_args[s] for s in self.slurm_args]) + '\n'
+            batchfile.write(slurm_prefix)
+            batchfile.write(slurm_command)
 
-            # slurm_cmd = ['sbatch', run_script, '--oversubscribe']
-            slurm_cmd = ['sbatch', run_script, '--oversubscribe']
-            started = False
-            retry_count = 0
-            while not started and retry_count < 5:
-                while True:
-                    try:
-                        self.proc = Popen(slurm_cmd, stdout=PIPE, stderr=PIPE)
-                        break
-                    except:
-                        sleep(1)
-                _, _ = self.proc.communicate()
-                started, job_id = check_slurm_job_submission(expected_name)
-                if started:
-                    self.status = JobStatus.SUBMITTED
-                    self.job_id = job_id
-                    message = '{type} id: {id} changed state to {state}'.format(
-                        type=self.get_type(),
-                        id=self.job_id,
-                        state=self.status)
-                    logging.info(message)
-                    self.event_list.push(message=message)
+        slurm = Slurm()
+        self.job_id = slurm.batch(run_script, '--oversubscribe')
+        self.status = JobStatus.SUBMITTED
+        message = '{type} id: {id} changed state to {state}'.format(
+            type=self.type,
+            id=self.job_id,
+            state=self.status)
+        logging.info(message)
+        self.event_list.push(message=message)
 
-                else:
-                    logging.warning('Error starting climo job, trying again attempt %s', str(retry_count))
-                    retry_count += 1
-
-            if retry_count >= 5:
-                self.status = JobStatus.FAILED
-                message = '{type} id: {id} changed state to {state}'.format(
-                    type=self.get_type(),
-                    id=self.job_id,
-                    state=self.status)
-                logging.info(message)
-                self.event_list.push(message=message)
-                self.job_id = 0
-            return self.job_id
+        return self.job_id
 
     def set_status(self, status):
         self.status = status

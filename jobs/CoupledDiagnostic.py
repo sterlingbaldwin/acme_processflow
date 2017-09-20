@@ -16,10 +16,10 @@ from cdp.cdp_viewer import OutputViewer
 from lib.util import render
 from lib.util import print_message
 from lib.util import print_debug
-from lib.util import check_slurm_job_submission
 from lib.util import cmd_exists
 from lib.util import create_symlink_dir
 from lib.events import Event_list
+from lib.slurm import Slurm
 from JobStatus import JobStatus
 
 
@@ -252,8 +252,6 @@ class CoupledDiagnostic(object):
             message = 'Coupled_diag job already computed, skipping'
             self.event_list.push(message=message)
             return 0
-        else:
-            self.status = JobStatus.PENDING
 
         self.start_time = datetime.now()
         # create symlinks to the input data
@@ -301,33 +299,16 @@ class CoupledDiagnostic(object):
             batchfile.write(slurm_prefix)
             batchfile.write(cmd)
 
-        slurm_cmd = ['sbatch', run_script, '--oversubscribe']
-        started = False
-        retry_count = 0
-
-
         # This is here as a stop gap measure to try and dodge the bullet outlined
         # here https://github.com/ACME-Climate/PreAndPostProcessingScripts/issues/32
         sleep(randint(0, 5))
-        while not started:
-            while True:
-                try:
-                    self.proc = Popen(slurm_cmd, stdout=PIPE, stderr=PIPE)
-                except:
-                    sleep(1)
-                else:
-                    break
-            output, err = self.proc.communicate()
-            started, job_id = check_slurm_job_submission(expected_name)
-            if started:
-                self.job_id = job_id
-                message = "## {job} id: {id} changed status to {status}".format(
-                    job=self.type,
-                    id=self.job_id,
-                    status=self.status)
-                logging.info(message)
-            else:
-                logging.warning('Failed to start diag job, trying again')
-                logging.warning('%s \n%s', output, err)
+        slurm = Slurm()
+        self.job_id = slurm.batch(run_script, '--oversubscribe')
+        self.status = slurm.showjob(self.job_id).get('JobState')
+        message = "## {job} id: {id} changed status to {status}".format(
+            job=self.type,
+            id=self.job_id,
+            status=self.status)
+        logging.info(message)
 
         return self.job_id
