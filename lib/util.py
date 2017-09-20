@@ -351,10 +351,8 @@ def start_ready_job_sets(job_sets, thread_list, debug, event, event_list):
                             job=job.get_type(), dep=dep.get_type())
                         logging.info(msg)
                 else:
-                    # print '{job} is ready'.format(job=job.get_type())
                     ready = True
                 if not ready:
-                    # print '{job} is not ready'.format(job=job.get_type())
                     continue
                 # if the job isnt a climo, and the job that it depends on is done, start it
                 if job.status == JobStatus.VALID:
@@ -376,6 +374,7 @@ def start_ready_job_sets(job_sets, thread_list, debug, event, event_list):
                             sleep(1)
                         else:
                             break
+                    job_set.status = SetStatus.RUNNING
                 if job.status == JobStatus.INVALID:
                     message = "{type} id: {id} status changed to {status}".format(
                         id=job.job_id,
@@ -522,11 +521,11 @@ def setup_local_hosting(job, event_list, img_src, generate=False):
     logging.info(msg)
     host_dir = job.config.get('web_dir')
     url = job.config.get('host_url')
-    if os.path.exists(host_dir):
+    if os.path.exists(job.config.get('web_dir')):
         new_id = uuid4().hex[:8]
         host_dir += '_' + new_id
         url += '_' + new_id
-        
+        job.config['host_url'] = url 
     if not os.path.exists(img_src):
         msg = '{job} hosting failed, no image source at {path}'.format(
             job=job.get_type(),
@@ -563,17 +562,20 @@ def setup_local_hosting(job, event_list, img_src, generate=False):
             data=job    )
 
     if job.get_type() == 'amwg':
-        print '--------------------'
-        print 'AMWG SETUP AND HOSTED'
-        print '--------------------'
-    if job.get_type() == 'acme_diags':    
+        msg = '{job} hosted at {url}/index.html'.format(
+            url=url,
+            job=job.get_type())
+        job.config['host_url'] += '/index.html'
+    elif job.get_type() == 'acme_diags':
         msg = '{job} hosted at {url}/viewer/index.html'.format(
             url=url,
             job=job.get_type())
+        job.config['host_url'] += '/viewer/index.html'
     else:
         msg = '{job} hosted at {url}/index.html'.format(
             url=url,
             job=job.get_type())
+        job.config['host_url'] += '/index.html'
     event_list.push(
         message=msg,
         data=job)

@@ -84,7 +84,6 @@ class ACMEDiags(object):
         if not os.path.exists(self.config.get('run_scripts_path')):
             os.makedirs(self.config.get('run_scripts_path'))
 
-    
     def postvalidate(self):
         if not os.path.exists(self.config['results_dir']):
             return False

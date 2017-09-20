@@ -179,6 +179,15 @@ class Timeseries(object):
         if not os.path.exists(self.config.get('run_scripts_path')):
             os.makedirs(self.config.get('run_scripts_path'))
         self.status = JobStatus.VALID
+    
+    def _find_year(self, filename):
+        pattern = '_\d\d\d\d\d\d_\d\d\d\d\d\d.*'
+        match = re.search(pattern=pattern, string=filename)
+        if not match:
+            return False, False
+        start = int(filename[match.start() + 1: match.start() + 5])
+        end = int(filename[match.start() + 8: match.start() + 12])
+        return start, end
 
     def postvalidate(self):
         """
@@ -192,8 +201,11 @@ class Timeseries(object):
             found = False
             for out in output_dir:
                 if var in out:
-                    found = True
-                    break
+                    start, end = self._find_year(out)
+                    if start == self.config['start_year'] and end == self.config['end_year']:
+                        found = True
+                        break
+
             if not found:
                 complete = False
                 break

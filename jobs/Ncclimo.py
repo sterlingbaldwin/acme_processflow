@@ -202,6 +202,7 @@ class Climo(object):
         for i in config:
             if i in self.inputs:
                 self.config[i] = config.get(i)
+        self.config['output_directory'] = self.config['regrid_output_directory']
         all_inputs = True
         for i in self.inputs:
             if i not in self.config:
