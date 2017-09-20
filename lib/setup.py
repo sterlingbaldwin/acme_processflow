@@ -198,7 +198,7 @@ def setup(parser, display_event, **kwargs):
         config=config,
         file_type_map=file_type_map)
 
-    if all_data:
+    if all_data or args.no_monitor:
         print "All data is present, skipping globus setup"
     else:
         endpoints = [endpoint for endpoint in config['transfer'].values()]

@@ -178,7 +178,10 @@ def add_jobs(year_set):
         timeseries_output_dir = os.path.join(
             config.get('global').get('output_path'),
             'monthly',
-            '{}yr'.format(year_set.length))
+            '{}yr'.format(year_set.length),
+            '{start:04d}-{end:04d}'.format(
+                start=year_set.set_start_year,
+                end=year_set.set_end_year))
         if not os.path.exists(timeseries_output_dir):
             msg = 'Creating timeseries output directory'
             logging.info(msg)
