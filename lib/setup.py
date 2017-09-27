@@ -2,6 +2,7 @@ import sys
 import os
 import logging
 import json
+import stat
 from uuid import uuid4
 
 from configobj import ConfigObj
@@ -107,6 +108,7 @@ def setup(parser, display_event, **kwargs):
         log_path = os.path.join(
             config.get('global').get('output_path'),
             'workflow.log')
+    config['global']['log_path'] = log_path
     logging.basicConfig(
         format='%(asctime)s:%(levelname)s: %(message)s',
         datefmt='%m/%d/%Y %I:%M:%S %p',
@@ -175,11 +177,11 @@ def setup(parser, display_event, **kwargs):
                 start_year=set_start_year,
                 end_year=set_end_year)
             job_sets.append(new_set)
-    
+
     line = 'Added {num} year sets to the queue'.format(
         num=len(job_sets))
     event_list.push(message=line)
-    
+
     # initialize the file_list
     line = 'Initializing file list'
     event_list.push(message=line)
@@ -190,7 +192,7 @@ def setup(parser, display_event, **kwargs):
         sim_start_year=sim_start_year,
         sim_end_year=sim_end_year,
         file_type_map=file_type_map)
-    
+
     # check if we have all the data already, if not setup globus
     all_data = check_for_inplace_data(
         file_list=kwargs.get('file_list'),
@@ -219,6 +221,7 @@ def setup(parser, display_event, **kwargs):
             error_output = os.path.join(
                 output_path,
                 'workflow.error')
+            config['global']['error_path'] = error_output
             if not os.path.exists(output_path):
                 os.makedirs(output_path)
             sys.stderr = open(error_output, 'w')
@@ -249,7 +252,7 @@ def setup(parser, display_event, **kwargs):
     config['transfer']['size'] = args.size if args.size else 100
     config['global']['run_id'] = uuid4().hex[:6]
     config['global']['print_file_list'] = True if args.file_list else False
-    
+
     return config
 
 def setup_file_list(**kwargs):
@@ -279,7 +282,6 @@ def setup_file_list(**kwargs):
     file_list['STREAMS']['streams.ocean'] = SetStatus.NO_DATA
     file_list['STREAMS']['streams.cice'] = SetStatus.NO_DATA
 
-    from pprint import pformat
     return file_list
 
 def verify_config(config, template):

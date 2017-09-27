@@ -10,6 +10,7 @@ import threading
 import logging
 import time
 import curses
+import stat
 
 from shutil import rmtree
 from shutil import move
@@ -54,6 +55,9 @@ if not os.environ.get('NCARG_ROOT'):
         print 'No NCARG_ROOT found in environment variables, make sure NCL installed on the machine and add its path to your ~/.bashrc'
         sys.exit()
 
+# set variable to make vcs shut up
+os.environ['UVCDAT_ANONYMOUS_LOG'] = 'False'
+
 # create global Event_list
 event_list = Event_list()
 
@@ -62,7 +66,7 @@ file_type_map = {
     'MPAS_AM': ('mpas_dir', 1, None),
     'MPAS_CICE': ('mpas_cice_dir', 1, None),
     'ATM': ('atm_dir', 1, None),
-    'MPAS_RST': ('mpas_rst_dir', 0, 'mpaso.rst.0003-01-01_00000.nc'),
+    'MPAS_RST': ('mpas_rst_dir', 0, 'mpaso.rst.0002-01-01_00000.nc'),
     'MPAS_O_IN': ('mpas_o-in_dir', 0, 'mpas-o_in'),
     'MPAS_CICE_IN': ('mpas_cice-in_dir', 0, 'mpas-cice_in'),
     'STREAMS': ('streams_dir', 0, None),
@@ -453,14 +457,17 @@ def monitor_check(monitor, config, file_list, event_list, display_event):
     custom_filetype = False
     for new_file in new_files:
         file_type = new_file.get('type')
+
         if not file_type:
             message = "File {0} has no file_type".format(
                 new_file['filename'])
             event_list.push(message=message)
             continue
         file_key = ""
-        if file_type in ['ATM', 'MPAS_AM', 'MPAS_CICE', 'MPAS_RST']:
+        if file_type in ['ATM', 'MPAS_AM', 'MPAS_CICE']:
             file_key = filename_to_file_list_key(new_file['filename'])
+        elif file_type == 'MPAS_RST':
+            file_key = 'mpaso.rst.0002-01-01_00000.nc'
         elif file_type == 'MPAS_CICE_IN':
             file_key = 'mpas-cice_in'
         elif file_type == 'MPAS_O_IN':
@@ -485,7 +492,8 @@ def monitor_check(monitor, config, file_list, event_list, display_event):
         else:
             try:
                 status = file_list[file_type][file_key]
-            except KeyError:
+            except KeyError as e:
+                logging.error(e)
                 continue
         if not status:
             continue
@@ -501,10 +509,17 @@ def monitor_check(monitor, config, file_list, event_list, display_event):
                 os.remove(local_path)
                 checked_new_files.append(new_file)
         if status == SetStatus.NO_DATA:
-            checked_new_files.append(new_file)
+            if add:
+                checked_new_files.append(new_file)
 
     if not checked_new_files:
+        print '-_-_-_-_-_-_-_-_-_-_-_-_'
+        print 'No new files found'
+        print '-_-_-_-_-_-_-_-_-_-_-_-_'
         return
+    print '-_-_-_-_-_-_-_-_-_-_-_-_'
+    print pformta(checked_new_files)
+    print '-_-_-_-_-_-_-_-_-_-_-_-_'
 
     t_config = config.get('transfer')
     global_config = config.get('global')
@@ -651,37 +666,6 @@ def handle_transfer(transfer_job, f_list, event, event_list):
             elif item_type == 'RPT':
                 file_key = 'rpointer.ocn' if 'ocn' in item_name else 'rpointer.atm'
             file_list[item_type][file_key] = SetStatus.DATA_READY
-    
-def cleanup():
-    """
-    Clean up temp files created during the run
-    """
-    if config.get('global').get('no_cleanup'):
-        return
-    logging.info('Cleaning up temp directories')
-    try:
-        tmp_path = config.get('global').get('tmp_path')
-        if os.path.exists(tmp_path):
-            rmtree(tmp_path)
-    except Exception as e:
-        logging.error(format_debug(e))
-        print_message('Error removing temp directories')
-
-    try:
-        archive_path = os.path.join(
-            config.get('global').get('output_path'),
-            'script_archive',
-            time.strftime("%Y-%m-%d-%I-%M"))
-        if not os.path.exists(archive_path):
-            os.makedirs(archive_path)
-        run_script_path = config.get('global').get('run_scripts_path')
-        if os.path.exists(run_script_path):
-            while os.path.exists(archive_path):
-                archive_path = archive_path[:-1] + str(int(archive_path[-1]) + 1)
-            move(run_script_path, archive_path)
-    except Exception as e:
-        logging.error(format_debug(e))
-        logging.error('Error archiving run_scripts directory')
 
 def xy_check(x, y, hmax, wmax):
     if y >= hmax or x >= wmax:
@@ -952,10 +936,20 @@ def start_display(config, event):
     except KeyboardInterrupt as e:
         return
 
-def finishup(config, job_sets, state_path):
+def finishup(config, job_sets, state_path, event_list):
+    message = 'Performing post run cleanup'
+    event_list.push(message=message)
     if not config.get('global').get('no-cleanup', False):
-        cleanup()
-    sleep(5)
+        cleanup(config)
+        msg = 'Setting permissions for output'
+        logging.info('Setting permissions on output directory')
+        head, _ = os.path.split(config['global']['output_path'])
+        for directory in [config['global']['output_path'], head]:
+            if os.path.exists(directory):
+                os.chmod(directory, 0755)
+    message = 'File permissions set'
+    event_list.push(message=message)
+
     message = 'All processing complete' if status == 1 else "One or more job failed"
     emailaddr = config.get('global').get('email')
     if emailaddr:
@@ -1059,7 +1053,7 @@ if __name__ == "__main__":
     # check that all netCDF files exist
     path_exists(config)
     # cleanup any temp directories from previous runs
-    cleanup()
+    # cleanup(config)
     if not os.path.exists(config['global']['run_scripts_path']):
         os.makedirs(config['global']['run_scripts_path'])
     if not os.path.exists(config['global']['tmp_path']):
@@ -1247,13 +1241,13 @@ if __name__ == "__main__":
                 file_list=file_list)
             status = is_all_done(job_sets)
             if status >= 0:
-                finishup(config, job_sets, state_path)
+                finishup(config, job_sets, state_path, event_list)
             sleep(10)
             loop_count += 1
     except KeyboardInterrupt as e:
         print_message('----- KEYBOARD INTERUPT -----')
         print_message('cleaning up threads', 'ok')
         display_event.set()
+        thread_kill_event.set()
         for t in thread_list:
-            thread_kill_event.set()
             t.join(timeout=1.0)

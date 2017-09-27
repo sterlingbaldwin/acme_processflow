@@ -55,7 +55,6 @@ class Climo(object):
             'year_set': '',
             'run_scripts_path': ''
         }
-        self.proc = None
         self.slurm_args = {
             'num_cores': '-n 16', # 16 cores
             'run_time': '-t 0-05:00', # 2 hours run time
@@ -96,72 +95,37 @@ class Climo(object):
             '-O', self.config['regrid_output_directory'],
             '-l'
         ]
-        if not batch:
-            # Not running in batch mode
-            while True:
-                try:
-                    self.proc = Popen(
-                        cmd,
-                        stdout=PIPE,
-                        stderr=PIPE,
-                        shell=False)
-                except:
-                    print 'problem starting job'
-                    sleep(1)
-                else:
-                    print 'started job'
-                    break
-            self.status = JobStatus.RUNNING
-            done = 2
-            console_output = ''
-            while done != 0:
-                done = self.proc.poll()
-                lines = self.proc.stdout.readlines()
-                for line in lines:
-                    console_output += line
-                lines = self.proc.stderr.readlines()
-                for line in lines:
-                    console_output += line
-                print console_output
-                if done < 0:
-                    break
-                sleep(1)
-                self.outputs['console_output'] = console_output
-                print console_output
+        
+        # Submitting the job to SLURM
+        expected_name = 'ncclimo_set_{year_set}_{start}_{end}_{uuid}'.format(
+            year_set=self.config.get('year_set'),
+            start='{:04d}'.format(self.config.get('start_year')),
+            end='{:04d}'.format(self.config.get('end_year')),
+            uuid=self.uuid[:5])
+        run_script = os.path.join(self.config.get('run_scripts_path'), expected_name)
 
-            self.status = JobStatus.COMPLETED
-            return 0
-        else:
-            # Submitting the job to SLURM
-            expected_name = 'ncclimo_set_{year_set}_{start}_{end}_{uuid}'.format(
-                year_set=self.config.get('year_set'),
-                start='{:04d}'.format(self.config.get('start_year')),
-                end='{:04d}'.format(self.config.get('end_year')),
-                uuid=self.uuid[:5])
-            run_script = os.path.join(self.config.get('run_scripts_path'), expected_name)
+        self.slurm_args['error_file'] = '-e {error_file}'.format(error_file=run_script + '.err')
+        self.slurm_args['output_file'] = '-o {output_file}'.format(output_file=run_script + '.out')
 
-            self.slurm_args['error_file'] = '-e {error_file}'.format(error_file=run_script + '.err')
-            self.slurm_args['output_file'] = '-o {output_file}'.format(output_file=run_script + '.out')
+        with open(run_script, 'w') as batchfile:
+            batchfile.write('#!/bin/bash\n')
+            slurm_prefix = '\n'.join(['#SBATCH ' + self.slurm_args[s] for s in self.slurm_args]) + '\n'
+            batchfile.write(slurm_prefix)
+            slurm_command = ' '.join(cmd)
+            batchfile.write(slurm_command)
 
-            with open(run_script, 'w') as batchfile:
-                batchfile.write('#!/bin/bash\n')
-                slurm_prefix = '\n'.join(['#SBATCH ' + self.slurm_args[s] for s in self.slurm_args]) + '\n'
-                batchfile.write(slurm_prefix)
-                slurm_command = ' '.join(cmd)
-                batchfile.write(slurm_command)
+        slurm = Slurm()
+        self.job_id = slurm.batch(run_script, '--oversubscribe')
 
-            slurm = Slurm()
-            self.job_id = slurm.batch(run_script, '--oversubscribe')
+        self.status = JobStatus.SUBMITTED
+        message = '{type} id: {id} changed state to {state}'.format(
+            type=self.get_type(),
+            id=self.job_id,
+            state=self.status)
+        logging.info(message)
+        self.event_list.push(message=message)
 
-            self.status = JobStatus.SUBMITTED
-            message = '{type} id: {id} changed state to {state}'.format(
-                type=self.get_type(),
-                id=self.job_id,
-                state=self.status)
-            logging.info(message)
-            self.event_list.push(message=message)
-
-            return self.job_id
+        return self.job_id
 
     def set_status(self, status):
         self.status = status

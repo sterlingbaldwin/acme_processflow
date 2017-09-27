@@ -6,8 +6,11 @@ import re
 import os
 import threading
 import socket
+import glob
+import time
+
 from pprint import pformat
-from shutil import copytree, rmtree
+from shutil import copytree, rmtree, move
 from subprocess import Popen, PIPE
 from time import sleep
 from time import strftime
@@ -25,6 +28,42 @@ from jobs.JobStatus import JobStatus, StatusMap
 from mailer import Mailer
 from string import Formatter
 from slurm import Slurm
+
+def recursive_file_permissions(path, mode):
+    '''
+    Recursively updates file permissions on a given path.
+    '''
+    for item in glob.glob(path + '/*'):
+        if os.path.isdir(item):
+            os.chmod(os.path.join(path, item), mode)
+            recursive_file_permissions(os.path.join(path, item), mode)
+        else:
+            os.chmod(os.path.join(path, item), mode)
+
+def cleanup(config):
+    """
+    Clean up temp files created during the run
+    """
+    if config.get('global').get('no_cleanup'):
+        return
+    try:
+        archive_path = os.path.join(
+            config.get('global').get('output_path'),
+            'script_archive',
+            time.strftime("%Y-%m-%d-%I-%M"))
+        if not os.path.exists(archive_path):
+            os.makedirs(archive_path)
+        run_script_path = config.get('global').get('run_scripts_path')
+        if os.path.exists(run_script_path):
+            while os.path.exists(archive_path):
+                archive_path = archive_path[:-1] + str(int(archive_path[-1]) + 1)
+            move(run_script_path, archive_path)
+            move(config['global']['log_path'], archive_path)
+            if config['global'].get('error_path'):
+                move(config['global']['error_path'], archive_path)
+    except Exception as e:
+        logging.error(format_debug(e))
+        logging.error('Error archiving run_scripts directory')
 
 def transfer_directory(**kwargs):
     """
@@ -416,6 +455,7 @@ def handle_completed_job(job, job_set, event_list):
             job.config.get('coupled_project_dir'),
             img_dir)
         setup_local_hosting(job, event_list, img_src)
+        
     elif job.get_type() == 'amwg':
         img_dir = '{start:04d}-{end:04d}{casename}-obs'.format(
             start=job.config.get('start_year'),
@@ -441,9 +481,8 @@ def handle_completed_job(job, job_set, event_list):
             return
     if job_set_done:
         job_set.status = SetStatus.COMPLETED
-    
 
-def monitor_job(job, job_set, event=None, debug=False, batch_type='slurm', event_list=None):
+def monitor_job(job, job_set, event, debug=False, batch_type='slurm', event_list=None):
     """
     Monitor the slurm job, and update the status to 'complete' when it finishes
     This function should only be called from within a thread
@@ -451,7 +490,6 @@ def monitor_job(job, job_set, event=None, debug=False, batch_type='slurm', event
     t = threading.current_thread()
     tid = t.ident
     msg = 'THEAD {} STARTING {}'.format(tid, t.name)
-    job.start_time = datetime.now()
     job_id = job.execute(batch='slurm')
 
     # If the job has already been run, handle it like it just finished
@@ -466,10 +504,10 @@ def monitor_job(job, job_set, event=None, debug=False, batch_type='slurm', event
     # If the job still needs aditional files to transfer, wait for the transfer to finish
     while job_id == -1:
         job.set_status(JobStatus.WAITING_ON_INPUT)
-        if thread_sleep(60, event):
+        if thread_sleep(10, event):
             return
         job_id = job.execute(batch='slurm')
-    
+
     # Prep for submitting the job
     message = 'Submitted {0} for year_set {1}'.format(
         job.get_type(),
@@ -483,7 +521,10 @@ def monitor_job(job, job_set, event=None, debug=False, batch_type='slurm', event
     while True:
         # update the job state
         job_status = slurm.showjob(job_id)['JobState']
-        job.set_status(StatusMap[job_status])
+        job_status = StatusMap[job_status]
+        if job_status == JobStatus.RUNNING and job.status != JobStatus.RUNNING:
+            job.start_time = datetime.now()
+        job.set_status(job_status)
 
         # this check is here in case the loop is stuck and the thread needs to be canceled
         if event and event.is_set():
@@ -512,7 +553,6 @@ def setup_local_hosting(job, event_list, img_src, generate=False):
     Sets up the local directory for hosting diagnostic sets
     """
     msg = 'Setting up local hosting for {}'.format(job.get_type())
-
     t = threading.current_thread()
     tid = t.ident
     event_list.push(
@@ -522,10 +562,10 @@ def setup_local_hosting(job, event_list, img_src, generate=False):
     host_dir = job.config.get('web_dir')
     url = job.config.get('host_url')
     if os.path.exists(job.config.get('web_dir')):
-        new_id = uuid4().hex[:8]
+        new_id = time.strftime("%Y-%m-%d-%I-%M")
         host_dir += '_' + new_id
         url += '_' + new_id
-        job.config['host_url'] = url 
+        job.config['host_url'] = url
     if not os.path.exists(img_src):
         msg = '{job} hosting failed, no image source at {path}'.format(
             job=job.get_type(),
@@ -554,28 +594,32 @@ def setup_local_hosting(job, event_list, img_src, generate=False):
     msg = 'Changing permissions on image_dir {}'.format(host_dir)
     logging.info(msg)
 
-    p = Popen(['chmod', 'a+rX', img_src], stdout=PIPE, stderr=PIPE)
-    out, err = p.communicate()
-    if err:
-        event_list.push(
-            message=err,
-            data=job    )
+    os.chmod(img_src, 0755)
+    head, _ = os.path.split(img_src)
+    os.chmod(head, 0755)
 
     if job.get_type() == 'amwg':
         msg = '{job} hosted at {url}/index.html'.format(
             url=url,
             job=job.get_type())
         job.config['host_url'] += '/index.html'
+        # output_dir = os.path.join(config['global']['output_path'], 'amwg')
     elif job.get_type() == 'acme_diags':
         msg = '{job} hosted at {url}/viewer/index.html'.format(
             url=url,
             job=job.get_type())
         job.config['host_url'] += '/viewer/index.html'
+        # output_dir = os.path.join(config['global']['output_path'], 'acme_diags')
     else:
         msg = '{job} hosted at {url}/index.html'.format(
             url=url,
             job=job.get_type())
         job.config['host_url'] += '/index.html'
+        # output_dir = os.path.join(config['global']['output_path'], 'coupled_diags')
+    # if oct(os.stat(output_dir)[0]) != '040755':
+    #     msg = 'Setting file permisions for ' + output_dir
+    #     event_list.push(message=msg)
+    #     recursive_file_permissions(output_dir, 0755)
     event_list.push(
         message=msg,
         data=job)
@@ -657,12 +701,10 @@ def write_human_state(event_list, job_sets, state_path='run_state.txt', ui_mode=
         state_path (str): The path to where to write the run_state
         ui_mode (bool): The UI mode, True if the UI is on, False if the UI is off
     """
-    import datetime
-
     try:
         with open(state_path, 'w') as outfile:
             line = "Execution state as of {0}\n".format(
-                datetime.datetime.now().strftime('%d, %b %Y %I:%M'))
+                datetime.now().strftime('%d, %b %Y %I:%M'))
             out_str = line
             out_str += 'Running under process {0}\n\n'.format(os.getpid())
             

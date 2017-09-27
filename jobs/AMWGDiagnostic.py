@@ -11,7 +11,7 @@ from time import sleep
 from datetime import datetime
 from shutil import copyfile
 # job modules
-from JobStatus import JobStatus
+from JobStatus import JobStatus, StatusMap
 # output_viewer modules
 from output_viewer.index import OutputPage
 from output_viewer.index import OutputIndex
@@ -276,6 +276,8 @@ class AMWGDiagnostic(object):
             print 'symlinks created'
         for item in os.listdir(self.config.get('test_path_climo')):
             start_search = re.search(r'_\d\d\d\d\d\d_', item)
+            if not start_search:
+                continue
             s_index = start_search.start()
             os.rename(
                 os.path.join(self.config.get('test_path_climo'), item),
@@ -306,7 +308,8 @@ class AMWGDiagnostic(object):
 
         slurm = Slurm()
         self.job_id = slurm.batch(run_script, '--oversubscribe')
-        self.status = slurm.showjob(self.job_id).get('JobState')
+        status = slurm.showjob(self.job_id)
+        self.status = StatusMap[status.get('JobState')]
         os.chdir(prev_dir)
         self.status = JobStatus.SUBMITTED
         message = '{type} id: {id} changed state to {state}'.format(

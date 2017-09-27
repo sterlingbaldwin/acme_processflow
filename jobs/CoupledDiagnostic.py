@@ -20,7 +20,7 @@ from lib.util import cmd_exists
 from lib.util import create_symlink_dir
 from lib.events import Event_list
 from lib.slurm import Slurm
-from JobStatus import JobStatus
+from JobStatus import JobStatus, StatusMap
 
 
 class CoupledDiagnostic(object):
@@ -303,7 +303,8 @@ class CoupledDiagnostic(object):
         sleep(randint(0, 5))
         slurm = Slurm()
         self.job_id = slurm.batch(run_script, '--oversubscribe')
-        self.status = slurm.showjob(self.job_id).get('JobState')
+        status = slurm.showjob(self.job_id)
+        self.status = StatusMap[status.get('JobState')]
         message = "## {job} id: {id} changed status to {status}".format(
             job=self.type,
             id=self.job_id,
