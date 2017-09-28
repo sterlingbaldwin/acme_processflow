@@ -509,17 +509,7 @@ def monitor_check(monitor, config, file_list, event_list, display_event):
                 os.remove(local_path)
                 checked_new_files.append(new_file)
         if status == SetStatus.NO_DATA:
-            if add:
-                checked_new_files.append(new_file)
-
-    if not checked_new_files:
-        print '-_-_-_-_-_-_-_-_-_-_-_-_'
-        print 'No new files found'
-        print '-_-_-_-_-_-_-_-_-_-_-_-_'
-        return
-    print '-_-_-_-_-_-_-_-_-_-_-_-_'
-    print pformta(checked_new_files)
-    print '-_-_-_-_-_-_-_-_-_-_-_-_'
+            checked_new_files.append(new_file)
 
     t_config = config.get('transfer')
     global_config = config.get('global')
