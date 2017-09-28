@@ -941,12 +941,12 @@ def finishup(config, job_sets, state_path, event_list):
     event_list.push(message=message)
     if not config.get('global').get('no-cleanup', False):
         cleanup(config)
-        msg = 'Setting permissions for output'
-        logging.info('Setting permissions on output directory')
-        head, _ = os.path.split(config['global']['output_path'])
-        for directory in [config['global']['output_path'], head]:
-            if os.path.exists(directory):
-                os.chmod(directory, 0755)
+
+    msg = 'Setting permissions for output'
+    logging.info('Setting permissions on output directory')
+    head, _ = os.path.split(config['global']['output_path'])
+    os.chmod(head, 0755)
+    recursive_file_permissions(config['global']['output_path'], 0755)
     message = 'File permissions set'
     event_list.push(message=message)
 

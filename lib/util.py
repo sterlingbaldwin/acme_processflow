@@ -455,7 +455,6 @@ def handle_completed_job(job, job_set, event_list):
             job.config.get('coupled_project_dir'),
             img_dir)
         setup_local_hosting(job, event_list, img_src)
-        
     elif job.get_type() == 'amwg':
         img_dir = '{start:04d}-{end:04d}{casename}-obs'.format(
             start=job.config.get('start_year'),
@@ -469,7 +468,6 @@ def handle_completed_job(job, job_set, event_list):
     elif job.get_type() == 'acme_diags':
         img_src = job.config.get('results_dir')
         setup_local_hosting(job, event_list, img_src)
-    
     # Second check if the whole set is done
     job_set_done = True
     for k in job_set.jobs:
@@ -603,7 +601,6 @@ def setup_local_hosting(job, event_list, img_src, generate=False):
             url=url,
             job=job.get_type())
         job.config['host_url'] += '/index.html'
-        # output_dir = os.path.join(config['global']['output_path'], 'amwg')
     elif job.get_type() == 'acme_diags':
         msg = '{job} hosted at {url}/viewer/index.html'.format(
             url=url,
@@ -615,11 +612,7 @@ def setup_local_hosting(job, event_list, img_src, generate=False):
             url=url,
             job=job.get_type())
         job.config['host_url'] += '/index.html'
-        # output_dir = os.path.join(config['global']['output_path'], 'coupled_diags')
-    # if oct(os.stat(output_dir)[0]) != '040755':
-    #     msg = 'Setting file permisions for ' + output_dir
-    #     event_list.push(message=msg)
-    #     recursive_file_permissions(output_dir, 0755)
+
     event_list.push(
         message=msg,
         data=job)
