@@ -932,14 +932,6 @@ def finishup(config, job_sets, state_path, event_list):
     if not config.get('global').get('no-cleanup', False):
         cleanup(config)
 
-    msg = 'Setting permissions for output'
-    logging.info('Setting permissions on output directory')
-    head, _ = os.path.split(config['global']['output_path'])
-    os.chmod(head, 0755)
-    recursive_file_permissions(config['global']['output_path'], 0755)
-    message = 'File permissions set'
-    event_list.push(message=message)
-
     message = 'All processing complete' if status == 1 else "One or more job failed"
     emailaddr = config.get('global').get('email')
     if emailaddr:

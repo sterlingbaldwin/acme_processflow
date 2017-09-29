@@ -29,16 +29,16 @@ from mailer import Mailer
 from string import Formatter
 from slurm import Slurm
 
-def recursive_file_permissions(path, mode):
+def recursive_file_permissions(path):
     '''
     Recursively updates file permissions on a given path.
     '''
     for item in glob.glob(path + '/*'):
         if os.path.isdir(item):
-            os.chmod(os.path.join(path, item), mode)
-            recursive_file_permissions(os.path.join(path, item), mode)
+            os.chmod(os.path.join(path, item), 0755)
+            recursive_file_permissions(os.path.join(path, item))
         else:
-            os.chmod(os.path.join(path, item), mode)
+            os.chmod(os.path.join(path, item), 0644)
 
 def cleanup(config):
     """
@@ -507,9 +507,10 @@ def monitor_job(job, job_set, event, debug=False, batch_type='slurm', event_list
         job_id = job.execute(batch='slurm')
 
     # Prep for submitting the job
-    message = 'Submitted {0} for year_set {1}'.format(
-        job.get_type(),
-        job_set.set_number)
+    message = 'Submitted {job} for year_set {start:04d}-{end:04d}'.format(
+        job=job.get_type(),
+        start=job_set.set_start_year,
+        end=job_set.set_end_year)
     event_list.push(
         message=message,
         data=job)
@@ -573,11 +574,8 @@ def setup_local_hosting(job, event_list, img_src, generate=False):
     try:
         msg = 'copying images from {src} to {dst}'.format(src=img_src, dst=host_dir)
         logging.info(msg)
-        # copytree(src=img_src, dst=host_dir)
-        create_symlink_dir(
-            src_dir=img_src,
-            src_list=os.listdir(img_src),
-            dst=host_dir)
+        copytree(src=img_src, dst=host_dir)
+        recursive_file_permissions(host_dir)
     except Exception as e:
         logging.error(format_debug(e))
         msg = 'Error copying {} to host directory'.format(job.get_type())
