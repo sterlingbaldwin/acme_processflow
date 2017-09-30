@@ -61,18 +61,6 @@ os.environ['UVCDAT_ANONYMOUS_LOG'] = 'False'
 # create global Event_list
 event_list = Event_list()
 
-# Map for keeping track of file types
-file_type_map = {
-    'MPAS_AM': ('mpas_dir', 1, None),
-    'MPAS_CICE': ('mpas_cice_dir', 1, None),
-    'ATM': ('atm_dir', 1, None),
-    'MPAS_RST': ('mpas_rst_dir', 0, 'mpaso.rst.0002-01-01_00000.nc'),
-    'MPAS_O_IN': ('mpas_o-in_dir', 0, 'mpas-o_in'),
-    'MPAS_CICE_IN': ('mpas_cice-in_dir', 0, 'mpas-cice_in'),
-    'STREAMS': ('streams_dir', 0, None),
-    'RPT': ('rpt_dir', 0, None)
-}
-
 def add_jobs(year_set):
     """
     Initializes and adds all the jobs to the year_set
