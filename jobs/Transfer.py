@@ -188,30 +188,6 @@ class Transfer(object):
         Updates the event_list with a nicely formated percent completion
         """
 
-        # First we need to parse through and find the years of the start and end
-        # start_file = self.config.get('file_list')[0]
-        # end_file = self.config.get('file_list')[-1]
-        # allowed_chars = [str(i) for i in range(10)]
-        # allowed_chars.append('-')
-        # if not 'mpas-' in start_file:
-        #     index = start_file['filename'].rfind('-')
-        #     while start_file['filename'][index] in allowed_chars and index > 0:
-        #         index -= 1
-        #     start_file_name = start_file['filename'][index + 1: index + 8]
-        # if not 'mpas-' in end_file:
-        #     index = end_file['filename'].rfind('-')
-        #     while end_file['filename'][index] in allowed_chars and index > 0:
-        #         index -= 1
-        #     end_file_name = end_file['filename'][index + 1: index + 8]
-
-        # # Start the display string assembly
-        # start_end_str = '{stype}:{start} to {etype}:{end}'.format(
-        #     start=start_file_name,
-        #     end=end_file_name,
-        #     stype=start_file['type'],
-        #     etype=end_file['type'])
-        # message = 'Transfer {0} in progress ['.format(start_end_str)
-
         spacer = ' ' if num_completed < 10 else ''
         message = 'Transfer in progress {spacer}({completed}/{total}) ['.format(
             completed=num_completed,
@@ -245,15 +221,6 @@ class Transfer(object):
             self.event_list.push(
                 message=msg,
                 data=task_id)
-
-    def error_cleanup(self):
-        pass
-        # print_message('Removing partially transfered files')
-        # destination_contents = os.listdir(self.config.get('destination_path'))
-        # for transfer in self.config['file_list']:
-        #     t_file = transfer['filename'].split(os.sep)[-1]
-        #     if t_file in destination_contents:
-        #         os.remove(os.path.join(self.config.get('destination_path'), t_file))
 
     def execute(self, event):
         # reject if job isnt valid

@@ -24,7 +24,8 @@ class FileManager(object):
         self.sta = sta
         self.db = SqliteDatabase(database)
         self.db.connect()
-        DataFile.drop_table()
+        if DataFile.table_exists():
+            DataFile.drop_table()
         DataFile.create_table()
     
     def populate_file_list(self, simstart, simend, types, localdir, remotedir, experiment):
@@ -84,10 +85,8 @@ class FileManager(object):
         else:
             remote_path = os.path.join(remote_path, 'run')
         result = client.endpoint_autoactivate(remote_endpoint, if_expires_in=2880)
-        print 'checking remote'
         if result['code'] == "AutoActivationFailed":
             return False
-
         for fail_count in xrange(10):
             try:
                 res = get_ls(
@@ -99,10 +98,27 @@ class FileManager(object):
                 sleep(fail_count)
             else:
                 break
-        print 'done checking remote'
         to_update = [x['name'] for x in res]
         for datafile in DataFile.select():
-            if datafile.name in to_update:
+            if datafile.name in to_update and datafile.remote_status == filestatus['NOT_EXIST']:
                 datafile.remote_status = filestatus['EXISTS']
                 datafile.save()
+    
+    def update_local_status(self, localdir, types):
+        for _type in types:
+            type_path = os.path.join(localdir, _type)
+            local_files = os.listdir(type_path)
+            for datafile in DataFile.select():
+                if datafile.name in local_files \
+                   and datafile.local_status == filestatus['NOT_EXIST']:
+                    datafile.local_status = filestatus['EXISTS']
+                    datafile.save()
+
+    def transfer_needed(self):
+        required_files = [x for x in DataFile.select().where(
+            (DataFile.local_status == filestatus['NOT_EXIST']) &
+            (DataFile.remote_status == filestatus['EXISTS'])
+        )]
+        for f in required_files:
+            print f.name
             
