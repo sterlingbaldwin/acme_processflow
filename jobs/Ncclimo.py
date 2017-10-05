@@ -7,7 +7,6 @@ import json
 import sys
 import logging
 
-from uuid import uuid4
 from pprint import pformat
 from subprocess import Popen, PIPE
 from time import sleep
@@ -29,10 +28,11 @@ class Climo(object):
     def __init__(self, config, event_list):
         self.event_list = event_list
         self.config = {}
-        self.status = JobStatus.INVALID
-        self.type = 'ncclimo'
-        self.uuid = uuid4().hex
-        self.yearset = config.get('yearset', 0)
+        self._status = JobStatus.INVALID
+        self._type = 'ncclimo'
+        self.year_set = config.get('year_set', 0)
+        self.start_year = config['start_year']
+        self.end_year = config['end_year']
         self.job_id = 0
         self.depends_on = []
         self.start_time = None
@@ -63,13 +63,32 @@ class Climo(object):
         }
         self.prevalidate(config)
 
-    def get_type(self):
+    def prevalidate(self, config):
         """
-        Returns job type
+        Prerun validation for inputs
         """
-        return self.type
+        if self.status == JobStatus.VALID:
+            return 0
+        for i in config:
+            if i in self.inputs:
+                self.config[i] = config.get(i)
+        self.config['output_directory'] = self.config['regrid_output_directory']
+        all_inputs = True
+        for i in self.inputs:
+            if i not in self.config:
+                all_inputs = False
+                message = 'Argument {} missing for Ncclimo, prevalidation failed'.format(i)
+                self.event_list.push(message=message)
+                break
 
-    def execute(self, batch=False):
+        self.status = JobStatus.VALID if all_inputs else JobStatus.INVALID
+        if not os.path.exists(self.config.get('run_scripts_path')):
+            os.makedirs(self.config.get('run_scripts_path'))
+        if self.year_set == 0:
+            self.status = JobStatus.INVALID
+        return 0
+
+    def execute(self):
         """
         Calls ncclimo in a subprocess
         """
@@ -95,16 +114,16 @@ class Climo(object):
             '-O', self.config['regrid_output_directory'],
             '-l'
         ]
-        
+
         # Submitting the job to SLURM
-        expected_name = 'ncclimo_set_{year_set}_{start}_{end}_{uuid}'.format(
+        expected_name = 'ncclimo_set_{year_set}_{start}_{end}'.format(
             year_set=self.config.get('year_set'),
             start='{:04d}'.format(self.config.get('start_year')),
-            end='{:04d}'.format(self.config.get('end_year')),
-            uuid=self.uuid[:5])
+            end='{:04d}'.format(self.config.get('end_year')))
         run_script = os.path.join(self.config.get('run_scripts_path'), expected_name)
+        if os.path.exists(run_script):
+            os.remove(run_script)
 
-        self.slurm_args['error_file'] = '-e {error_file}'.format(error_file=run_script + '.err')
         self.slurm_args['output_file'] = '-o {output_file}'.format(output_file=run_script + '.out')
 
         with open(run_script, 'w') as batchfile:
@@ -119,66 +138,13 @@ class Climo(object):
 
         self.status = JobStatus.SUBMITTED
         message = '{type} id: {id} changed state to {state}'.format(
-            type=self.get_type(),
+            type=self.type,
             id=self.job_id,
             state=self.status)
         logging.info(message)
         self.event_list.push(message=message)
 
         return self.job_id
-
-    def set_status(self, status):
-        self.status = status
-
-    def save(self, conf_path):
-        """
-        Saves job configuration to a json file at conf_path
-        """
-        try:
-            with open(conf_path, 'r') as infile:
-                config = json.load(infile)
-            with open(conf_path, 'w') as outfile:
-                config[self.uuid]['inputs'] = self.config
-                config[self.uuid]['outputs'] = self.outputs
-                config[self.uuid]['type'] = self.type
-                json.dump(config, outfile, indent=4)
-        except Exception as e:
-            print_message('Error saving configuration file')
-            print_debug(e)
-            raise
-
-    def __str__(self):
-        return pformat({
-            'type': self.type,
-            'config': self.config,
-            'status': self.status,
-            'depends_on': self.depends_on,
-            'uuid': self.uuid,
-            'job_id': self.job_id,
-        })
-
-    def prevalidate(self, config):
-        """
-        Prerun validation for inputs
-        """
-        if self.status == JobStatus.VALID:
-            return 0
-        for i in config:
-            if i in self.inputs:
-                self.config[i] = config.get(i)
-        self.config['output_directory'] = self.config['regrid_output_directory']
-        all_inputs = True
-        for i in self.inputs:
-            if i not in self.config:
-                all_inputs = False
-                message = 'Argument {} missing for Ncclimo, prevalidation failed'.format(i)
-                self.event_list.push(message=message)
-                break
-
-        self.status = JobStatus.VALID if all_inputs else JobStatus.INVALID
-        if not os.path.exists(self.config.get('run_scripts_path')):
-            os.makedirs(self.config.get('run_scripts_path'))
-        return 0
 
     def postvalidate(self):
         """
@@ -200,8 +166,8 @@ class Climo(object):
             return False
         file_list = get_climo_output_files(
             input_path=climo_dir,
-            set_start_year=set_start_year,
-            set_end_year=set_end_year)
+            start_year=set_start_year,
+            end_year=set_end_year)
         if len(file_list) < 12:
             return False
 
@@ -210,9 +176,31 @@ class Climo(object):
             return False
         file_list = get_climo_output_files(
             input_path=regrid_dir,
-            set_start_year=set_start_year,
-            set_end_year=set_end_year)
+            start_year=set_start_year,
+            end_year=set_end_year)
         if len(file_list) < 17:
             return False
         
         return True
+
+    def __str__(self):
+        return pformat({
+            'type': self.type,
+            'config': self.config,
+            'status': self.status,
+            'depends_on': self.depends_on,
+            'job_id': self.job_id,
+        })
+
+    @property
+    def type(self):
+        return self._type
+
+    @property
+    def status(self):
+        return self._status
+
+    @status.setter
+    def status(self, status):
+        self._status = status
+

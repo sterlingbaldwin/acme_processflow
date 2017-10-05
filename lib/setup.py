@@ -2,14 +2,16 @@ import sys
 import os
 import logging
 import json
+import time
 import stat
-from uuid import uuid4
+from shutil import rmtree
 
 from configobj import ConfigObj
 from YearSet import YearSet, SetStatus
 from shutil import copyfile
+from lib.filemanager import FileManager
+from lib.runmanager import RunManager
 from util import (check_config_white_space, 
-                  check_for_inplace_data,
                   setup_globus,
                   check_globus)
 
@@ -21,23 +23,15 @@ def setup(parser, display_event, **kwargs):
         parser (argparse.ArgumentParser): The parser object
         display_event (Threadding_event): The event to turn the display on and off
     """
-    file_type_map = kwargs['file_type_map']
-
     # Setup the parser
-    args = parser.parse_args() 
+    args = parser.parse_args()
     if not args.config:
         parser.print_help()
         sys.exit()
-    try:
-        event_list = kwargs['event_list']
-        file_list = kwargs['file_list']
-        file_name_list = kwargs['file_name_list']
-        job_sets = kwargs['job_sets']
-    except:
-        print "Setup parameters not met"
-        print event_list, file_list, file_name_list, job_sets
-        sys.exit()
     
+    event_list = kwargs['event_list']
+    thread_list = kwargs['thread_list']
+
     # check if globus config is valid, else remove it
     globus_config = os.path.join(os.path.expanduser('~'), '.globus.cfg')
     if os.path.exists(globus_config):
@@ -54,13 +48,13 @@ def setup(parser, display_event, **kwargs):
         sys.exit(-1)
 
     # read the config file and setup the config dict
-    try: 
+    try:
         config = ConfigObj(args.config)
     except Exception as e:
         print "Error parsing config file {}".format(args.config)
         parser.print_help()
         sys.exit()
-    
+
     if args.resource_dir:
         config['global']['resource_dir'] = args.resource_dir
     else:
@@ -69,7 +63,10 @@ def setup(parser, display_event, **kwargs):
             'share',
             'processflow',
             'resources')
-    
+
+    config['global']['input_path'] = os.path.join(config['global']['project_path'], 'input')
+    config['global']['output_path'] = os.path.join(config['global']['project_path'], 'output')
+
     # run validator for config file
     template_path = os.path.join(
         config['global']['resource_dir'],
@@ -82,24 +79,19 @@ def setup(parser, display_event, **kwargs):
         for message in messages:
             print message
         sys.exit(-1)
-    
-    if not os.path.exists(config['global'].get('data_cache_path')):
-        os.makedirs(config['global'].get('data_cache_path'))
-    if not os.path.exists(config['global'].get('output_path')):
-        os.makedirs(config['global'].get('output_path'))
-    
+
+    # setup output and cache directories
+    if not os.path.exists(config['global']['input_path']):
+        os.makedirs(config['global']['input_path'])
+    if not os.path.exists(config['global']['output_path']):
+        os.makedirs(config['global']['output_path'])
+
     # Copy the config into the input directory for safe keeping
-    input_config_path = os.path.join(config['global'].get('data_cache_path'), 'run.cfg')
+    input_config_path = os.path.join(config['global']['input_path'], 'run.cfg')
     if not os.path.exists(input_config_path):
         copyfile(
             src=args.config,
             dst=input_config_path)
-    
-    # setup output and cache directories
-    if not os.path.exists(config['global']['output_path']):
-        os.makedirs(config['global']['output_path'])
-    if not os.path.exists(config['global']['data_cache_path']):
-        os.makedirs(config['global']['data_cache_path'])
     
     # setup logging
     if args.log:
@@ -130,18 +122,12 @@ def setup(parser, display_event, **kwargs):
     config['global']['set_frequency'] = set_frequency
 
     # setup config for file type directories
-    for key, val in config['global']['patterns'].items():
+    for filetype in config['global']['file_types']:
         new_dir = os.path.join(
-            config['global']['data_cache_path'],
-            key)
+            config['global']['input_path'],
+            filetype)
         if not os.path.exists(new_dir):
             os.makedirs(new_dir)
-        if key in file_type_map:
-            config['global'][file_type_map[key][0]] = new_dir
-        else:
-            if not config.get('global').get('other_data'):
-                config['global']['other_data'] = []
-            config['global']['other_data'].append(new_dir)
 
     # setup run_scipts_path
     run_script_path = os.path.join(
@@ -156,49 +142,34 @@ def setup(parser, display_event, **kwargs):
         config['global']['output_path'],
         'tmp')
     config['global']['tmp_path'] = tmp_path
-    if not os.path.exists(tmp_path):
-        os.makedirs(tmp_path)
-    
+    if os.path.exists(tmp_path):
+        rmtree(tmp_path)
+    os.makedirs(tmp_path)
+
     # setup the year_set list
+    config['global']['simulation_start_year'] = int(config['global']['simulation_start_year'])
+    config['global']['simulation_end_year'] = int(config['global']['simulation_end_year'])
     sim_start_year = int(config['global']['simulation_start_year'])
     sim_end_year = int(config['global']['simulation_end_year'])
-    number_of_sim_years = sim_end_year - (sim_start_year - 1)
-    line = 'Initializing year sets'
-    event_list.push(message=line)
-    for freq in set_frequency:
-        year_set = number_of_sim_years / freq
 
-        # initialize the job_sets dict
-        for i in range(1, year_set + 1):
-            set_start_year = sim_start_year + ((i - 1) * freq)
-            set_end_year = set_start_year + freq - 1
-            new_set = YearSet(
-                set_number=len(job_sets) + 1,
-                start_year=set_start_year,
-                end_year=set_end_year)
-            job_sets.append(new_set)
-
-    line = 'Added {num} year sets to the queue'.format(
-        num=len(job_sets))
-    event_list.push(message=line)
-
-    # initialize the file_list
-    line = 'Initializing file list'
-    event_list.push(message=line)
-    file_list = setup_file_list(
-        file_list=file_list,
-        file_name_list=file_name_list,
-        patterns=config['global']['patterns'],
-        sim_start_year=sim_start_year,
-        sim_end_year=sim_end_year,
-        file_type_map=file_type_map)
-
-    # check if we have all the data already, if not setup globus
-    all_data = check_for_inplace_data(
-        file_list=kwargs.get('file_list'),
-        file_name_list=kwargs.get('file_name_list'),
-        config=config,
-        file_type_map=file_type_map)
+    # initialize the filemanager
+    event_list.push(message='Initializing file manager')
+    filemanager = FileManager(
+        database=os.path.join(config['global']['project_path'], 'input', 'workflow.db'),
+        types=config['global']['file_types'],
+        sta=config['global']['short_term_archive'],
+        remote_path=config['global']['source_path'],
+        remote_endpoint=config['transfer']['source_endpoint'],
+        local_path=os.path.join(config['global']['project_path'], 'input'),
+        local_endpoint=config['transfer']['destination_endpoint'])
+    filemanager.populate_file_list(
+        simstart=config['global']['simulation_start_year'],
+        simend=config['global']['simulation_end_year'],
+        experiment=config['global']['experiment'])
+    filemanager.update_local_status()
+    all_data = filemanager.all_data_local()
+    logging.info("FileManager setup complete")
+    logging.info(str(filemanager))
 
     if all_data or args.no_monitor:
         print "All data is present, skipping globus setup"
@@ -240,20 +211,37 @@ def setup(parser, display_event, **kwargs):
             source_endpoint=config['transfer']['source_endpoint'],
             source_path=config['global']['source_path'],
             destination_endpoint=config['transfer']['destination_endpoint'],
-            destination_path=config['global']['data_cache_path'])
+            destination_path=config['global']['input_path'])
         if not setup_success:
             print 'ERROR! Unable to access {} globus node'.format(endpoint['type'])
             print 'The node may be down, or you may not have access to the requested directory'
             sys.exit(-1)
+    
+    # setup the runmanager
+    runmanager = RunManager(
+        event_list=event_list,
+        output_path=config['global']['output_path'],
+        caseID=config['global']['experiment'],
+        scripts_path=run_script_path,
+        thread_list=kwargs['thread_list'],
+        event=kwargs['kill_event'])
+    runmanager.setup_job_sets(
+        set_frequency=config['global']['set_frequency'],
+        sim_start_year=sim_start_year,
+        sim_end_year=sim_end_year,
+        config=config)
+    runmanager.write_job_sets(
+        os.path.join(
+            config['global']['output_path'],
+            'job_status.txt'))
 
     config['global']['ui'] = False if args.no_ui else True
     config['global']['no_cleanup'] = True if args.no_cleanup else False
     config['global']['no_monitor'] = True if args.no_monitor else False
-    config['transfer']['size'] = args.size if args.size else 100
-    config['global']['run_id'] = uuid4().hex[:6]
+    config['global']['run_id'] = time.strftime("%Y-%m-%d-%H-%M")
     config['global']['print_file_list'] = True if args.file_list else False
 
-    return config
+    return config, filemanager, runmanager
 
 def setup_file_list(**kwargs):
     file_list = kwargs['file_list']
@@ -298,9 +286,65 @@ def verify_config(config, template):
             messages.append(msg)
             valid = False
         for item in val:
+            if not config.get(key):
+                msg = '{key} requires {val} but it is missing from your config'.format(
+                    key=key, val=item)
+                messages.append(msg)
+                valid = False
+                continue
             if item not in config[key]:
                 msg = '{key} requires {val} but it is missing from your config'.format(
                     key=key, val=item)
                 messages.append(msg)
                 valid = False
     return valid, messages
+
+def finishup(config, job_sets, state_path, event_list):
+    message = 'Performing post run cleanup'
+    event_list.push(message=message)
+    if not config.get('global').get('no-cleanup', False):
+        cleanup(config)
+
+    message = 'All processing complete' if status == 1 else "One or more job failed"
+    emailaddr = config.get('global').get('email')
+    if emailaddr:
+        event_list.push(message='Sending notification email to {}'.format(emailaddr))
+        try:
+            if status == 1:
+                msg = 'Post processing jobs have completed successfully\n'
+                for job_set in job_sets:
+                    msg += '\nYearSet {start}-{end}: {status}\n'.format(
+                        start=job_set.set_start_year,
+                        end=job_set.set_end_year,
+                        status=job_set.status)
+                    for job in job_set.jobs:
+                        if job.type in ['coupled_diags', 'amwg', 'acme_diags']:
+                            msg += '    > {job} hosted at {url}\n'.format(
+                                job=job.type,
+                                url=job.config['host_url'])
+                        else:
+                            msg += '    > {job} output located {output}\n'.format(
+                                job=job.type,
+                                output=job.config['output_directory'])
+            else:
+                msg = 'One or more job failed\n\n'
+                with open(state_path, 'r') as state_file:
+                    for line in state_file.readlines():
+                        msg += line
+
+            m = Mailer(src='processflowbot@llnl.gov', dst=emailaddr)
+            m.send(
+                status=message,
+                msg=msg)
+        except Exception as e:
+            logging.error(format_debug(e))
+    event_list.push(message=message)
+    display_event.set()
+    print_type = 'ok' if status == 1 else 'error'
+    print_message(message, print_type)
+    logging.info("All processes complete")
+    for t in thread_list:
+        thread_kill_event.set()
+        t.join(timeout=1.0)
+    sleep(2)
+    sys.exit(0)

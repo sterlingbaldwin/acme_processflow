@@ -4,14 +4,12 @@ import logging
 import time
 import re
 
-from uuid import uuid4
 from pprint import pformat
 from subprocess import Popen, PIPE
 from time import sleep
 from random import randint
 from datetime import datetime
 from shutil import copyfile
-from cdp.cdp_viewer import OutputViewer
 
 from lib.util import render
 from lib.util import print_message
@@ -23,7 +21,7 @@ from lib.slurm import Slurm
 from JobStatus import JobStatus, StatusMap
 
 
-class CoupledDiagnostic(object):
+class AprimeDiags(object):
     def __init__(self, config, event_list):
         """
         Setup class attributes
@@ -80,26 +78,16 @@ class CoupledDiagnostic(object):
             'num_machines': '-N 1', # run on one machine
             'oversubscribe': '--oversubscribe'
         }
-        self.var_list = [
-            'PRECT',
-            'RESTOM',
-            'FLNT',
-            'FSNT',
-            'FSNTOA',
-            'FLUT',
-            'SWCF',
-            'LWCF',
-            'TAU'
-        ]
         config['run_ocean'] = int(config['run_ocean'])
         self.start_time = None
         self.end_time = None
         self.config = {}
         self.status = JobStatus.INVALID
-        self.type = 'coupled_diags'
+        self._type = 'aprime_diags'
         self.outputs = {}
-        self.year_set = 0
-        self.uuid = uuid4().hex
+        self.year_set = config.get('yearset', 0)
+        self.start_year = config['start_year']
+        self.end_year = config['end_year']
         self.job_id = 0
         self.depends_on = []
         self.prevalidate(config)
@@ -110,16 +98,21 @@ class CoupledDiagnostic(object):
             'config': self.config,
             'status': self.status,
             'depends_on': self.depends_on,
-            'uuid': self.uuid,
             'job_id': self.job_id,
             'year_set': self.year_set
         })
 
-    def get_type(self):
-        return self.type
+    @property
+    def type(self):
+        return self._type
 
-    def set_status(self, status):
-        self.status = status
+    @property
+    def status(self):
+        return self._status
+
+    @status.setter
+    def status(self, status):
+        self._status = status
 
     def prevalidate(self, config):
         """
@@ -133,6 +126,8 @@ class CoupledDiagnostic(object):
 
         if not os.path.exists(self.config.get('run_scripts_path')):
             os.makedirs(self.config.get('run_scripts_path'))
+        if self.year_set == 0:
+            self.status = JobStatus.INVALID
 
     def postvalidate(self):
         """
@@ -241,7 +236,7 @@ class CoupledDiagnostic(object):
                 dst=run_dir)
         return True
 
-    def execute(self, batch=False):
+    def execute(self):
         """
         Perform the actual work
         """
@@ -275,32 +270,30 @@ class CoupledDiagnostic(object):
             src=template_out,
             dst=run_script_template_out)
 
-        cmd = 'csh {run_AIMS}'.format(run_AIMS=self.config.get('rendered_output_path'))
+        cmd = 'csh {run_AIMS}'.format(
+            run_AIMS=self.config.get('rendered_output_path'))
 
-        expected_name = 'coupled_diag_set_{set}_{start}_{end}_{uuid}'.format(
+        expected_name = 'coupled_diag_set_{set}_{start}_{end}'.format(
             set=self.config.get('year_set'),
             start='{:04d}'.format(self.config.get('test_begin_yr_climo')),
-            end='{:04d}'.format(self.config.get('test_end_yr_climo')),
-            uuid=self.uuid[:5])
+            end='{:04d}'.format(self.config.get('test_end_yr_climo')))
 
         run_script = os.path.join(self.config.get('run_scripts_path'), expected_name)
-        self.slurm_args['error_file'] = '-e {err}'.format(
-            err=run_script + '.err')
+        if os.path.exists(run_script):
+            os.remove(run_script)
+
         self.slurm_args['out_file'] = '-o {out}'.format(
             out=run_script + '.out')
         self.slurm_args['working_dir'] = '--workdir {dir}'.format(
             dir=self.config.get('coupled_diags_home'))
+        slurm_args = ['#SBATCH {}'.format(self.slurm_args[s]) for s in self.slurm_args]
+        slurm_prefix = '\n'.join(slurm_args) + '\n'
 
         with open(run_script, 'w') as batchfile:
             batchfile.write('#!/bin/bash\n')
-            slurm_args = ['#SBATCH {}'.format(self.slurm_args[s]) for s in self.slurm_args]
-            slurm_prefix = '\n'.join(slurm_args) + '\n'
             batchfile.write(slurm_prefix)
             batchfile.write(cmd)
 
-        # This is here as a stop gap measure to try and dodge the bullet outlined
-        # here https://github.com/ACME-Climate/PreAndPostProcessingScripts/issues/32
-        sleep(randint(0, 5))
         slurm = Slurm()
         self.job_id = slurm.batch(run_script, '--oversubscribe')
         status = slurm.showjob(self.job_id)

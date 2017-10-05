@@ -4,7 +4,6 @@ import os
 import re
 import json
 # system module functions
-from uuid import uuid4
 from subprocess import Popen, PIPE
 from pprint import pformat
 from time import sleep
@@ -23,7 +22,6 @@ from lib.util import print_debug
 from lib.util import print_message
 from lib.util import create_symlink_dir
 from lib.util import render
-from lib.util import get_climo_output_files
 from lib.slurm import Slurm
 from lib.events import Event_list
 
@@ -44,14 +42,13 @@ class AMWGDiagnostic(object):
 
         """
         self.event_list = event_list
-        self.status = JobStatus.INVALID
+        self._status = JobStatus.INVALID
         self.start_time = None
         self.end_time = None
+        self.year_set = config.get('year_set', 0)
         self.inputs = {
             'web_dir': '',
             'host_url': '',
-            'run_id': '',
-            'diag_home': '',
             'test_casename': '',
             'test_path': '',
             'test_filetype': 'monthly_history',
@@ -64,16 +61,14 @@ class AMWGDiagnostic(object):
             'year_set': '',
             'run_directory': '',
             'template_path': '',
-            'dataset_name': '',
             'run_scripts_path': '',
-            'experiment': ''
         }
-        self.type = 'amwg'
-        self.outputs = {}
+        self._type = 'amwg'
         self.config = {}
-        self.uuid = uuid4().hex
+        self.start_year = config['start_year']
+        self.end_year = config['end_year']
         self.job_id = 0
-        self.depends_on = []
+        self.depends_on = ['ncclimo']
         self.slurm_args = {
             'num_cores': '-n 16', # 16 cores
             'run_time': '-t 0-02:00', # 2 hours run time
@@ -88,21 +83,8 @@ class AMWGDiagnostic(object):
             'config': self.config,
             'status': self.status,
             'depends_on': self.depends_on,
-            'uuid': self.uuid,
             'job_id': self.job_id,
         })
-
-    def get_type(self):
-        """
-        Getter for the job type
-        """
-        return self.type
-
-    def set_status(self, status):
-        """
-        Setter for the job status
-        """
-        self.status = status
 
     def prevalidate(self, config):
         """
@@ -116,92 +98,10 @@ class AMWGDiagnostic(object):
             if key not in self.config:
                 self.config[key] = value
 
-        for depend in config.get('depends_on'):
-            self.depends_on.append(depend)
-        
-        if not os.path.exists(self.config.get('run_scripts_path')):
-            os.makedirs(self.config.get('run_scripts_path'))
+        if self.year_set == 0:
+            self.status = JobStatus.INVALID
+            return
         self.status = JobStatus.VALID
-
-    def get_set(self, filename):
-        """
-        Find the files year_set
-        """
-        for i in range(len(filename)):
-            if filename[i].isdigit():
-                s_index = i
-                break
-        year_set = filename[i:]
-        return year_set
-
-    def get_attrs(self, filename):
-        """
-        From an AMWG output file, find that files attributes
-        """
-        filesplit = filename.split('_')
-        set_id = self.get_set(filesplit[0])
-        seasons = ['DJF', 'MAM', 'JJA', 'SON', 'ANN']
-        if filesplit[1] in seasons:
-            col = filesplit[1]
-            row = filesplit[2]
-            group = '_'.join(filesplit[3:])[:-4]
-        else:
-            s_index = 2
-            for i in range(s_index, len(filesplit)):
-                if filesplit[i] in seasons:
-                    s_index = i
-                    break
-            col = filesplit[s_index]
-            row = '_'.join(filesplit[1: s_index])
-            group = '_'.join(filesplit[s_index:])[:-4]
-        return set_id, group, row, col
-
-    def generateIndex(self, output_dir):
-        """
-        Generates the index.json for the DiagnosticViewer
-        """
-        return
-        self.event_list.push(message='Starting index generataion for AMWG diagnostic')
-        contents = [s for s in os.listdir(self.config.get('run_directory')) if s.endswith('png')]
-        dataset_name = self.config.get('dataset_name')
-        index = OutputIndex('AMWG Diagnostic', version=dataset_name)
-
-        pages = {}
-        for item in contents:
-            page, group, row, col = self.get_attrs(item)
-            if not pages.get(page):
-                pages[page] = {}
-            if not pages.get(page).get(group):
-                pages[page][group] = {}
-            if not pages.get(page).get(group).get(row):
-                pages[page][group][row] = {}
-            if not pages.get(page).get(group).get(row).get(col):
-                pages[page][group][row][col] = []
-            pages[page][group][row][col].append(OutputFile(path=item, title=item))
-            # pages[page][group][row][col].append(item)
-
-        # with open('amwg_index.json', 'w') as f:
-        #     json.dump(pages, f)
-
-        for pi, page in pages.items():
-            outpage = OutputPage(pi)
-            for gi, group in page.items():
-                outgroup = OutputGroup(gi)
-                group_ind = len(outpage.groups)
-                outpage.addGroup(outgroup)
-                for ri, row in group.items():
-                    tmp_row_list = []
-                    for key, val in row.items():
-                        tmp_row_list.append(val)
-                    outrow = OutputRow(ri, tmp_row_list)
-                    outpage.addRow(outrow, group_ind)
-            index.addPage(outpage)
-        try:
-            index.toJSON(os.path.join(self.config.get('run_directory'), 'index.json'))
-        except:
-            self.event_list.push(message='Index generation failed')
-        else:
-            self.event_list.push(message='Index generataion complete')
 
     def postvalidate(self):
         """
@@ -225,7 +125,7 @@ class AMWGDiagnostic(object):
         else:
             return False
 
-    def execute(self, batch='slurm', debug=False):
+    def execute(self):
         """
         Perform the actual work
         """
@@ -237,19 +137,16 @@ class AMWGDiagnostic(object):
             logging.info(message)
             return 0
 
-        self.start_time = datetime.now()
-        # setup the output directory
-        run_dir = self.config.get('run_directory')
-        if not os.path.exists(run_dir):
-            os.makedirs(run_dir)
-        # render the csh script
+        # render the csh script into the output directory
+        output_path = self.config['output_path']
         template_out = os.path.join(
-            run_dir,
+            output_path,
             'amwg.csh')
         render(
             variables=self.config,
             input_path=self.config.get('template_path'),
             output_path=template_out)
+        # Copy the rendered run script into the scripts directory
         run_script_template_out = os.path.join(
             self.config.get('run_scripts_path'), 'amwg_{0}-{1}.csh'.format(
                 self.config.get('start_year'),
@@ -257,66 +154,55 @@ class AMWGDiagnostic(object):
         copyfile(
             src=template_out,
             dst=run_script_template_out)
-        if debug:
-            print 'run script rendering complete'
-        # get the list of climo files for this diagnostic
-        file_list = get_climo_output_files(
-            input_path=self.config.get('regrided_climo_path'),
-            set_start_year=self.config.get('start_year'),
-            set_end_year=self.config.get('end_year'))
-        if debug:
-            print 'gathering climo files from {}'.format(self.config.get('regrided_climo_path'))
-            print pformat(file_list)
-        # create the directory of symlinks
-        create_symlink_dir(
-            src_dir=self.config.get('regrided_climo_path'),
-            src_list=file_list,
-            dst=self.config.get('test_path_climo'))
-        if debug:
-            print 'symlinks created'
-        for item in os.listdir(self.config.get('test_path_climo')):
-            start_search = re.search(r'_\d\d\d\d\d\d_', item)
-            if not start_search:
-                continue
-            s_index = start_search.start()
-            os.rename(
-                os.path.join(self.config.get('test_path_climo'), item),
-                os.path.join(self.config.get('test_path_climo'), item[:s_index] + '_climo.nc'))
-        # setup sbatch script
-        expected_name = 'amwg_set_{year_set}_{start}_{end}_{uuid}'.format(
-            year_set=self.config.get('year_set'),
-            start='{:04d}'.format(self.config.get('start_year')),
-            end='{:04d}'.format(self.config.get('end_year')),
-            uuid=self.uuid[:5])
-        run_script = os.path.join(self.config.get('run_scripts_path'), expected_name)
-        if debug:
-            print 'run_script: {}'.format(run_script)
-        self.slurm_args['error_file'] = '-e {error_file}'.format(error_file=run_script + '.err')
-        self.slurm_args['output_file'] = '-o {output_file}'.format(output_file=run_script + '.out')
 
-        cmd = ['csh', template_out]
+        # setup sbatch script
+        expected_name = 'amwg_{start:04d}-{end:04d}'.format(
+            year_set=self.config.get('year_set'),
+            start=self.config.get('start_year'),
+            end=self.config.get('end_year'))
+        run_script = os.path.join(
+            self.config.get('run_scripts_path'),
+            expected_name)
+        if os.path.exists(run_script):
+            os.remove(run_script)
+
+        self.slurm_args['output_file'] = '-o {output_file}'.format(
+            output_file=run_script + '.out')
+        cmd = 'csh {templat}'.format(
+            template=template_out)
+        slurm_args_str = ['#SBATCH {value}'.format(value=v) for k, v in self.slurm_args.items()]
+        slurm_prefix = '\n'.join(slurm_args_str)
         with open(run_script, 'w') as batchfile:
             batchfile.write('#!/bin/bash\n')
-            slurm_args_str = ['#SBATCH {value}\n'.format(value=v) for k, v in self.slurm_args.items()]
-            slurm_prefix = ''.join(slurm_args_str)
             batchfile.write(slurm_prefix)
-            slurm_command = ' '.join(cmd)
-            batchfile.write(slurm_command)
+            batchfile.write(cmd)
 
         prev_dir = os.getcwd()
-        os.chdir(run_dir)
+        os.chdir(output_path)
 
         slurm = Slurm()
         self.job_id = slurm.batch(run_script, '--oversubscribe')
+        os.chdir(prev_dir)
+
         status = slurm.showjob(self.job_id)
         self.status = StatusMap[status.get('JobState')]
-        os.chdir(prev_dir)
-        self.status = JobStatus.SUBMITTED
         message = '{type} id: {id} changed state to {state}'.format(
-            type=self.get_type(),
+            type=self.type,
             id=self.job_id,
             state=self.status)
         logging.info(message)
         self.event_list.push(message=message)
 
         return self.job_id
+
+    @property
+    def type(self):
+        return self._type
+
+    @property
+    def status(self):
+        return self._status
+
+    @status.setter
+    def status(self, status):
+        self._status = status

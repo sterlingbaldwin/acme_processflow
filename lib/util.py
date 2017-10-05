@@ -28,6 +28,7 @@ from jobs.JobStatus import JobStatus, StatusMap
 from mailer import Mailer
 from string import Formatter
 from slurm import Slurm
+from models import DataFile
 
 def recursive_file_permissions(path):
     '''
@@ -80,6 +81,7 @@ def transfer_directory(**kwargs):
     src_path = kwargs['src_path']
     dst_path = kwargs['dst_path']
     event_list = kwargs['event_list']
+    event = kwargs['event']
 
     client = get_client()
     transfer = TransferData(
@@ -101,6 +103,9 @@ def transfer_directory(**kwargs):
     msg = '{dir} transfer starting'.format(dir=directory_name)
     event_list.push(message=msg)
     while True:
+        if event and event.is_set():
+            client.cancel_task(task_id)
+            return
         status = client.get_task(task_id).get('status')
         if status == 'SUCCEEDED':
             msg = '{dir} transfer complete'.format(dir=directory_name)
@@ -141,9 +146,11 @@ def check_globus(**kwargs):
                 endpoint['path'],
                 endpoint['id'],
                 False, 0, False)
-    except:
+    except Exception as e:
+        print_debug(e)
         return False, endpoint
     else:
+        print "Access granted"
         return True, None
 
 def check_config_white_space(filepath):
@@ -208,7 +215,7 @@ def setup_globus(endpoints, no_ui=False, **kwargs):
     
     if no_ui:
         mailer = Mailer(
-            src=kwargs['src'],
+            src='processflowbot@llnl.gov',
             dst=kwargs['dst'])
 
     # First go through the globus login process
@@ -286,27 +293,22 @@ def setup_globus(endpoints, no_ui=False, **kwargs):
         display_event.clear()
     return True
 
-def get_climo_output_files(input_path, set_start_year, set_end_year):
-    contents = os.listdir(input_path)
-    file_list_tmp = [s for s in contents if not os.path.isdir(s)]
-    file_list = []
-    for climo_file in file_list_tmp:
-        start_search = re.search(r'\_\d\d\d\d\d\d', climo_file)
-        if not start_search:
-            continue
-        start_index = start_search.start() + 1
-        start_year = int(climo_file[start_index: start_index + 4])
-        if not start_year == set_start_year:
-            continue
-        end_search = re.search(r'\_\d\d\d\d\d\d', climo_file[start_index:])
-        if not end_search:
-            continue
-        end_index = end_search.start() + start_index + 1
-        end_year = int(climo_file[end_index: end_index + 4])
-        if not end_year == set_end_year:
-            continue
-        file_list.append(climo_file)
-    return file_list
+def get_climo_output_files(input_path, start_year, end_year):
+    """
+    Return a list of ncclimo climatologies from start_year to end_year
+
+    Parameters:
+        input_path (str): the directory to look in
+        start_year (int): the first year of climos to add to the list
+        end_year (int): the last year
+    Returns:
+        file_list (list(str)): A list of the climo files in the directory
+    """
+    contents = [s for s in os.listdir(input_path) if not os.path.isdir(s)]
+    pattern = r'\_{start:04d}\d\d\_{end:04d}\d\d\_'.format(
+        start=start_year,
+        end=end_year)
+    return [x for x in contents if re.search(pattern=pattern, string=x)]
 
 def path_exists(config_items):
     """
@@ -323,42 +325,6 @@ def path_exists(config_items):
             if val.endswith('.nc') and not os.path.exists(val):
                 print "File {key}: {value} does not exist, exiting.".format(key=key, value=val)
                 sys.exit(1)
-
-def check_year_sets(job_sets, file_list, sim_start_year, sim_end_year, debug, add_jobs):
-    """
-    Checks the file_list, and sets the year_set status to ready if all the files are in place,
-    otherwise, checks if there is partial data, or zero data
-    """
-    incomplete_job_sets = [s for s in job_sets
-                           if s.status != SetStatus.COMPLETED
-                           and s.status != SetStatus.RUNNING
-                           and s.status != SetStatus.FAILED]
-    for job_set in incomplete_job_sets:
-
-        start_year = job_set.set_start_year
-        end_year = job_set.set_end_year
-
-        non_zero_data = False
-        data_ready = True
-        for i in range(start_year, end_year + 1):
-            for j in range(1, 13):
-                file_key = '{0}-{1}'.format(i, j)
-                status = file_list['ATM'][file_key]
-
-                if status in [SetStatus.NO_DATA, SetStatus.IN_TRANSIT, SetStatus.PARTIAL_DATA]:
-                    data_ready = False
-                elif status == SetStatus.DATA_READY:
-                    non_zero_data = True
-
-        if data_ready:
-            job_set.status = SetStatus.DATA_READY
-            job_set = add_jobs(job_set)
-            continue
-        if not data_ready and non_zero_data:
-            job_set.status = SetStatus.PARTIAL_DATA
-            continue
-        if not data_ready and not non_zero_data:
-            job_set.status = SetStatus.NO_DATA
 
 def start_ready_job_sets(job_sets, thread_list, debug, event, event_list):
     """
@@ -379,7 +345,7 @@ def start_ready_job_sets(job_sets, thread_list, debug, event, event_list):
                     dep = ''
                     for dependancy in job.depends_on:
                         for djob in job_set.jobs:
-                            if djob.get_type() == dependancy:
+                            if djob.type == dependancy:
                                 if djob.status == JobStatus.COMPLETED:
                                     ready = True
                                 else:
@@ -387,7 +353,7 @@ def start_ready_job_sets(job_sets, thread_list, debug, event, event_list):
                                 break
                     if not ready:
                         msg = '{job} is waiting on {dep}'.format(
-                            job=job.get_type(), dep=dep.get_type())
+                            job=job.type, dep=dep.type)
                         logging.info(msg)
                 else:
                     ready = True
@@ -424,239 +390,6 @@ def start_ready_job_sets(job_sets, thread_list, debug, event, event_list):
 def cmd_exists(cmd):
     return any(os.access(os.path.join(path, cmd), os.X_OK) for path in os.environ["PATH"].split(os.pathsep))
 
-def handle_completed_job(job, job_set, event_list):
-    """
-    Perform post execution tasks
-    """
-
-    t = threading.current_thread()
-    tid = t.ident
-    msg = 'Handling completion for thread {} with id {}'.format(
-        t.name, tid)
-    logging.info(msg)
-    # First check that we have the expected output
-    if not job.postvalidate():
-        message = '{0} completed but doesnt have expected output, setting status to failed'.format(job.get_type())
-        event_list.push(
-            message=message,
-            data=job)
-        logging.error(message)
-        job.status = JobStatus.FAILED
-        job_set.status = SetStatus.FAILED
-        return
-    else:
-        job.status = JobStatus.COMPLETED
-
-    # Finally host the files
-    if job.get_type() == 'coupled_diags':
-        img_dir = 'coupled_diagnostics_{casename}-obs'.format(
-            casename=job.config.get('test_casename'))
-        img_src = os.path.join(
-            job.config.get('coupled_project_dir'),
-            img_dir)
-        setup_local_hosting(job, event_list, img_src)
-    elif job.get_type() == 'amwg':
-        img_dir = '{start:04d}-{end:04d}{casename}-obs'.format(
-            start=job.config.get('start_year'),
-            end=job.config.get('end_year'),
-            casename=job.config.get('test_casename'))
-        img_src = os.path.join(
-            job.config.get('test_path_diag'),
-            '..',
-            img_dir)
-        setup_local_hosting(job, event_list, img_src)
-    elif job.get_type() == 'acme_diags':
-        img_src = job.config.get('results_dir')
-        setup_local_hosting(job, event_list, img_src)
-    # Second check if the whole set is done
-    job_set_done = True
-    for k in job_set.jobs:
-        if k.status != JobStatus.COMPLETED:
-            job_set_done = False
-            break
-        if k.status == JobStatus.FAILED:
-            job_set.status = SetStatus.FAILED
-            return
-    if job_set_done:
-        job_set.status = SetStatus.COMPLETED
-
-def monitor_job(job, job_set, event, debug=False, batch_type='slurm', event_list=None):
-    """
-    Monitor the slurm job, and update the status to 'complete' when it finishes
-    This function should only be called from within a thread
-    """
-    t = threading.current_thread()
-    tid = t.ident
-    msg = 'THEAD {} STARTING {}'.format(tid, t.name)
-    job_id = job.execute(batch='slurm')
-
-    # If the job has already been run, handle it like it just finished
-    if job_id == 0:
-        job.set_status(JobStatus.COMPLETED)
-        job.postvalidate()
-        if job.status == JobStatus.COMPLETED:
-            handle_completed_job(job, job_set, event_list)
-            return
-        return
-
-    # If the job still needs aditional files to transfer, wait for the transfer to finish
-    while job_id == -1:
-        job.set_status(JobStatus.WAITING_ON_INPUT)
-        if thread_sleep(10, event):
-            return
-        job_id = job.execute(batch='slurm')
-
-    # Prep for submitting the job
-    message = 'Submitted {job} for year_set {start:04d}-{end:04d}'.format(
-        job=job.get_type(),
-        start=job_set.set_start_year,
-        end=job_set.set_end_year)
-    event_list.push(
-        message=message,
-        data=job)
-    logging.info(message)
-
-    slurm = Slurm()
-    while True:
-        # update the job state
-        job_status = slurm.showjob(job_id)['JobState']
-        job_status = StatusMap[job_status]
-        if job_status == JobStatus.RUNNING and job.status != JobStatus.RUNNING:
-            job.start_time = datetime.now()
-        job.set_status(job_status)
-
-        # this check is here in case the loop is stuck and the thread needs to be canceled
-        if event and event.is_set():
-            return
-        if job.status == JobStatus.INVALID:
-            return
-        if job.status == JobStatus.FAILED:
-            job.end_time = datetime.now()
-            msg = 'Job {0} has failed'.format(job_id)
-            event_list.push(
-                message=msg,
-                data=job)
-            job_set.status = SetStatus.FAILED
-            return
-        if job.status == JobStatus.COMPLETED:
-            job.end_time = datetime.now()
-            handle_completed_job(job, job_set, event_list)
-            return
-
-        # wait for 10 seconds, or if the kill_thread event has been set, exit
-        if thread_sleep(10, event):
-            return
-
-def setup_local_hosting(job, event_list, img_src, generate=False):
-    """
-    Sets up the local directory for hosting diagnostic sets
-    """
-    msg = 'Setting up local hosting for {}'.format(job.get_type())
-    t = threading.current_thread()
-    tid = t.ident
-    event_list.push(
-        message=msg,
-        data=job)
-    logging.info(msg)
-    host_dir = job.config.get('web_dir')
-    url = job.config.get('host_url')
-    if os.path.exists(job.config.get('web_dir')):
-        new_id = time.strftime("%Y-%m-%d-%I-%M")
-        host_dir += '_' + new_id
-        url += '_' + new_id
-        job.config['host_url'] = url
-    if not os.path.exists(img_src):
-        msg = '{job} hosting failed, no image source at {path}'.format(
-            job=job.get_type(),
-            path=img_src)
-        logging.error(msg)
-        return
-    try:
-        msg = 'copying images from {src} to {dst}'.format(src=img_src, dst=host_dir)
-        logging.info(msg)
-        copytree(src=img_src, dst=host_dir)
-        recursive_file_permissions(host_dir)
-    except Exception as e:
-        logging.error(format_debug(e))
-        msg = 'Error copying {} to host directory'.format(job.get_type())
-        event_list.push(
-            message=msg,
-            data=job)
-        return
-
-    temp = host_dir.split(os.sep)
-    index = temp.index(os.environ['USER']) + 2
-    image_dir = os.sep.join(temp[:index])
-    msg = 'Changing permissions on image_dir {}'.format(host_dir)
-    logging.info(msg)
-
-    os.chmod(img_src, 0755)
-    head, _ = os.path.split(img_src)
-    os.chmod(head, 0755)
-
-    if job.get_type() == 'amwg':
-        msg = '{job} hosted at {url}/index.html'.format(
-            url=url,
-            job=job.get_type())
-        job.config['host_url'] += '/index.html'
-    elif job.get_type() == 'acme_diags':
-        msg = '{job} hosted at {url}/viewer/index.html'.format(
-            url=url,
-            job=job.get_type())
-        job.config['host_url'] += '/viewer/index.html'
-        # output_dir = os.path.join(config['global']['output_path'], 'acme_diags')
-    else:
-        msg = '{job} hosted at {url}/index.html'.format(
-            url=url,
-            job=job.get_type())
-        job.config['host_url'] += '/index.html'
-
-    event_list.push(
-        message=msg,
-        data=job)
-    logging.info(msg)
-
-def check_for_inplace_data(file_list, file_name_list, config, file_type_map):
-    """
-    Checks the data cache for any files that might alread   y be in place,
-    updates the file_list and job_sets accordingly
-    """
-    cache_path = config['global']['data_cache_path']
-    sim_end_year = int(config['global']['simulation_end_year'])
-    if not os.path.exists(cache_path):
-        os.makedirs(cache_path)
-        return False
-    
-    patterns = config['global']['patterns']
-    input_dirs = [os.path.join(cache_path, key) for key, val in patterns.items()]
-    for input_dir in input_dirs:
-        file_type = input_dir.split(os.sep)[-1]
-        for input_file in os.listdir(input_dir):
-            input_file_path = os.path.join(input_dir, input_file)
-            file_key = ""
-            if file_type_map[file_type][1]:
-                file_key = filename_to_file_list_key(filename=input_file)
-                index = file_key.find('-')
-                year = int(file_key[:index])
-                if year > sim_end_year:
-                    continue
-                if not file_list[file_type][file_key] == SetStatus.IN_TRANSIT:
-                    file_list[file_type][file_key] = SetStatus.DATA_READY
-                file_name_list[file_type][file_key] = input_file
-            else:
-                for file_key in file_list[file_type]:
-                    if file_key == input_file:
-                        if os.path.exists(os.path.join(input_dir, input_file)) and \
-                        not file_list[file_type][file_key] == SetStatus.IN_TRANSIT:
-                            file_list[file_type][file_key] = SetStatus.DATA_READY
-                        file_name_list[file_type][file_key] = input_file
-
-    for key, val in patterns.items():
-        for file_key in file_list[key]:
-            if file_list[key][file_key] != SetStatus.DATA_READY:
-                return False
-    return True
-
 def print_debug(e):
     """
     Print an exceptions relavent information
@@ -682,7 +415,7 @@ def format_debug(e):
         lineno=traceback.tb_lineno(sys.exc_info()[2]),
         stack=traceback.print_tb(tb))
 
-def write_human_state(event_list, job_sets, state_path='run_state.txt', ui_mode=True, print_file_list=False, file_list=None):
+def write_human_state(event_list, job_sets, state_path='run_state.txt', ui_mode=True, print_file_list=False, types=None):
     """
     Writes out a human readable representation of the current execution state
 
@@ -712,7 +445,7 @@ def write_human_state(event_list, job_sets, state_path='run_state.txt', ui_mode=
 
                 for job in year_set.jobs:
                     line = '  >   {type} -- {id}: {status}\n'.format(
-                        type=job.get_type(),
+                        type=job.type,
                         id=job.job_id,
                         status=job.status)
                     out_str += line
@@ -745,14 +478,35 @@ def write_human_state(event_list, job_sets, state_path='run_state.txt', ui_mode=
     except Exception as e:
         logging.error(format_debug(e))
         return
-    
+
     if print_file_list:
         head, _ = os.path.split(state_path)
         file_list_path = os.path.join(head, 'file_list.txt')
         if not os.path.exists(head):
             os.makedirs(head)
         with open(file_list_path, 'w') as fp:
-            fp.write(pformat(file_list))
+            for _type in types:
+                fp.write(_type + ':\n')
+                for datafile in DataFile.select().where(DataFile.datatype == _type):
+                    filestr = '   ' + datafile.name + '\n     local_status: '
+                    if datafile.local_status == 0:
+                        filestr += ' present, '
+                    elif datafile.local_status == 1:
+                        filestr += ' missing, '
+                    else:
+                        filestr += ' in transit, '
+                    filestr += '\n     remote_status: '
+                    if datafile.remote_status == 0:
+                        filestr += ' present'
+                    elif datafile.remote_status == 1:
+                        filestr += ' missing'
+                    else:
+                        filestr += ' in transit'
+                    filestr += '\n     local_size: ' + str(datafile.local_size)
+                    filestr += '\n     local_path: ' + datafile.local_path
+                    filestr += '\n     remote_size: ' + str(datafile.remote_size)
+                    filestr += '\n     remote_path: ' + datafile.remote_path + '\n'
+                    fp.write(filestr)
 
 class colors:
     HEADER = '\033[95m'
@@ -824,26 +578,6 @@ def render(variables, input_path, output_path, delimiter='%%'):
             rendered_string = line
         outfile.write(rendered_string)
 
-def is_all_done(job_sets):
-    """
-    Check if all job_sets are done, and all processing has been completed
-
-    return -1 if still running
-    return 0 if a jobset failed
-    return 1 if all complete
-    """
-
-    # First check for pending jobs
-    for job_set in job_sets:
-        if job_set.status != SetStatus.COMPLETED and \
-           job_set.status != SetStatus.FAILED:
-            return -1
-    # all job sets are either complete or failed
-    for job_set in job_sets:
-        if job_set.status != SetStatus.COMPLETED:
-            return 0
-    return 1
-
 def filename_to_file_list_key(filename):
     """
     Takes a filename and returns the key for the file_list
@@ -907,124 +641,6 @@ def create_symlink_dir(src_dir, src_list, dst):
         except Exception as e:
             msg = format_debug(e)
             logging.error(e)
-
-
-def file_priority_cmp(a, b):
-    priority = {
-        'ATM': 1,
-        'MPAS_AM': 2,
-        'MPAS_CICE': 3,
-        'MPAS_RST': 4,
-        'MPAS_O_IN': 5,
-        'MPAS_CICE_IN': 6,
-        'RPT': 7,
-    }
-    apriority = priority.get(a['type'])
-    bpriority = priority.get(b['type'])
-    if not apriority and not bpriority:
-        return 1
-    elif not apriority:
-        apriority = 8
-    elif not bpriority:
-        bpriority = 8
-    
-    return apriority - bpriority
-
-
-def raw_file_cmp(a, b):
-    """
-    Comparison function for incoming files
-
-    Parameters
-        a (file): the first operand
-        b (file): the second operand
-
-        the file consists of a filename, date, size and type
-    """
-
-    a = str(a['filename'].split('/')[-1])
-    b = str(b['filename'].split('/')[-1])
-    if not filter(str.isdigit, a) or not filter(str.isdigit, b):
-        return a > b
-    expression = '\d\d\d\d-\d\d.*'
-    asearch = re.search(expression, a)
-    if not asearch:
-        return -1
-    bsearch = re.search(expression, b)
-    if not bsearch:
-        return -1
-    a_index = asearch.start()
-    b_index = bsearch.start()
-    a_walk_index = 4
-    # while str(a[a_index + a_walk_index]).isdigit():
-    #     a_walk_index += 1
-    b_walk_index = 4
-    # while str(b[b_index + b_walk_index]).isdigit():
-    #     b_walk_index += 1
-    a_year = int(a[a_index: a_index + a_walk_index])
-    b_year = int(b[b_index: b_index + b_walk_index])
-    if a_year > b_year:
-        return 1
-    elif a_year < b_year:
-        return -1
-    else:
-        month_walk = 2
-        # while a[a_index + a_walk_index + month_walk].isdigit():
-        #     month_walk += 1
-        a_month = int(a[a_index + a_walk_index + 1: a_index + a_walk_index + month_walk])
-        b_month = int(b[b_index + b_walk_index + 1: b_index + b_walk_index + month_walk])
-        if a_month > b_month:
-            return 1
-        elif a_month < b_month:
-            return -1
-        else:
-            return 0
-
-def raw_filename_cmp(a, b):
-    """
-    Comparison function for incoming files
-
-    Parameters
-        a (str): the first filename
-        b (str): the second filename
-
-    """
-
-    a = a.split('/')[-1]
-    b = b.split('/')[-1]
-    expression = '\d\d\d\d-\d\d.*'
-    asearch = re.search(expression, a)
-    if not asearch:
-        return -1
-    bsearch = re.search(expression, b)
-    if not bsearch:
-        return -1
-    a_index = asearch.start()
-    b_index = bsearch.start()
-    a_walk_index = 4
-    # while str(a[a_index + a_walk_index]).isdigit():
-    #     a_walk_index += 1
-    b_walk_index = 4
-    # while str(b[b_index + b_walk_index]).isdigit():
-    #     b_walk_index += 1
-    a_year = int(a[a_index: a_index + a_walk_index])
-    b_year = int(b[b_index: b_index + b_walk_index])
-    if a_year > b_year:
-        return 1
-    elif a_year < b_year:
-        return -1
-    else:
-        month_walk = 2
-        # while a[a_index + a_walk_index + month_walk].isdigit():
-        #     month_walk += 1
-        a_month = int(a[a_index + a_walk_index + 1: a_index + a_walk_index + month_walk])
-        b_month = int(b[b_index + b_walk_index + 1: b_index + b_walk_index + month_walk])
-        if a_month > b_month:
-            return 1
-        elif a_month < b_month:
-            return -1
-        else:
-            return 0
 
 def thread_sleep(seconds, event):
     """

@@ -1,7 +1,6 @@
 {
     "global": [
-        "output_path",
-        "data_cache_path",
+        "project_path",
         "source_path",
         "simulation_start_year",
         "simulation_end_year",
@@ -11,10 +10,10 @@
         "img_host_server",
         "email",
         "host_directory",
-        "patterns",
+        "short_term_archive",
         "set_jobs"
     ],
-    "acme_diags": [
+    "e3sm_diags": [
         "host_directory",
         "host_url_prefix",
         "backend",

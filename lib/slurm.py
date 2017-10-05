@@ -32,10 +32,7 @@ class Slurm(object):
         out = out.split()
         if 'error' in out:
             return 0
-        try:
-            job_id = int(out[-1])
-        except Exception as e:
-            raise e
+        job_id = int(out[-1])
         return job_id
 
     def run(self, cmd, sargs=False):

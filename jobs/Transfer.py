@@ -17,13 +17,11 @@ from globus_sdk import TransferData
 
 from lib.util import print_debug
 from lib.util import print_message
-from lib.util import filename_to_year_set
 from lib.util import format_debug
-from lib.util import raw_file_cmp
-from lib.util import file_priority_cmp
 from lib.util import setup_globus
 from lib.util import strfdelta
 from lib.events import Event_list
+from lib.models import DataFile
 from jobs.JobStatus import JobStatus
 
 class Transfer(object):
@@ -34,15 +32,11 @@ class Transfer(object):
         self.event_list = event_list
         self.config = {}
         self.status = JobStatus.INVALID
-        self.type = 'transfer'
-        self.outputs = {
-            "status": self.status
-        }
+        self._type = 'transfer'
         self.uuid = uuid4().hex
         self.start_time = None
         self.end_time = None
         self.inputs = {
-            'size': '',
             'file_list': '',
             'recursive': '',
             'source_endpoint': '',
@@ -53,31 +47,17 @@ class Transfer(object):
             'display_event': '',
             'ui': ''
         }
-        self._max_size = 100
-        self._transfer_size = 0
         self.prevalidate(config)
         self.msg = None
         self.job_id = 0
-    
-    @property
-    def transfer_size(self):
-        return self.transfer_size
-    
-    @property
-    def max_size(self):
-        return self._max_size
-    
-    @max_size.setter
-    def max_size(self, size):
-        self._max_size = size
     
     @property
     def file_list(self):
         return self.config.get('file_list')
     
     @file_list.setter
-    def file_list(self, nfile_list):
-        self.config['file_list'] = nfile_list
+    def file_list(self, _file_list):
+        self.config['file_list'] = _file_list
 
     def save(self, conf_path):
         """
@@ -96,14 +76,9 @@ class Transfer(object):
             print_debug(e)
             raise
 
-    def get_type(self):
-        """
-        Returns job type
-        """
-        return self.type
-
-    def get_file_list(self):
-        return self.inputs.get('file_list')
+    @property
+    def type(self):
+        return self._type
 
     def __str__(self):
         return pformat({
@@ -132,36 +107,13 @@ class Transfer(object):
 
         for i in self.inputs:
             if i not in self.config or self.config[i] == None:
-                if i == 'file_list':
-                    self.config[i] = ''
-                elif i == 'recursive':
+                if i == 'recursive':
                     self.config[i] = False
                 else:
                     print_message('Missing transfer argument {}'.format(i))
                     self.status = JobStatus.INVALID
                     return -1
         self.status = JobStatus.VALID
-        size = config.get('size')
-        self._max_size = int(size) if size and size > 0 else 100
-        # only add the first n transfers up to the max
-        
-        file_list = sorted(self.config.get('file_list'), raw_file_cmp)
-        file_list.sort(file_priority_cmp)
-        transfer_list = []
-        transfer_size = 0
-        for index, element in enumerate(file_list):
-            new_size = transfer_size + (element['size'] / 1000000000.0)
-            if self._max_size >= new_size:
-                transfer_list.append(element)
-                transfer_size += (element['size'] / 1000000000.0)
-            else:
-                break
-        self._transfer_size = transfer_size
-        self.config['file_list'] = transfer_list
-        for file_info in file_list:
-            destination = os.path.join(self.config.get('destination_path'), file_info['type'])
-            if not os.path.exists(destination):
-                os.makedirs(destination)
         return 0
 
     def postvalidate(self):
@@ -201,28 +153,38 @@ class Transfer(object):
             else:
                 message += '_'
         message += '] {percent:.2f}%'.format(percent=percent_complete)
-        
+
         # check if the event has already been pushed into the event_list
         replaced = False
-        for index, event in enumerate(self.event_list.list):
-            if task_id == event.data:
+        from lib.util import print_debug
+        try:
+            for index, event in enumerate(self.event_list.list):
+                if task_id == event.data:
+                    msg = '{time} {msg}'.format(
+                        time=time.strftime("%I:%M"),
+                        msg=message)
+                    self.event_list.replace(
+                        index=index,
+                        message=msg)
+                    replaced = True
+                    break
+            if not replaced:
                 msg = '{time} {msg}'.format(
                     time=time.strftime("%I:%M"),
                     msg=message)
-                self.event_list.replace(
-                    index=index,
-                    message=msg)
-                replaced = True
-                break
-        if not replaced:
-            msg = '{time} {msg}'.format(
-                time=time.strftime("%I:%M"),
-                msg=message)
-            self.event_list.push(
-                message=msg,
-                data=task_id)
+                self.event_list.push(
+                    message=msg,
+                    data=task_id)
+        except Exception as e:
+            print_debug(e)
 
     def execute(self, event):
+        """
+        Start the transfer
+        
+        Parameters:
+            event (thread.event): event to trigger job cancel
+        """
         # reject if job isnt valid
         self.prevalidate()
         if self.status != JobStatus.VALID:
@@ -269,18 +231,10 @@ class Transfer(object):
             self.status = JobStatus.FAILED
             return
 
-        for path in self.config['file_list']:
-            dst_path = os.path.join(
-                self.config.get('destination_path'),
-                path['type'],
-                path['filename'].split('/')[-1])
-            src_path = os.path.join(
-                self.config.get('source_path'),
-                path['filename'])
-            # print "moving file from {src} to {dst}".format(src=src_path, dst=dst_path)
+        for datafile in self.config['file_list']:
             transfer_task.add_item(
-                source_path=src_path,
-                destination_path=dst_path,
+                source_path=datafile.remote_path,
+                destination_path=datafile.local_path,
                 recursive=False)
 
         # Start the transfer
@@ -337,11 +291,11 @@ class Transfer(object):
                     self.status = JobStatus.RUNNING
                 if event and event.is_set():
                     client.cancel_task(task_id)
-                    self.error_cleanup()
+                    #self.error_cleanup()
                     return
             except Exception as e:
                 logging.error(format_debug(e))
                 client.cancel_task(task_id)
-                self.error_cleanup()
+                #self.error_cleanup()
                 return
             time.sleep(5)
