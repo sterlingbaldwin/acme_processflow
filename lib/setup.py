@@ -11,9 +11,12 @@ from YearSet import YearSet, SetStatus
 from shutil import copyfile
 from lib.filemanager import FileManager
 from lib.runmanager import RunManager
+from lib.mailer import Mailer
 from util import (check_config_white_space, 
                   setup_globus,
-                  check_globus)
+                  check_globus,
+                  print_message,
+                  print_debug)
 
 def setup(parser, display_event, **kwargs):
     """
@@ -28,7 +31,7 @@ def setup(parser, display_event, **kwargs):
     if not args.config:
         parser.print_help()
         sys.exit()
-    
+
     event_list = kwargs['event_list']
     thread_list = kwargs['thread_list']
 
@@ -43,8 +46,9 @@ def setup(parser, display_event, **kwargs):
     # Check that there are no white space errors in the config file
     line_index = check_config_white_space(args.config)
     if line_index != 0:
-        print 'ERROR: line {num} does not have a space after the \'=\', white space is required. Please add a space and run again.'.format(
-            num=line_index)
+        print '''
+ERROR: line {num} does not have a space after the \'=\', white space is required. 
+Please add a space and run again.'''.format(num=line_index)
         sys.exit(-1)
 
     # read the config file and setup the config dict
@@ -299,11 +303,14 @@ def verify_config(config, template):
                 valid = False
     return valid, messages
 
-def finishup(config, job_sets, state_path, event_list):
+def finishup(config, job_sets, state_path, event_list, status, display_event, thread_list):
     message = 'Performing post run cleanup'
     event_list.push(message=message)
     if not config.get('global').get('no-cleanup', False):
-        cleanup(config)
+        # cleanup(config)
+        tmp = os.path.join(config['global']['output_path'], 'tmp')
+        if os.path.exists(tmp):
+            rmtree(tmp)
 
     message = 'All processing complete' if status == 1 else "One or more job failed"
     emailaddr = config.get('global').get('email')
@@ -318,14 +325,22 @@ def finishup(config, job_sets, state_path, event_list):
                         end=job_set.set_end_year,
                         status=job_set.status)
                     for job in job_set.jobs:
-                        if job.type in ['coupled_diags', 'amwg', 'acme_diags']:
-                            msg += '    > {job} hosted at {url}\n'.format(
+                        if job.type == 'amwg':
+                            msg += '    > {job} hosted at {url}/index.html\n'.format(
+                                job=job.type,
+                                url=job.config['host_url'])
+                        elif job.type == 'e3sm_diags':
+                            msg += '    > {job} hosted at {url}/viewer/index.html\n'.format(
+                                job=job.type,
+                                url=job.config['host_url'])
+                        elif job.type == 'aprime_diags':
+                            msg += '    > {job} hosted at {url}/index.html\n'.format(
                                 job=job.type,
                                 url=job.config['host_url'])
                         else:
                             msg += '    > {job} output located {output}\n'.format(
                                 job=job.type,
-                                output=job.config['output_directory'])
+                                output=config['global']['output_path'])
             else:
                 msg = 'One or more job failed\n\n'
                 with open(state_path, 'r') as state_file:
@@ -337,7 +352,7 @@ def finishup(config, job_sets, state_path, event_list):
                 status=message,
                 msg=msg)
         except Exception as e:
-            logging.error(format_debug(e))
+            print_debug(e)
     event_list.push(message=message)
     display_event.set()
     print_type = 'ok' if status == 1 else 'error'
@@ -346,5 +361,4 @@ def finishup(config, job_sets, state_path, event_list):
     for t in thread_list:
         thread_kill_event.set()
         t.join(timeout=1.0)
-    sleep(2)
-    sys.exit(0)
+    time.sleep(2)

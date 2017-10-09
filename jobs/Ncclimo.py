@@ -180,7 +180,7 @@ class Climo(object):
             end_year=set_end_year)
         if len(file_list) < 17:
             return False
-        
+
         return True
 
     def __str__(self):

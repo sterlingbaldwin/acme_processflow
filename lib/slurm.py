@@ -25,7 +25,7 @@ class Slurm(object):
         Returns:
             job id of the new job (int)
         """
-       
+
         out, err = self._submit('sbatch', cmd, sargs)
         if err:
             raise Exception('SLURM ERROR: ' + err)

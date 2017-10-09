@@ -33,7 +33,8 @@ class E3SMDiags(object):
             'year_set': '',
             'experiment': '',
             'web_dir': '',
-            'host_url': ''
+            'host_url': '',
+            'output_path': ''
         }
         self.slurm_args = {
             'num_cores': '-n 16', # 16 cores
@@ -138,7 +139,7 @@ class E3SMDiags(object):
             name=run_name)
         run_script = os.path.join(
             self.config.get('run_scripts_path'),
-            expected_name)
+            run_name)
         if os.path.exists(run_script):
             os.remove(run_script)
 

@@ -50,7 +50,6 @@ class AMWGDiagnostic(object):
             'web_dir': '',
             'host_url': '',
             'test_casename': '',
-            'test_path': '',
             'test_filetype': 'monthly_history',
             'test_path_history': '',
             'test_path_climo': '',
@@ -62,6 +61,8 @@ class AMWGDiagnostic(object):
             'run_directory': '',
             'template_path': '',
             'run_scripts_path': '',
+            'output_path': '',
+            'diag_home': '',
         }
         self._type = 'amwg'
         self.config = {}
@@ -157,7 +158,6 @@ class AMWGDiagnostic(object):
 
         # setup sbatch script
         expected_name = 'amwg_{start:04d}-{end:04d}'.format(
-            year_set=self.config.get('year_set'),
             start=self.config.get('start_year'),
             end=self.config.get('end_year'))
         run_script = os.path.join(
@@ -168,7 +168,7 @@ class AMWGDiagnostic(object):
 
         self.slurm_args['output_file'] = '-o {output_file}'.format(
             output_file=run_script + '.out')
-        cmd = 'csh {templat}'.format(
+        cmd = '\ncsh {template}'.format(
             template=template_out)
         slurm_args_str = ['#SBATCH {value}'.format(value=v) for k, v in self.slurm_args.items()]
         slurm_prefix = '\n'.join(slurm_args_str)
@@ -178,11 +178,11 @@ class AMWGDiagnostic(object):
             batchfile.write(cmd)
 
         prev_dir = os.getcwd()
-        os.chdir(output_path)
+        #os.chdir(output_path)
 
         slurm = Slurm()
         self.job_id = slurm.batch(run_script, '--oversubscribe')
-        os.chdir(prev_dir)
+        #os.chdir(prev_dir)
 
         status = slurm.showjob(self.job_id)
         self.status = StatusMap[status.get('JobState')]

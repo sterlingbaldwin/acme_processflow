@@ -464,7 +464,6 @@ if __name__ == "__main__":
                 if not all_data \
                 and filemanager.active_transfers < 2 \
                 and not config['global']['no_monitor']:
-                    print '--- Starting filemanager transfer ---'
                     filemanager.transfer_needed(
                         event_list=event_list,
                         event=thread_kill_event,
@@ -483,13 +482,22 @@ if __name__ == "__main__":
                 ui_mode=config.get('global').get('ui'),
                 print_file_list=config.get('global').get('print_file_list'),
                 types=filemanager.types)
-            if runmanager.is_all_done() >= 0:
-                finishup(config, job_sets, state_path, event_list)
+            status = runmanager.is_all_done()
+            if status >= 0:
+                finishup(
+                    config=config,
+                    job_sets=runmanager.job_sets,
+                    state_path=state_path,
+                    event_list=event_list,
+                    status=status,
+                    display_event=display_event,
+                    thread_list=thread_list)
+                sys.exit(0)
             sleep(2)
             loop_count += 1
     except KeyboardInterrupt as e:
         print_message('----- KEYBOARD INTERUPT -----')
-        print_message('cleaning up threads', 'ok')
+        print_message('----- cleaning up threads ---', 'ok')
         display_event.set()
         thread_kill_event.set()
         for thread in thread_list:

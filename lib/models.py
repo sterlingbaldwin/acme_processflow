@@ -11,10 +11,3 @@ class DataFile(Model):
     datatype = CharField()
     remote_size = IntegerField()
     local_size = IntegerField()
-
-
-class JobRecord(Model):
-    name = CharField()
-    jobtype = CharField()
-    jobid = IntegerField()
-    status = CharField()
