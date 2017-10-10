@@ -46,12 +46,12 @@ class Timeseries(object):
             'annual_mode': '',
             'start_year': '',
             'end_year': '',
-            'input_directory': '',
             'output_directory': '',
             'var_list': '',
             'caseId': '',
             'run_scripts_path': '',
             'regrid_map_path': '',
+            'file_list': '',
         }
         self.proc = None
         self.slurm_args = {
@@ -61,7 +61,23 @@ class Timeseries(object):
             'oversubscribe': '--oversubscribe'
         }
         self.prevalidate(config)
-    
+
+    def prevalidate(self, config):
+        """
+        Prerun validation for inputs
+        """
+        if self.status == JobStatus.VALID:
+            return 0
+        for i in config:
+            if i in self.inputs:
+                self.config[i] = config.get(i)
+        if not os.path.exists(self.config.get('run_scripts_path')):
+            os.makedirs(self.config.get('run_scripts_path'))
+        if self.year_set == 0:
+            self.status = JobStatus.INVALID
+            return
+        self.status = JobStatus.VALID
+
     def __str__(self):
         return pformat({
             'type': self.type,
@@ -82,10 +98,10 @@ class Timeseries(object):
             self.event_list.push(message=message)
             return 0
 
-        self.start_time = datetime.now()
-        input_dir = self.config.get('input_directory')
-        file_list = [os.path.join(input_dir, item) for item in os.listdir(input_dir)]
+        file_list = self.config['file_list']
         file_list.sort()
+        list_string = ' '.join(file_list)
+
         slurm_command = ' '.join([
             'ncclimo',
             '-a', self.config['annual_mode'],
@@ -95,7 +111,7 @@ class Timeseries(object):
             '-e', str(self.config['end_year']),
             '-o', self.config['output_directory'],
             '--map={}'.format(self.config.get('regrid_map_path')),
-            ' '.join(file_list)
+            list_string
         ])
 
         # Submitting the job to SLURM
@@ -126,22 +142,6 @@ class Timeseries(object):
         self.event_list.push(message=message)
 
         return self.job_id
-
-    def prevalidate(self, config):
-        """
-        Prerun validation for inputs
-        """
-        if self.status == JobStatus.VALID:
-            return 0
-        for i in config:
-            if i in self.inputs:
-                self.config[i] = config.get(i)
-        if not os.path.exists(self.config.get('run_scripts_path')):
-            os.makedirs(self.config.get('run_scripts_path'))
-        if self.year_set == 0:
-            self.status = JobStatus.INVALID
-            return
-        self.status = JobStatus.VALID
     
     def _find_year(self, filename):
         pattern = '_\d\d\d\d\d\d_\d\d\d\d\d\d.*'

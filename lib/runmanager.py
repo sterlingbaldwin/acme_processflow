@@ -33,7 +33,7 @@ class RunManager(object):
         if not os.path.exists(self.scripts_path):
             os.makedirs(self.scripts_path)
 
-    def setup_job_sets(self, set_frequency, sim_start_year, sim_end_year, config):
+    def setup_job_sets(self, set_frequency, sim_start_year, sim_end_year, config, filemanager):
         sim_length = sim_end_year - sim_start_year + 1
         for freq in set_frequency:
             number_of_sets_at_freq = sim_length / freq
@@ -42,40 +42,41 @@ class RunManager(object):
             for i in range(1, number_of_sets_at_freq + 1):
                 start_year = sim_start_year + ((i - 1) * freq)
                 end_year = start_year + freq - 1
+                print 'Creating job_set for {}-{}'.format(start_year, end_year)
                 new_set = YearSet(
                     set_number=len(self.job_sets) + 1,
                     start_year=start_year,
                     end_year=end_year)
                 self.add_jobs(
                     config=config,
-                    year_set=new_set)
+                    year_set=new_set,
+                    filemanager=filemanager)
                 self.job_sets.append(new_set)
 
     def write_job_sets(self, path):
+        if os.path.exists(path):
+            os.remove(path)
         out_str = ''
         fp = open(path, 'w')
         for year_set in self.job_sets:
-            line = 'Year_set {num}: {start} - {end}\n'.format(
+            out_str += 'Year_set {num}: {start:04d} - {end:04d}\n'.format(
                 num=year_set.set_number,
                 start=year_set.set_start_year,
                 end=year_set.set_end_year)
-            out_str += line
 
-            line = 'status: {status}\n'.format(
+            out_str += 'status: {status}\n'.format(
                 status=year_set.status)
-            out_str += line
 
             for job in year_set.jobs:
-                line = '  >   {type} -- {id}: {status}\n'.format(
+                out_str += '  >   {type} -- {id}: {status}\n'.format(
                     type=job.type,
                     id=job.job_id,
                     status=job.status)
-                out_str += line
             out_str += '\n'
             fp.write(out_str)
         fp.close()
 
-    def add_jobs(self, config, year_set):
+    def add_jobs(self, config, year_set, filemanager):
         """
         Initializes and adds all the jobs to the year_set
 
@@ -116,7 +117,7 @@ class RunManager(object):
             os.makedirs(regrid_output_dir)
 
         if required_jobs.get('ncclimo'):
-            # Add the ncclimo job to the runmanager    
+            # Add the ncclimo job to the runmanager
             self.add_climo(
                 start_year=year_set.set_start_year,
                 end_year=year_set.set_end_year,
@@ -127,6 +128,10 @@ class RunManager(object):
                 regrid_output_dir=regrid_output_dir)
 
         if required_jobs.get('timeseries'):
+            file_list = filemanager.get_file_paths_by_year(
+                start_year=year_set.set_start_year,
+                end_year=year_set.set_end_year,
+                _type='atm')
             # Add the timeseries job to the runmanager
             self.add_timeseries(
                 start_year=year_set.set_start_year,
@@ -135,7 +140,8 @@ class RunManager(object):
                 input_path=atm_path,
                 regrid_map_path=config['ncclimo']['regrid_map_path'],
                 var_list=config.get('ncclimo').get('var_list'),
-                output_path=output_base_path)
+                output_path=output_base_path,
+                file_list=file_list)
 
         if required_jobs.get('aprime_diags'):
             # Add the aprime job
@@ -269,6 +275,7 @@ class RunManager(object):
         input_path = kwargs['input_path']
         regrid_map_path = kwargs['regrid_map_path']
         var_list = kwargs['var_list']
+        file_list = kwargs['file_list']
 
         if not self._precheck(year_set, 'timeseries'):
             return
@@ -282,6 +289,7 @@ class RunManager(object):
             os.makedirs(timeseries_output_dir)
 
         config = {
+            'file_list': file_list,
             'run_scripts_path': self.scripts_path,
             'annual_mode': 'sdd',
             'caseId': self.caseID,
@@ -289,7 +297,6 @@ class RunManager(object):
             'var_list': var_list,
             'start_year': start_year,
             'end_year': end_year,
-            'input_directory': input_path,
             'output_directory': timeseries_output_dir,
             'regrid_map_path': regrid_map_path
         }
@@ -631,6 +638,10 @@ class RunManager(object):
                         continue
                     # If the job is valid, start it
                     if job.status == JobStatus.VALID:
+                        print 'submitting to queue {type}: {start:04d}-{end:04d}'.format(
+                            type=job.type,
+                            start=job.start_year,
+                            end=job.end_year)
                         job.execute()
                         self.running_jobs.append(job)
                         self.monitor_running_jobs()

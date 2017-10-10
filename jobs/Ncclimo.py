@@ -114,6 +114,8 @@ class Climo(object):
             '-O', self.config['regrid_output_directory'],
             '-l'
         ]
+        slurm_command = ' '.join(cmd)
+
 
         # Submitting the job to SLURM
         expected_name = 'ncclimo_set_{year_set}_{start}_{end}'.format(
@@ -125,12 +127,11 @@ class Climo(object):
             os.remove(run_script)
 
         self.slurm_args['output_file'] = '-o {output_file}'.format(output_file=run_script + '.out')
+        slurm_prefix = '\n'.join(['#SBATCH ' + self.slurm_args[s] for s in self.slurm_args]) + '\n'
 
         with open(run_script, 'w') as batchfile:
             batchfile.write('#!/bin/bash\n')
-            slurm_prefix = '\n'.join(['#SBATCH ' + self.slurm_args[s] for s in self.slurm_args]) + '\n'
             batchfile.write(slurm_prefix)
-            slurm_command = ' '.join(cmd)
             batchfile.write(slurm_command)
 
         slurm = Slurm()

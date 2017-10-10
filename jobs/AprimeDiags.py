@@ -5,17 +5,12 @@ import time
 import re
 
 from pprint import pformat
-from subprocess import Popen, PIPE
 from time import sleep
-from random import randint
 from datetime import datetime
 from shutil import copyfile
 
 from lib.util import render
-from lib.util import print_message
 from lib.util import print_debug
-from lib.util import cmd_exists
-from lib.util import create_symlink_dir
 from lib.events import Event_list
 from lib.slurm import Slurm
 from JobStatus import JobStatus, StatusMap
@@ -28,49 +23,16 @@ class AprimeDiags(object):
         """
         self.event_list = event_list
         self.inputs = {
-            'mpaso_regions_file': '',
-            'web_dir': '',
-            'host_url': '',
-            'mpas_am_dir': '',
-            'rpt_dir': '',
-            'mpas_cice_dir': '',
-            'mpas_o_dir': '',
-            'streams_dir': '',
-            'host_url_prefix': '',
-            'host_directory': '',
-            'run_id': '',
-            'year_set': '',
-            'climo_temp_dir': '',
-            'coupled_project_dir': '',
-            'test_casename': '',
-            'test_native_res': '',
-            'test_archive_dir': '',
-            'test_begin_yr_climo': '',
-            'test_end_yr_climo': '',
-            'test_begin_yr_ts': '',
-            'test_end_yr_ts': '',
-            'ref_case': '',
-            'ref_archive_dir': '',
-            'mpas_meshfile': '',
-            'mpas_remapfile': '',
-            'mpas_cice_in_dir': '',
-            'pop_remapfile': '',
-            'remap_files_dir': '',
-            'GPCP_regrid_wgt_file': '',
-            'CERES_EBAF_regrid_wgt_file': '',
-            'ERS_regrid_wgt_file': '',
-            'coupled_home_directory': '',
-            'coupled_template_path': '',
-            'rendered_output_path': '',
-            'obs_ocndir': '',
-            'obs_seaicedir': '',
-            'obs_sstdir': '',
-            'dataset_name': '',
-            'output_base_dir': '',
-            'run_scripts_path': '',
-            'mpas_rst_dir': '',
-            'run_ocean': '',
-            'experiment': ''
+            "host_dir": '',
+            "output_base_path": '',
+            "input_path": '',
+            "coupled_diags_home": '',
+            "start_year": '',
+            "end_year": '',
+            "test_atm_res": '',
+            "test_mpas_mesh_name": '',
+            "year_set": '',
+            "run_scripts_path": ''
         }
         self.slurm_args = {
             'num_cores': '-n 16', # 16 cores
@@ -78,13 +40,11 @@ class AprimeDiags(object):
             'num_machines': '-N 1', # run on one machine
             'oversubscribe': '--oversubscribe'
         }
-        config['run_ocean'] = int(config['run_ocean'])
         self.start_time = None
         self.end_time = None
         self.config = {}
         self.status = JobStatus.INVALID
         self._type = 'aprime_diags'
-        self.outputs = {}
         self.year_set = config.get('yearset', 0)
         self.start_year = config['start_year']
         self.end_year = config['end_year']
@@ -116,16 +76,34 @@ class AprimeDiags(object):
 
     def prevalidate(self, config):
         """
-        Iterate over given config dictionary making sure all the inputs are set
-        and rejecting any inputs that arent in the input dict
+        Create input and output directories
         """
         self.config = config
-        self.depends_on = config.get('depends_on')
-        self.year_set = config.get('year_set')
         self.status = JobStatus.VALID
 
         if not os.path.exists(self.config.get('run_scripts_path')):
             os.makedirs(self.config.get('run_scripts_path'))
+
+        set_string = '{start:04d}-{end:04d}'.format(
+            start=self.start_year,
+            end=self.end_year)
+        # Setup output directory
+        output_path = os.path.join(
+            self.config['output_base_path'],
+            'aprime',
+            set_string)
+        if not os.path.exists(output_path):
+            os.makedirs(output_path)
+        self.config['output_path'] = output_path
+        # Setup temp directory
+        tmp_path = os.path.join(
+            self.config['output_base_path'],
+            'tmp', 'aprime',
+            set_string)
+        if not os.path.exists(tmp_path):
+            os.makedirs(tmp_path)
+        self.config['tmp_path'] = tmp_path
+
         if self.year_set == 0:
             self.status = JobStatus.INVALID
 
@@ -154,87 +132,29 @@ class AprimeDiags(object):
         if os.path.exists(output_directory):
             contents = os.listdir(output_directory)
             target_output = 35
-            if self.config['run_ocean']:
-                target_output = 60
             return bool(len(contents) >= target_output)
         else:
             return False
 
-    def setup_input_directory(self):
-        climo_temp_path = self.config.get('climo_tmp_dir')
-        set_start_year = self.config.get('start_year')
-        set_end_year = self.config.get('end_year')
-
-        if not climo_temp_path or not os.path.exists(climo_temp_path):
-            self.status = JobStatus.INVALID
-            msg = '{} does not exist'.format(climo_temp_path)
-            logging.error(mgs)
-            return False
-
-        run_dir = os.path.join(
-            self.config.get('test_archive_dir'),
-            self.config.get('test_casename'),
+    def setup_input_directory(self, filemanager):
+        tmp_path = self.config.get('tmp_path')
+        input_path = os.path.join(
+            tmp_path,
+            self.config['test_casename'],
             'run')
-        if not os.path.exists(run_dir):
-            os.makedirs(run_dir)
+        if not os.path.exists(input_path):
+            os.makedirs(input_path)
 
-        # create atm links
-        climo_src_list = os.listdir(climo_temp_path)
-        create_symlink_dir(
-            src_dir=climo_temp_path,
-            src_list=climo_src_list,
-            dst=run_dir)
-        # create mpaso.hist.am links and mpascice links
-        if self.config.get('run_ocean'):
-            for mpas_dir in ['mpas_am_dir', 'mpas_cice_dir']:
-                mpas_temp_list = []
-                all_years = []
-                mpas_path = self.config.get(mpas_dir)
-                if not mpas_path:
-                    msg = 'Run ocean set to 1, but no mpas files included. Invalid configuration'
-                    self.event_list.push(message=msg)
-                    logging.error(mgs)
-                    self.status = JobStatus.INVALID
-                    return 2
-                for mpas in os.listdir(mpas_path):
-                    start = re.search(r'\.\d\d\d\d', mpas)
-                    s_index = start.start() + 1
-                    year = int(mpas[s_index: s_index + 4])
-                    if year > set_end_year or year < set_start_year:
-                        if year == set_end_year + 1:
-                            month = int(mpas[s_index + 5: s_index + 7])
-                            if month == 1:
-                                mpas_temp_list.append(mpas)
-                        continue
-                    mpas_temp_list.append(mpas)
-                    if year not in all_years:
-                        all_years.append(year)
-
-            if len(all_years) < (set_end_year - set_start_year):
-                msg = 'len({all_years}) < ({set_end_year} - {set_start_year})'.format(
-                    all_years=all_years, set_end_year=set_end_year, set_start_year=set_start_year)
-                loggig.error(msg)
-                return False
-            create_symlink_dir(
-                src_dir=mpas_path,
-                src_list=mpas_temp_list,
-                dst=run_dir)
-
-        extras = ['mpas_am_dir', 'mpas_cice_in_dir', 'mpas_o_dir', 'streams_dir', 'mpas_rst_dir', 'rpt_dir']
-        for extra in extras:
-            path = self.config.get(extra)
-            if not path or not os.path.exists(path):
-                continue
-            src_list = os.listdir(path)
-            if not src_list:
-                msg = '{} is empty'.format(path)
-                logging.error(msg)
-                return False
-            create_symlink_dir(
-                src_dir=path,
-                src_list=src_list,
-                dst=run_dir)
-        return True
+        for datatype in ['atm', 'ocn', 'ice', 'streams.ocean', 'streams.cice', 'rest']:
+            input_files = filemanager.get_file_paths_by_year(
+                start_year=self.start_year,
+                end_year=self.end_year,
+                _type=datatype)
+            for file in input_files:
+                head, tail = os.path.split(file)
+                os.symlink(
+                    src=file,
+                    dst=os.path.join(input_path, tail))
 
     def execute(self):
         """

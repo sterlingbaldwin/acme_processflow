@@ -30,17 +30,6 @@ from string import Formatter
 from slurm import Slurm
 from models import DataFile
 
-def recursive_file_permissions(path):
-    '''
-    Recursively updates file permissions on a given path.
-    '''
-    for item in glob.glob(path + '/*'):
-        if os.path.isdir(item):
-            os.chmod(os.path.join(path, item), 0755)
-            recursive_file_permissions(os.path.join(path, item))
-        else:
-            os.chmod(os.path.join(path, item), 0644)
-
 def cleanup(config):
     """
     Clean up temp files created during the run
@@ -69,7 +58,7 @@ def cleanup(config):
 def transfer_directory(**kwargs):
     """
     Transfer all the contents from source_endpoint:src_path to destination_endpoint:dst_path
-    
+
     parameters:
         source_endpoint (str) the globus UUID for the source files
         destination_endpoint (str) the globus UUID for the destination
@@ -116,7 +105,6 @@ def transfer_directory(**kwargs):
         else:
             event_list.push(message=msg)
             sleep(5)
-    
 
 def check_globus(**kwargs):
     """
@@ -153,24 +141,6 @@ def check_globus(**kwargs):
         print "Access granted"
         return True, None
 
-def check_config_white_space(filepath):
-    line_index = 0
-    found = False
-    with open(filepath, 'r') as infile:
-        for line in infile.readlines():
-            line_index += 1
-            index = line.find('=')
-            if index == -1:
-                found = False
-                continue
-            if line[index + 1] != ' ':
-                found = True
-                break
-    if found:
-        return line_index
-    else:
-        return 0
-
 def strfdelta(tdelta, fmt):
     f = Formatter()
     d = {}
@@ -183,15 +153,6 @@ def strfdelta(tdelta, fmt):
             d[i], rem = divmod(rem, l[i])
 
     return f.format(fmt, **d)
-
-def year_from_filename(filename):
-    pattern = r'\.\d\d\d\d-'
-    index = re.search(pattern, filename)
-    if index:
-        year = int(filename[index.start() + 1: index.start() + 5])
-        return year
-    else:
-        return 0
 
 def setup_globus(endpoints, no_ui=False, **kwargs):
     """
@@ -326,67 +287,6 @@ def path_exists(config_items):
                 print "File {key}: {value} does not exist, exiting.".format(key=key, value=val)
                 sys.exit(1)
 
-def start_ready_job_sets(job_sets, thread_list, debug, event, event_list):
-    """
-    Iterates over the job sets checking for ready ready jobs, and starts them
-
-    input:
-        job_sets: a list of YearSets,
-        thread_list: the list of currently running threads,
-        debug: boolean debug flag,
-        event: an event to pass to any threads we start so we can destroy them if needed
-    """
-    for job_set in job_sets:
-        # if the job state is ready, but hasnt started yet
-        if job_set.status  in [SetStatus.DATA_READY, SetStatus.RUNNING]:
-            for job in job_set.jobs:
-                if job.depends_on:
-                    ready = False
-                    dep = ''
-                    for dependancy in job.depends_on:
-                        for djob in job_set.jobs:
-                            if djob.type == dependancy:
-                                if djob.status == JobStatus.COMPLETED:
-                                    ready = True
-                                else:
-                                    dep = djob
-                                break
-                    if not ready:
-                        msg = '{job} is waiting on {dep}'.format(
-                            job=job.type, dep=dep.type)
-                        logging.info(msg)
-                else:
-                    ready = True
-                if not ready:
-                    continue
-                # if the job isnt a climo, and the job that it depends on is done, start it
-                if job.status == JobStatus.VALID:
-                    while True:
-                        try:
-                            args = (
-                                job,
-                                job_set, event,
-                                debug, 'slurm',
-                                event_list)
-                            thread = threading.Thread(
-                                target=monitor_job,
-                                name='monitor_job for {}'.format(job.get_type()),
-                                args=args)
-                            thread_list.append(thread)
-                            thread.start()
-                        except Exception as e:
-                            print_debug(e)
-                            sleep(1)
-                        else:
-                            break
-                    job_set.status = SetStatus.RUNNING
-                if job.status == JobStatus.INVALID:
-                    message = "{type} id: {id} status changed to {status}".format(
-                        id=job.job_id,
-                        status=job.status,
-                        type=job.get_type())
-                    logging.error(message)
-
 def cmd_exists(cmd):
     return any(os.access(os.path.join(path, cmd), os.X_OK) for path in os.environ["PATH"].split(os.pathsep))
 
@@ -471,10 +371,10 @@ def write_human_state(event_list, job_sets, state_path='run_state.txt', ui_mode=
                     continue
                 out_str += line.message + '\n'
             outfile.write(out_str)
-            if not ui_mode:
-                print '\n'
-                print out_str
-                print '\n================================================\n'
+            # if not ui_mode:
+            #     print '\n'
+            #     print out_str
+            #     print '\n================================================\n'
     except Exception as e:
         logging.error(format_debug(e))
         return
@@ -577,49 +477,6 @@ def render(variables, input_path, output_path, delimiter='%%'):
         else:
             rendered_string = line
         outfile.write(rendered_string)
-
-def filename_to_file_list_key(filename):
-    """
-    Takes a filename and returns the key for the file_list
-    """
-    pattern = r'\.\d\d\d\d-'
-    index = re.search(pattern, filename)
-    if index:
-        year = int(filename[index.start() + 1: index.start() + 5])
-    else:
-        return '0-0'
-    # the YYYY field is 4 characters long, the month is two
-    year_offset = index.start() + 5
-    # two characters for the month, and one for the - between year and month
-    month_offset = year_offset + 3
-    month = int(filename[year_offset + 1: month_offset])
-    key = "{year}-{month}".format(year=year, month=month)
-    return key
-
-def filename_to_year_set(filename, freq):
-    """
-    Takes a filename and returns the year_set that the file belongs to
-
-    Parameters
-        filename (str or unicode): The name of the file to return the year set for
-        freq (int): The length of the year set
-    """
-    if not isinstance(filename, (unicode, str)):
-        print "Filename is a {} not a string".format(type(filename))
-        raise
-    if not isinstance(freq, int):
-        try:
-            freq = int(freq)
-        except:
-            print "Freq is a {} not an int, and can not be converted".format(type(freq))
-            raise
-
-    year = year_from_filename(filename)
-    if year % freq == 0:
-        return int(year / freq)
-    else:
-        return int(year / freq) + 1
-
 
 def create_symlink_dir(src_dir, src_list, dst):
     """

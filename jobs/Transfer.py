@@ -50,7 +50,7 @@ class Transfer(object):
         self.prevalidate(config)
         self.msg = None
         self.job_id = 0
-    
+
     @property
     def file_list(self):
         return self.config.get('file_list')

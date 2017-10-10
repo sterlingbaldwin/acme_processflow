@@ -22,12 +22,16 @@ file_type_map = {
     'atm': 'EXPERIMENT.cam.h0.YEAR-MONTH.nc',
     'ice': 'mpascice.hist.am.timeSeriesStatsMonthly.YEAR-MONTH-01.nc',
     'ocn': 'mpaso.hist.am.timeSeriesStatsMonthly.YEAR-MONTH-01.nc',
-    'rest': 'mpaso.rst.YEAR-01-01_00000.nc'
+    'rest': 'mpaso.rst.YEAR-01-01_00000.nc',
+    'streams.ocean': 'streams.ocean',
+    'streams.cice': 'streams.cice'
 }
 
 
 class FileManager(object):
-
+    """
+    Manage all files required by jobs
+    """
     def __init__(self, database, types, sta=False, **kwargs):
         self.sta = sta
         self.types = types
@@ -57,13 +61,15 @@ class FileManager(object):
     def populate_file_list(self, simstart, simend, experiment):
         """
         Populate the database with the required DataFile entries
-        
+
         Parameters:
             simstart (int): the start year of the simulation,
             simend (int): the end year of the simulation,
             types (list(str)): the list of file types to add, must be members of file_type_map,
-            experiment (str): the name of the experiment ex: 20170915.beta2.A_WCYCL1850S.ne30_oECv3_ICG.edison
+            experiment (str): the name of the experiment 
+                ex: 20170915.beta2.A_WCYCL1850S.ne30_oECv3_ICG.edison
         """
+        print 'Creating file table'
         newfiles = []
         with self.db.atomic():
             for _type in self.types:
@@ -71,9 +77,18 @@ class FileManager(object):
                     continue
                 if _type == 'rest':
                     name = file_type_map[_type].replace('YEAR', '0002')
-                    local_path = os.path.join(self.local_path, 'input', 'rest', name)
+                    local_path = os.path.join(
+                        self.local_path,
+                        'input',
+                        'rest',
+                        name)
                     if self.sta:
-                        remote_path = os.path.join(self.remote_path, 'archive', 'rest', '0002-01-01-00000', name)
+                        remote_path = os.path.join(
+                            self.remote_path,
+                            'archive',
+                            'rest',
+                            '0002-01-01-00000',
+                            name)
                     else:
                         remote_path = os.path.join(self.remote_path, name)
                     newfiles = self._add_file(
@@ -84,7 +99,11 @@ class FileManager(object):
                         _type=_type)
                 if _type == 'streams.ocean' or _type == 'streams.cice':
                     name = _type
-                    local_path = local_path = os.path.join(self.local_path, 'input', 'streams', name)
+                    local_path = local_path = os.path.join(
+                        self.local_path,
+                        'input',
+                        'streams',
+                        name)
                     remote_path = os.path.join(self.remote_path, 'run', name)
                     newfiles = self._add_file(
                         newfiles=newfiles,
@@ -119,7 +138,7 @@ class FileManager(object):
             step = 50
             for idx in range(0, len(newfiles), step):
                 DataFile.insert_many(newfiles[idx: idx + step]).execute()
-    
+
     def _add_file(self, newfiles, **kwargs):
         newfiles.append({
             'name': kwargs['name'],
@@ -150,32 +169,48 @@ class FileManager(object):
             for _type in self.types:
                 if _type == 'rest':
                     remote_path = os.path.join(self.remote_path, 'archive', _type, '0002-01-01-00000')
+                elif 'streams' in _type:
+                    remote_path = os.path.join(self.remote_path, 'run')
                 else:
                     remote_path = os.path.join(self.remote_path, 'archive', _type, 'hist')
+                print 'Querying globus for {}'.format(_type)
                 res = self._get_ls(
                     client=client,
-                    path=remote_path)                
-                to_update_name = [x['name'] for x in res]
-                to_update_size = [x['size'] for x in res]
-                for datafile in DataFile.select().where(DataFile.datatype == _type):
-                    if datafile.name in to_update_name \
-                    and datafile.remote_status == filestatus['NOT_EXIST']:
-                        datafile.remote_status = filestatus['EXISTS']
-                        datafile.remote_size = to_update_size[to_update_name.index(datafile.name)]
-                        datafile.save()
+                    path=remote_path)
+                names = [x.name for x in DataFile.select().where(DataFile.datatype == _type)]
+                to_update_name = [x['name'] for x in res if x['name'] in names]
+                to_update_size = [x['size'] for x in res if x['name'] in names]
+                print 'Updating database for {} records'.format(len(to_update_name))
+                # for datafile in DataFile.select().where(DataFile.datatype == _type):
+                #     if datafile.name in to_update_name \
+                #     and datafile.remote_status == filestatus['NOT_EXIST']:
+                #         datafile.remote_status = filestatus['EXISTS']
+                #         datafile.remote_size = to_update_size[to_update_name.index(datafile.name)]
+                #         datafile.save()
+                q = DataFile.update(
+                    remote_status=filestatus['EXISTS'],
+                    remote_size=to_update_size[to_update_name.index(DataFile.name)]
+                ).where(
+                    (DataFile.name in to_update_name) & 
+                    (DataFile.datatype == _type))
+                n = q.execute()
+                print 'updated {} records'.format(n)
         else:
             remote_path = os.path.join(self.remote_path, 'run')
             res = self._get_ls(
                 client=self.client,
                 path=remote_path)
-            to_update_name = [x['name'] for x in res]
-            to_update_size = [x['size'] for x in res]
-            for datafile in DataFile.select():
-                if datafile.name in to_update_name \
-                and datafile.remote_status == filestatus['NOT_EXIST']:
-                    datafile.remote_status = filestatus['EXISTS']
-                    datafile.remote_size = to_update_size[to_update_name.index(datafile.name)]
-                    datafile.save()
+            for _type in self.types:
+                names = [x.name for x in DataFile.select().where(DataFile.datatype == _type)]
+                to_update_name = [x['name'] for x in res if x['name'] in names]
+                to_update_size = [x['size'] for x in res if x['name'] in names]
+                q = DataFile.update(
+                    remote_status=filestatus['EXISTS'],
+                    remote_size=to_update_size[to_update_name.index(DataFile.name)]
+                ).where(
+                    (DataFile.name in to_update_name) & 
+                    (DataFile.datatype == _type))
+                n = q.execute()
 
     def _get_ls(self, client, path):
         for fail_count in xrange(10):
@@ -231,13 +266,24 @@ class FileManager(object):
             (DataFile.remote_status == filestatus['EXISTS']) &
             ((DataFile.local_status == filestatus['NOT_EXIST']) |
              (DataFile.local_size != DataFile.remote_size))
-        ).limit(20)]
-        logging.info('Transfering required files')
+        )]
+        target_files  = []
+        target_size = 1e11
+        total_size = 0
         for file in required_files:
+            if total_size + file.remote_size < target_size:
+                target_files.append(file)
+                total_size += file.remote_size
+            else:
+                break
+        logging.info('Transfering required files')
+        print 'staring transfer for:'
+        for file in target_files:
             print file.name
             logging.info(file.name)
+        print 'total transfer size {}'.format(total_size)
         transfer_config = {
-            'file_list': required_files,
+            'file_list': target_files,
             'source_endpoint': self.remote_endpoint,
             'destination_endpoint': self.local_endpoint,
             'source_path': self.remote_path,
@@ -274,10 +320,14 @@ class FileManager(object):
         message = "Transfer has completed"
         logging.info(message)
         event_list.push(message=message)
-        for datafile in DataFile.select().where(DataFile.name in transfer.file_list):
-            datafile.local_status = filestatus['EXISTS']
-            datafile.local_size = os.path.getsize(datafile.local_path)
-            datafile.save()
+        DataFile.update(
+            local_status=filestatus['EXISTS'],
+            local_size=os.path.getsize(datafile.local_path)
+        ).where(DataFile.name in transfer.file_list)
+        # for datafile in DataFile.select().where(DataFile.name in transfer.file_list):
+        #     datafile.local_status = filestatus['EXISTS']
+        #     datafile.local_size = os.path.getsize(datafile.local_path)
+        #     datafile.save()
         print '--- Transfer complete ---'
 
     def years_ready(self, start_year, end_year):
@@ -313,11 +363,14 @@ class FileManager(object):
             return -1
 
     def get_file_paths_by_year(self, start_year, end_year, _type):
-        datafiles = DataFile.select().where(
-            (DataFile.type == _type) &
-            (DataFile.year >= start_year) &
-            (DataFile.year <= end_year))
-        return [x.local_path for x in datafiels]
+        if _type in ['rest', 'streams.ocean', 'streams.cice']:
+            datafiles = Datafile.select().where(DataFile.datatype == _type)
+        else:
+            datafiles = DataFile.select().where(
+                (DataFile.datatype == _type) &
+                (DataFile.year >= start_year) &
+                (DataFile.year <= end_year))
+        return [x.local_path for x in datafiles]
 
     def check_year_sets(self, job_sets):
         """
@@ -335,8 +388,17 @@ class FileManager(object):
                 end_year=job_set.set_end_year)
 
             if data_ready == 1:
+                print "{start:04d}-{end:04d} is ready".format(
+                    start=job_set.set_start_year,
+                    end=job_set.set_end_year)
                 job_set.status = SetStatus.DATA_READY
             elif data_ready == 0:
+                print "{start:04d}-{end:04d} has partial data".format(
+                    start=job_set.set_start_year,
+                    end=job_set.set_end_year)
                 job_set.status = SetStatus.PARTIAL_DATA
             elif data_ready == -1:
+                print "{start:04d}-{end:04d} has not data".format(
+                    start=job_set.set_start_year,
+                    end=job_set.set_end_year)
                 job_set.status = SetStatus.NO_DATA

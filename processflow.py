@@ -443,17 +443,19 @@ if __name__ == "__main__":
                 break
 
     # Main loop
-    remote_check_delay = 30 * 5
-    local_check_delay = 5
+    remote_check_delay = 60
+    local_check_delay = 2
     all_data = filemanager.all_data_local()
 
     try:
         loop_count = remote_check_delay
+        print "Entering main loop"
         while True:
             # Check the remote status once every 5 minutes
             if not all_data \
             and not config.get('global').get('no_monitor', False) \
             and loop_count == remote_check_delay:
+                print 'Updating remote status'
                 filemanager.update_remote_status(client)
                 filemanager.update_local_status()
                 loop_count = 0
@@ -464,6 +466,7 @@ if __name__ == "__main__":
                 if not all_data \
                 and filemanager.active_transfers < 2 \
                 and not config['global']['no_monitor']:
+                    print 'starting file transfer'
                     filemanager.transfer_needed(
                         event_list=event_list,
                         event=thread_kill_event,
@@ -472,9 +475,12 @@ if __name__ == "__main__":
                         display_event=display_event,
                         emailaddr=config['global']['email'],
                         thread_list=thread_list)
+            print 'checking year sets'
             filemanager.check_year_sets(runmanager.job_sets)
+            print 'starting ready jobs'
             runmanager.start_ready_job_sets()
             runmanager.monitor_running_jobs()
+            print 'writing state'
             write_human_state(
                 event_list=event_list,
                 job_sets=runmanager.job_sets,
@@ -493,7 +499,7 @@ if __name__ == "__main__":
                     display_event=display_event,
                     thread_list=thread_list)
                 sys.exit(0)
-            sleep(2)
+            sleep(5)
             loop_count += 1
     except KeyboardInterrupt as e:
         print_message('----- KEYBOARD INTERUPT -----')

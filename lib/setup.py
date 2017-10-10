@@ -12,8 +12,7 @@ from shutil import copyfile
 from lib.filemanager import FileManager
 from lib.runmanager import RunManager
 from lib.mailer import Mailer
-from util import (check_config_white_space, 
-                  setup_globus,
+from util import (setup_globus,
                   check_globus,
                   print_message,
                   print_debug)
@@ -220,7 +219,7 @@ Please add a space and run again.'''.format(num=line_index)
             print 'ERROR! Unable to access {} globus node'.format(endpoint['type'])
             print 'The node may be down, or you may not have access to the requested directory'
             sys.exit(-1)
-    
+
     # setup the runmanager
     runmanager = RunManager(
         event_list=event_list,
@@ -233,11 +232,8 @@ Please add a space and run again.'''.format(num=line_index)
         set_frequency=config['global']['set_frequency'],
         sim_start_year=sim_start_year,
         sim_end_year=sim_end_year,
-        config=config)
-    runmanager.write_job_sets(
-        os.path.join(
-            config['global']['output_path'],
-            'job_status.txt'))
+        config=config,
+        filemanager=filemanager)
 
     config['global']['ui'] = False if args.no_ui else True
     config['global']['no_cleanup'] = True if args.no_cleanup else False
@@ -362,3 +358,21 @@ def finishup(config, job_sets, state_path, event_list, status, display_event, th
         thread_kill_event.set()
         t.join(timeout=1.0)
     time.sleep(2)
+
+def check_config_white_space(filepath):
+    line_index = 0
+    found = False
+    with open(filepath, 'r') as infile:
+        for line in infile.readlines():
+            line_index += 1
+            index = line.find('=')
+            if index == -1:
+                found = False
+                continue
+            if line[index + 1] != ' ':
+                found = True
+                break
+    if found:
+        return line_index
+    else:
+        return 0
