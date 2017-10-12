@@ -391,7 +391,9 @@ def write_human_state(event_list, job_sets, mutex, state_path='run_state.txt', u
                     fp.write(_type + ':\n')
                     datafiles = DataFile.select().where(DataFile.datatype == _type)
                     for datafile in datafiles:
-                        filestr = '   ' + datafile.name + '\n     local_status: '
+                        
+                        filestr = '------------------------------------------' 
+                        filestr += '\n     name: ' + datafile.name + '\n     local_status: '
                         if datafile.local_status == 0:
                             filestr += ' present, '
                         elif datafile.local_status == 1:
@@ -414,7 +416,7 @@ def write_human_state(event_list, job_sets, mutex, state_path='run_state.txt', u
                 print_debug(e)
             finally:
                 mutex.release()
-   
+
 class colors:
     HEADER = '\033[95m'
     OKBLUE = '\033[94m'

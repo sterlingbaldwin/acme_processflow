@@ -36,7 +36,7 @@ class FileManager(object):
     def __init__(self, database, types, sta=False, **kwargs):
         self.mutex = kwargs['mutex']
         self.sta = sta
-        self.types = types
+        self.types = types if isinstance(types, list) else [types]
         self.active_transfers = 0
         self.db_path = database
         self.mutex.acquire()
@@ -206,15 +206,14 @@ class FileManager(object):
                         remote_status=filestatus['EXISTS'],
                         remote_size=to_update_size[to_update_name.index(DataFile.name)]
                     ).where(
-                        (DataFile.name in to_update_name) &
+                        (DataFile.name << to_update_name) &
                         (DataFile.datatype == _type))
                     n = q.execute()
                 except Exception as e:
                     print_debug(e)
+                    print "Do you have the correct start and end dates?"
                 finally:
                     self.mutex.release()
-
-                print 'updated {} records'.format(n)
         else:
             remote_path = os.path.join(self.remote_path, 'run')
             res = self._get_ls(
@@ -226,12 +225,12 @@ class FileManager(object):
                     names = [x.name for x in DataFile.select().where(DataFile.datatype == _type)]
                     to_update_name = [x['name'] for x in res if x['name'] in names]
                     to_update_size = [x['size'] for x in res if x['name'] in names]
-                
+
                     q = DataFile.update(
                         remote_status=filestatus['EXISTS'],
                         remote_size=to_update_size[to_update_name.index(DataFile.name)]
                     ).where(
-                        (DataFile.name in to_update_name) &
+                        (DataFile.name << to_update_name) &
                         (DataFile.datatype == _type))
                     n = q.execute()
                     print 'updated {} records'.format(n)
@@ -311,28 +310,36 @@ class FileManager(object):
         try:
             required_files = [x for x in DataFile.select().where(
                 (DataFile.remote_status == filestatus['EXISTS']) &
+                (DataFile.local_status != filestatus['IN_TRANSIT']) &
                 ((DataFile.local_status == filestatus['NOT_EXIST']) |
-                    (DataFile.local_size != DataFile.remote_size))
+                 (DataFile.local_size != DataFile.remote_size))
             )]
+            target_files = []
+            target_size = 1e11 # 100 GB
+            total_size = 0
+            for file in required_files:
+                if total_size + file.remote_size < target_size:
+                    target_files.append({
+                        'name': file.name,
+                        'local_size': file.local_size,
+                        'local_path': file.local_path,
+                        'local_status': file.local_status,
+                        'remote_size': file.remote_size,
+                        'remote_path': file.remote_path,
+                        'remote_status': file.remote_status
+                    })
+                    total_size += file.remote_size
+                else:
+                    break
         except Exception as e:
             print_debug(e)
         finally:
             self.mutex.release()
-        target_files = []
-        target_size = 1e11 # 100 GB
-        total_size = 0
-        for file in required_files:
-            if total_size + file.remote_size < target_size:
-                target_files.append(file)
-                total_size += file.remote_size
-            else:
-                break
+
         logging.info('Transfering required files')
-        print 'staring transfer for:'
-        for file in target_files:
-            print file.name
-            logging.info(file.name)
-        print 'total transfer size {}'.format(total_size)
+        print 'total transfer size {size} for {nfiles} files'.format(
+            size=total_size,
+            nfiles=len(target_files))
         transfer_config = {
             'file_list': target_files,
             'source_endpoint': self.remote_endpoint,
@@ -346,10 +353,23 @@ class FileManager(object):
         transfer = Transfer(
             config=transfer_config,
             event_list=event_list)
+        print 'staring transfer for:'
+        transfer_names = [x['name'] for x in transfer.file_list]
+        for file in transfer.file_list:
+            print file['name']
+            logging.info(file['name'])
         self.mutex.acquire()
         try:
-            for file in transfer.file_list:
-                DataFile.update(local_status=filestatus['IN_TRANSIT']).where(DataFile.name == file)
+            print 'should be updating local status'
+            DataFile.update(
+                local_status=filestatus['IN_TRANSIT']
+            ).where(
+                DataFile.name << transfer_names
+            ).execute()
+            print 'following files are in transit'
+            for df in DataFile.select():
+                if df.local_status == filestatus['IN_TRANSIT']:
+                    print df.name
         except Exception as e:
             print_debug(e)
         finally:
@@ -379,25 +399,24 @@ class FileManager(object):
         message = "Transfer has completed"
         logging.info(message)
         event_list.push(message=message)
-        self.mutex.acquire()
         print 'Updating table with new files info'
-        # to_update_path = [df.local_path for df in DataFile.select().where(DataFile.name in transfer.file_list)]
-        # to_update_size = [os.path.getsize(x) for x in to_update_path if os.path.exists(x)]
-        # DataFile.update(
-        #     local_status=filestatus['EXISTS'],
-        #     local_size=to_update_size[to_update_path.index(DataFile.local_path)]
-        # ).where(DataFile.name in transfer.file_list)
-
-        for datafile in DataFile.select().where(DataFile.name in transfer.file_list):
-            if os.path.exists(datafile.local_path):
+        self.mutex.acquire()
+        names = [x['name'] for x in transfer.file_list]
+        for datafile in DataFile.select().where(DataFile.name << names):
+            if os.path.exists(datafile.local_path) \
+            and os.path.getsize(datafile.local_path) == datafile.remote_size:
                 datafile.local_status = filestatus['EXISTS']
                 datafile.local_size = os.path.getsize(datafile.local_path)
             else:
                 datafile.local_status = filestatus['NOT_EXIST']
                 datafile.local_size = 0
             datafile.save()
+        try:
+            self.mutex.release()
+        except:
+            pass
         print 'table update complete'
-        self.mutex.release()
+
 
     def years_ready(self, start_year, end_year):
         """

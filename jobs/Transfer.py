@@ -218,8 +218,8 @@ class Transfer(object):
 
         for datafile in self.config['file_list']:
             transfer_task.add_item(
-                source_path=datafile.remote_path,
-                destination_path=datafile.local_path,
+                source_path=datafile['remote_path'],
+                destination_path=datafile['local_path'],
                 recursive=False)
 
         # Start the transfer

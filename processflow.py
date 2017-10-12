@@ -488,6 +488,8 @@ if __name__ == "__main__":
                         display_event=display_event,
                         emailaddr=config['global']['email'],
                         thread_list=thread_list)
+                if all_data:
+                    print 'All data local'
             print 'checking year sets'
             filemanager.check_year_sets(runmanager.job_sets)
             print 'starting ready jobs'
@@ -508,7 +510,6 @@ if __name__ == "__main__":
             if status >= 0:
                 print 'all runs complete'
                 while not filemanager.all_data_local():
-                    print "Transfering additional files"
                     started = filemanager.transfer_needed(
                         event_list=event_list,
                         event=thread_kill_event,
@@ -519,6 +520,8 @@ if __name__ == "__main__":
                         thread_list=thread_list)
                     if not started:
                         sleep(30)
+                    else:
+                        print "Transfering additional files"
                 finishup(
                     config=config,
                     job_sets=runmanager.job_sets,
@@ -529,7 +532,6 @@ if __name__ == "__main__":
                     thread_list=thread_list,
                     kill_event=thread_kill_event)
                 sys.exit(0)
-            print 'still running'
             sleep(5)
             loop_count += 1
     except KeyboardInterrupt as e:
