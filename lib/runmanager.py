@@ -619,18 +619,18 @@ class RunManager(object):
                         logging.error('INVALID JOB')
                         logging.error(str(job))
                         continue
-                    # If the job has any dependencies, iterate through the list to see if they're done
+                    # If the job has any dependencies
+                    # iterate through the list to see if they're done
                     ready = True
-                    if job.depends_on:
+                    if job.depends_on and len(job.depends_on) > 0:
                         for dependancy in job.depends_on:
                             for dependent_job in job_set.jobs:
                                 if dependent_job.type == dependancy:
                                     if dependent_job.status != JobStatus.COMPLETED:
                                         ready = False
                                         msg = '{job} is waiting on {dep}'.format(
-                                            job=job.type, 
+                                            job=job.type,
                                             dep=dependent_job.type)
-                                        print dependent_job.type, dependent_job.status
                                         logging.info(msg)
                                         break
                     # If the job isnt ready, skip it
@@ -638,10 +638,6 @@ class RunManager(object):
                         continue
                     # If the job is valid, start it
                     if job.status == JobStatus.VALID:
-                        print 'submitting to queue {type}: {start:04d}-{end:04d}'.format(
-                            type=job.type,
-                            start=job.start_year,
-                            end=job.end_year)
                         job.execute()
                         self.running_jobs.append(job)
                         self.monitor_running_jobs()
@@ -691,7 +687,10 @@ class RunManager(object):
         """
         Perform post execution tasks
         """
-        print '----- handling completion for {}'.format(job.type)
+        print ' handling completion for {job}: {start:04d}-{end:04d}'.format(
+            job=job.type,
+            start=job.start_year,
+            end=job.end_year)
         job_set = None
         for s in self.job_sets:
             if s.set_number == job.year_set:
@@ -768,7 +767,6 @@ class RunManager(object):
         logging.info(msg)
 
         host_dir = job.config.get('web_dir')
-        print '--- hostdir {}'.format(host_dir)
         url = job.config.get('host_url')
         if os.path.exists(job.config.get('web_dir')):
             new_id = time.strftime("%Y-%m-%d-%I-%M")
@@ -781,6 +779,7 @@ class RunManager(object):
                 path=img_src)
             logging.error(msg)
             return
+        print '--- hostdir {}'.format(job.config['host_url'])
         try:
             msg = 'copying images from {src} to {dst}'.format(src=img_src, dst=host_dir)
             logging.info(msg)
@@ -789,7 +788,6 @@ class RunManager(object):
             from subprocess import Popen
             p = Popen(['chmod', '-R', '0755', host_dir])
             out, err = p.communicate()
-            print out, err
             head, _ = os.path.split(host_dir)
             os.chmod(head, 0755)
             head, _ = os.path.split(head)

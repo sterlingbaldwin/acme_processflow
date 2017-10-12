@@ -45,6 +45,7 @@ class AMWGDiagnostic(object):
         self._status = JobStatus.INVALID
         self.start_time = None
         self.end_time = None
+        self.output_path = None
         self.year_set = config.get('year_set', 0)
         self.inputs = {
             'web_dir': '',
@@ -139,9 +140,9 @@ class AMWGDiagnostic(object):
             return 0
 
         # render the csh script into the output directory
-        output_path = self.config['output_path']
+        self.output_path = self.config['output_path']
         template_out = os.path.join(
-            output_path,
+            self.output_path,
             'amwg.csh')
         render(
             variables=self.config,
@@ -181,6 +182,10 @@ class AMWGDiagnostic(object):
         #os.chdir(output_path)
 
         slurm = Slurm()
+        print 'submitting to queue {type}: {start:04d}-{end:04d}'.format(
+            type=self.type,
+            start=self.start_year,
+            end=self.end_year)
         self.job_id = slurm.batch(run_script, '--oversubscribe')
         #os.chdir(prev_dir)
 

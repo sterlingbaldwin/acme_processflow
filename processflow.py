@@ -32,7 +32,6 @@ from lib.events import Event, Event_list
 from lib.setup import setup, finishup
 from lib.filemanager import FileManager
 from lib.runmanager import RunManager
-from lib.models import DataFile
 from lib.util import *
 
 # setup argument parser
@@ -339,6 +338,7 @@ if __name__ == "__main__":
 
     # An event to kill the threads on terminal exception
     thread_kill_event = threading.Event()
+    mutex = threading.Lock()
     display_event = threading.Event()
     debug = False
     from_saved_state = False
@@ -355,7 +355,8 @@ if __name__ == "__main__":
         display_event,
         event_list=event_list,
         thread_list=thread_list,
-        kill_event=thread_kill_event)
+        kill_event=thread_kill_event,
+        mutex=mutex)
 
     if config == -1:
         print "Error in setup, exiting"
@@ -391,6 +392,17 @@ if __name__ == "__main__":
     state_path = os.path.join(
         config.get('global').get('output_path'),
         'run_state.txt')
+    filemanager.update_remote_status(client)
+    filemanager.update_local_status()
+    write_human_state(
+        event_list=event_list,
+        job_sets=runmanager.job_sets,
+        state_path=state_path,
+        ui_mode=config.get('global').get('ui'),
+        print_file_list=config.get('global').get('print_file_list'),
+        types=filemanager.types,
+        mutex=mutex)
+
     if config.get('global').get('dry_run', False):
         event_list.push(message='Running in dry-run mode')
         write_human_state(
@@ -399,7 +411,8 @@ if __name__ == "__main__":
             state_path=state_path,
             ui_mode=config.get('global').get('ui'),
             print_file_list=config.get('global').get('print_file_list'),
-            types=filemanager.types)
+            types=filemanager.types,
+            mutex=mutex)
         if config.get('global').get('ui'):
             sleep(50)
             display_event.set()
@@ -448,7 +461,7 @@ if __name__ == "__main__":
     all_data = filemanager.all_data_local()
 
     try:
-        loop_count = remote_check_delay
+        loop_count = 0
         print "Entering main loop"
         while True:
             # Check the remote status once every 5 minutes
@@ -487,9 +500,25 @@ if __name__ == "__main__":
                 state_path=state_path,
                 ui_mode=config.get('global').get('ui'),
                 print_file_list=config.get('global').get('print_file_list'),
-                types=filemanager.types)
+                types=filemanager.types,
+                mutex=mutex)
+            print 'done writing state'
+            print 'checking run status'
             status = runmanager.is_all_done()
             if status >= 0:
+                print 'all runs complete'
+                while not filemanager.all_data_local():
+                    print "Transfering additional files"
+                    started = filemanager.transfer_needed(
+                        event_list=event_list,
+                        event=thread_kill_event,
+                        remote_endpoint=config['transfer']['source_endpoint'],
+                        ui=config['global']['ui'],
+                        display_event=display_event,
+                        emailaddr=config['global']['email'],
+                        thread_list=thread_list)
+                    if not started:
+                        sleep(30)
                 finishup(
                     config=config,
                     job_sets=runmanager.job_sets,
@@ -497,8 +526,10 @@ if __name__ == "__main__":
                     event_list=event_list,
                     status=status,
                     display_event=display_event,
-                    thread_list=thread_list)
+                    thread_list=thread_list,
+                    kill_event=thread_kill_event)
                 sys.exit(0)
+            print 'still running'
             sleep(5)
             loop_count += 1
     except KeyboardInterrupt as e:

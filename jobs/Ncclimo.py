@@ -37,6 +37,7 @@ class Climo(object):
         self.depends_on = []
         self.start_time = None
         self.end_time = None
+        self.output_path = None
         self.outputs = {
             'status': self.status,
             'climos': '',
@@ -59,6 +60,7 @@ class Climo(object):
             'num_cores': '-n 16', # 16 cores
             'run_time': '-t 0-05:00', # 2 hours run time
             'num_machines': '-N 1', # run on one machine
+            'oversubscribe': '--oversubscribe'
             # 'oversubscribe': '--oversubscribe'
         }
         self.prevalidate(config)
@@ -100,8 +102,8 @@ class Climo(object):
             self.event_list.push(message=message)
             return 0
 
-        self.start_time = datetime.now()
-        # ncclimo = 'ncclimo'
+        self.output_path = self.config['regrid_output_directory']
+
         cmd = [
             'ncclimo',
             '-c', self.config['caseId'],
@@ -135,6 +137,10 @@ class Climo(object):
             batchfile.write(slurm_command)
 
         slurm = Slurm()
+        print 'submitting to queue {type}: {start:04d}-{end:04d}'.format(
+            type=self.type,
+            start=self.start_year,
+            end=self.end_year)
         self.job_id = slurm.batch(run_script, '--oversubscribe')
 
         self.status = JobStatus.SUBMITTED

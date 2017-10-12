@@ -44,6 +44,7 @@ class E3SMDiags(object):
         }
         self.start_time = None
         self.end_time = None
+        self.output_path = None
         self.config = {}
         self._status = JobStatus.INVALID
         self._type = "e3sm_diags"
@@ -94,7 +95,14 @@ class E3SMDiags(object):
             return False
         if 'index.html' not in os.listdir(os.path.join(self.config['results_dir'], 'viewer')):
             return False
-        return True
+        try:
+            for item in ['params.py', 'params.pyc', 'viewer']:
+                if item in contents:
+                    contents.remove(item)
+        except:
+            return False
+        else:
+            return bool(len(contents) == len(self.config['sets']))
 
     def execute(self):
 
@@ -106,9 +114,9 @@ class E3SMDiags(object):
             logging.info(message)
             return 0
         # render the parameters file
-        output_path = self.config['output_path']
+        self.output_path = self.config['output_path']
         template_out = os.path.join(
-            output_path,
+            self.output_path,
             'params.py')
         variables = {
             'sets': self.config['sets'],
@@ -156,6 +164,10 @@ class E3SMDiags(object):
             batchfile.write(cmd)
 
         slurm = Slurm()
+        print 'submitting to queue {type}: {start:04d}-{end:04d}'.format(
+            type=self.type,
+            start=self.start_year,
+            end=self.end_year)
         self.job_id = slurm.batch(run_script, '--oversubscribe')
         status = slurm.showjob(self.job_id)
         self.status = StatusMap[status.get('JobState')]

@@ -42,6 +42,7 @@ class AprimeDiags(object):
         }
         self.start_time = None
         self.end_time = None
+        self.output_path = None
         self.config = {}
         self.status = JobStatus.INVALID
         self._type = 'aprime_diags'
@@ -167,7 +168,7 @@ class AprimeDiags(object):
             self.event_list.push(message=message)
             return 0
 
-        self.start_time = datetime.now()
+        self.output_path = self.config['output_path']
         # create symlinks to the input data
         setup_status = self.setup_input_directory()
         if not setup_status:
@@ -215,6 +216,10 @@ class AprimeDiags(object):
             batchfile.write(cmd)
 
         slurm = Slurm()
+        print 'submitting to queue {type}: {start:04d}-{end:04d}'.format(
+            type=self.type,
+            start=self.start_year,
+            end=self.end_year)
         self.job_id = slurm.batch(run_script, '--oversubscribe')
         status = slurm.showjob(self.job_id)
         self.status = StatusMap[status.get('JobState')]

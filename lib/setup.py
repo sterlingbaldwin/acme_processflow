@@ -33,6 +33,7 @@ def setup(parser, display_event, **kwargs):
 
     event_list = kwargs['event_list']
     thread_list = kwargs['thread_list']
+    mutex = kwargs['mutex']
 
     # check if globus config is valid, else remove it
     globus_config = os.path.join(os.path.expanduser('~'), '.globus.cfg')
@@ -164,18 +165,25 @@ Please add a space and run again.'''.format(num=line_index)
         remote_path=config['global']['source_path'],
         remote_endpoint=config['transfer']['source_endpoint'],
         local_path=os.path.join(config['global']['project_path'], 'input'),
-        local_endpoint=config['transfer']['destination_endpoint'])
+        local_endpoint=config['transfer']['destination_endpoint'],
+        mutex=mutex)
     filemanager.populate_file_list(
         simstart=config['global']['simulation_start_year'],
         simend=config['global']['simulation_end_year'],
         experiment=config['global']['experiment'])
+    print 'Updating local status'
     filemanager.update_local_status()
+    print 'Local status update complete'
     all_data = filemanager.all_data_local()
+    if all_data:
+        print 'All data is local'
+    else:
+        print 'Additional data needed'
     logging.info("FileManager setup complete")
     logging.info(str(filemanager))
 
     if all_data or args.no_monitor:
-        print "All data is present, skipping globus setup"
+        print "skipping globus setup"
     else:
         endpoints = [endpoint for endpoint in config['transfer'].values()]
         if args.no_ui:
@@ -299,7 +307,7 @@ def verify_config(config, template):
                 valid = False
     return valid, messages
 
-def finishup(config, job_sets, state_path, event_list, status, display_event, thread_list):
+def finishup(config, job_sets, state_path, event_list, status, display_event, thread_list, kill_event):
     message = 'Performing post run cleanup'
     event_list.push(message=message)
     if not config.get('global').get('no-cleanup', False):
@@ -336,7 +344,7 @@ def finishup(config, job_sets, state_path, event_list, status, display_event, th
                         else:
                             msg += '    > {job} output located {output}\n'.format(
                                 job=job.type,
-                                output=config['global']['output_path'])
+                                output=job.output_path)
             else:
                 msg = 'One or more job failed\n\n'
                 with open(state_path, 'r') as state_file:
@@ -355,7 +363,7 @@ def finishup(config, job_sets, state_path, event_list, status, display_event, th
     print_message(message, print_type)
     logging.info("All processes complete")
     for t in thread_list:
-        thread_kill_event.set()
+        kill_event.set()
         t.join(timeout=1.0)
     time.sleep(2)
 

@@ -36,12 +36,7 @@ class Timeseries(object):
         self.depends_on = []
         self.start_time = None
         self.end_time = None
-        self.outputs = {
-            'status': self.status,
-            'climos': '',
-            'regrid': '',
-            'console_output': ''
-        }
+        self.output_path = None
         self.inputs = {
             'annual_mode': '',
             'start_year': '',
@@ -53,7 +48,6 @@ class Timeseries(object):
             'regrid_map_path': '',
             'file_list': '',
         }
-        self.proc = None
         self.slurm_args = {
             'num_cores': '-n 16', # 16 cores
             'run_time': '-t 0-05:00', # 2 hours run time
@@ -101,7 +95,7 @@ class Timeseries(object):
         file_list = self.config['file_list']
         file_list.sort()
         list_string = ' '.join(file_list)
-
+        self.output_path = self.config['output_directory']
         slurm_command = ' '.join([
             'ncclimo',
             '-a', self.config['annual_mode'],
@@ -132,6 +126,10 @@ class Timeseries(object):
             batchfile.write(slurm_command)
 
         slurm = Slurm()
+        print 'submitting to queue {type}: {start:04d}-{end:04d}'.format(
+            type=self.type,
+            start=self.start_year,
+            end=self.end_year)
         self.job_id = slurm.batch(run_script, '--oversubscribe')
         self.status = JobStatus.SUBMITTED
         message = '{type} id: {id} changed state to {state}'.format(

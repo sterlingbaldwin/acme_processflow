@@ -315,7 +315,7 @@ def format_debug(e):
         lineno=traceback.tb_lineno(sys.exc_info()[2]),
         stack=traceback.print_tb(tb))
 
-def write_human_state(event_list, job_sets, state_path='run_state.txt', ui_mode=True, print_file_list=False, types=None):
+def write_human_state(event_list, job_sets, mutex, state_path='run_state.txt', ui_mode=True, print_file_list=False, types=None):
     """
     Writes out a human readable representation of the current execution state
 
@@ -385,29 +385,36 @@ def write_human_state(event_list, job_sets, state_path='run_state.txt', ui_mode=
         if not os.path.exists(head):
             os.makedirs(head)
         with open(file_list_path, 'w') as fp:
-            for _type in types:
-                fp.write(_type + ':\n')
-                for datafile in DataFile.select().where(DataFile.datatype == _type):
-                    filestr = '   ' + datafile.name + '\n     local_status: '
-                    if datafile.local_status == 0:
-                        filestr += ' present, '
-                    elif datafile.local_status == 1:
-                        filestr += ' missing, '
-                    else:
-                        filestr += ' in transit, '
-                    filestr += '\n     remote_status: '
-                    if datafile.remote_status == 0:
-                        filestr += ' present'
-                    elif datafile.remote_status == 1:
-                        filestr += ' missing'
-                    else:
-                        filestr += ' in transit'
-                    filestr += '\n     local_size: ' + str(datafile.local_size)
-                    filestr += '\n     local_path: ' + datafile.local_path
-                    filestr += '\n     remote_size: ' + str(datafile.remote_size)
-                    filestr += '\n     remote_path: ' + datafile.remote_path + '\n'
-                    fp.write(filestr)
-
+            mutex.acquire(False)
+            try:
+                for _type in types:
+                    fp.write(_type + ':\n')
+                    datafiles = DataFile.select().where(DataFile.datatype == _type)
+                    for datafile in datafiles:
+                        filestr = '   ' + datafile.name + '\n     local_status: '
+                        if datafile.local_status == 0:
+                            filestr += ' present, '
+                        elif datafile.local_status == 1:
+                            filestr += ' missing, '
+                        else:
+                            filestr += ' in transit, '
+                        filestr += '\n     remote_status: '
+                        if datafile.remote_status == 0:
+                            filestr += ' present'
+                        elif datafile.remote_status == 1:
+                            filestr += ' missing'
+                        else:
+                            filestr += ' in transit'
+                        filestr += '\n     local_size: ' + str(datafile.local_size)
+                        filestr += '\n     local_path: ' + datafile.local_path
+                        filestr += '\n     remote_size: ' + str(datafile.remote_size)
+                        filestr += '\n     remote_path: ' + datafile.remote_path + '\n'
+                        fp.write(filestr)
+            except Exception as e:
+                print_debug(e)
+            finally:
+                mutex.release()
+   
 class colors:
     HEADER = '\033[95m'
     OKBLUE = '\033[94m'

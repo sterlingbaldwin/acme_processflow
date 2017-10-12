@@ -9,7 +9,6 @@ import logging
 
 from pprint import pformat
 from datetime import datetime, timedelta
-from uuid import uuid4
 
 from globus_cli.commands.login import do_link_login_flow, check_logged_in
 from globus_cli.services.transfer import get_client, autoactivate
@@ -21,7 +20,6 @@ from lib.util import format_debug
 from lib.util import setup_globus
 from lib.util import strfdelta
 from lib.events import Event_list
-from lib.models import DataFile
 from jobs.JobStatus import JobStatus
 
 class Transfer(object):
@@ -33,7 +31,6 @@ class Transfer(object):
         self.config = {}
         self.status = JobStatus.INVALID
         self._type = 'transfer'
-        self.uuid = uuid4().hex
         self.start_time = None
         self.end_time = None
         self.inputs = {
@@ -45,7 +42,7 @@ class Transfer(object):
             'destination_path': '',
             'src_email': '',
             'display_event': '',
-            'ui': ''
+            'ui': '',
         }
         self.prevalidate(config)
         self.msg = None
@@ -58,23 +55,6 @@ class Transfer(object):
     @file_list.setter
     def file_list(self, _file_list):
         self.config['file_list'] = _file_list
-
-    def save(self, conf_path):
-        """
-        Saves job configuration to a json file at conf_path
-        """
-        try:
-            with open(conf_path, 'r') as infile:
-                config = json.load(infile)
-            with open(conf_path, 'w') as outfile:
-                config[self.uuid]['inputs'] = self.config
-                config[self.uuid]['outputs'] = self.outputs
-                config[self.uuid]['type'] = self.type
-                json.dump(config, outfile, indent=4)
-        except Exception as e:
-            print_message('Error saving configuration file')
-            print_debug(e)
-            raise
 
     @property
     def type(self):
@@ -120,7 +100,12 @@ class Transfer(object):
         """
         TODO: validate that all files were moved correctly
         """
-        pass
+        for datafile in self.config['file_list']:
+           if not os.path.exists(datafile.local_path):
+               self.status = JobStatus.FAILED
+               return False
+        self.status = JobStatus.COMPLETED
+        return True
 
 
     def get_destination_path(self, srcpath, dstpath, recursive):
