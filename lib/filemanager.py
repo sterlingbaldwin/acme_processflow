@@ -396,9 +396,6 @@ class FileManager(object):
             event_list.push(message='Tranfer failed')
             return
 
-        message = "Transfer has completed"
-        logging.info(message)
-        event_list.push(message=message)
         print 'Updating table with new files info'
         self.mutex.acquire()
         names = [x['name'] for x in transfer.file_list]

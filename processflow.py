@@ -462,7 +462,8 @@ if __name__ == "__main__":
 
     try:
         loop_count = 0
-        print "Entering main loop"
+        print "--- Entering main loop ---"
+        print "    Current status can be found at {}".format(state_path)
         while True:
             # Check the remote status once every 5 minutes
             if not all_data \
@@ -489,13 +490,10 @@ if __name__ == "__main__":
                         emailaddr=config['global']['email'],
                         thread_list=thread_list)
                 if all_data:
-                    print 'All data local'
-            print 'checking year sets'
+                    print 'All data local, turning off remote checks'
             filemanager.check_year_sets(runmanager.job_sets)
-            print 'starting ready jobs'
             runmanager.start_ready_job_sets()
             runmanager.monitor_running_jobs()
-            print 'writing state'
             write_human_state(
                 event_list=event_list,
                 job_sets=runmanager.job_sets,
@@ -504,8 +502,6 @@ if __name__ == "__main__":
                 print_file_list=config.get('global').get('print_file_list'),
                 types=filemanager.types,
                 mutex=mutex)
-            print 'done writing state'
-            print 'checking run status'
             status = runmanager.is_all_done()
             if status >= 0:
                 print 'all runs complete'
