@@ -70,6 +70,7 @@ class Timeseries(object):
         if self.year_set == 0:
             self.status = JobStatus.INVALID
             return
+        self.output_path = self.config['output_directory']
         self.status = JobStatus.VALID
 
     def __str__(self):
@@ -95,7 +96,6 @@ class Timeseries(object):
         file_list = self.config['file_list']
         file_list.sort()
         list_string = ' '.join(file_list)
-        self.output_path = self.config['output_directory']
         slurm_command = ' '.join([
             'ncclimo',
             '-a', self.config['annual_mode'],

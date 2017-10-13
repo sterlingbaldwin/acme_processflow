@@ -505,8 +505,11 @@ if __name__ == "__main__":
                 mutex=mutex)
             status = runmanager.is_all_done()
             if status >= 0:
-                print 'all runs complete'
+                first_print = True
                 while not filemanager.all_data_local():
+                    if first_print:
+                        print "All jobs complete, moving additional files"
+                        first_print = False
                     started = filemanager.transfer_needed(
                         event_list=event_list,
                         event=thread_kill_event,
