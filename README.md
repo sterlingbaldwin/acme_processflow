@@ -1,6 +1,6 @@
 # ACME Automated Workflow
 
-The acme_workflow performs post processing jobs automatically, removing many of the difficulties of performing 
+The processflow performs post processing jobs automatically, removing many of the difficulties of performing 
 diagnostics on model data. 
 
 [Documentation can be found here](https://acme-climate.github.io/acme_processflow/docs/html/index.html)
@@ -8,8 +8,8 @@ diagnostics on model data.
 
 # Usage<a name="usage"></a>
 
-        usage: workflow.py [-h] [-c CONFIG] [-v] [-d] [-n] [-r] [-l LOG] [-u] [-m]
-                        [-V] [-s SIZE]
+        usage: processflow.py [-h] [-c CONFIG] [-n] [-l LOG] [-u] [-m] [-s SIZE] [-f]
+                      [-r RESOURCE_DIR]
 
         optional arguments:
         -h, --help            show this help message and exit
@@ -24,4 +24,7 @@ diagnostics on model data.
         -s SIZE, --size SIZE  The maximume size in gigabytes of a single transfer,
                                 defaults to 100. Must be larger then the largest
                                 single file.
-
+        -f, --file-list       Turn on debug output of the internal file_list so you
+                                can see what the current state of the model files are
+        -r RESOURCE_DIR, --resource-dir RESOURCE_DIR
+                                Path to custom resource directory
