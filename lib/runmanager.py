@@ -512,19 +512,6 @@ class RunManager(object):
         if not os.path.exists(temp_path):
             os.makedirs(temp_path)
 
-        # Create directory of regridded climos
-        regrid_path = os.path.join(
-            self.output_path,
-            'climo_regrid')
-        file_list = get_climo_output_files(
-            input_path=regrid_path,
-            start_year=start_year,
-            end_year=end_year)
-        create_symlink_dir(
-            src_dir=regrid_path,
-            src_list=file_list,
-            dst=temp_path)
-
         # Varify the template
         template_path = os.path.join(
             resource_path,
@@ -535,7 +522,12 @@ class RunManager(object):
             logging.error(msg)
             return
 
+        regrid_path = os.path.join(
+            self.output_path,
+            'climo_regrid')
+
         config = {
+            'regrid_base_path': regrid_path,
             'web_dir': web_directory,
             'host_url': host_url,
             'experiment': self.caseID,

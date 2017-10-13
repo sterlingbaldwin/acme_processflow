@@ -18,6 +18,7 @@ class E3SMDiags(object):
     def __init__(self, config, event_list):
         self.event_list = event_list
         self.inputs = {
+            'regrid_base_path': '',
             'regrided_climo_path': '',
             'reference_data_path': '',
             'test_data_path': '',
@@ -131,7 +132,7 @@ class E3SMDiags(object):
             variables=variables,
             input_path=self.config.get('template_path'),
             output_path=template_out)
-        
+
         run_name = 'e3sm_diag_{start:04d}_{end:04d}'.format(
             start=self.config.get('start_year'),
             end=self.config.get('end_year'))
@@ -141,6 +142,16 @@ class E3SMDiags(object):
         copyfile(
             src=template_out,
             dst=template_copy)
+
+        # Create directory of regridded climos
+        file_list = get_climo_output_files(
+            input_path=self.config['regrid_base_path'],
+            start_year=self.start_year,
+            end_year=self.end_year)
+        create_symlink_dir(
+            src_dir=self.config['regrid_base_path'],
+            src_list=file_list,
+            dst=self.config['regrided_climo_path'])
 
         # setup sbatch script
         expected_name = 'e3sm_diag_{name}'.format(
