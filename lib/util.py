@@ -266,7 +266,7 @@ def get_climo_output_files(input_path, start_year, end_year):
         file_list (list(str)): A list of the climo files in the directory
     """
     contents = [s for s in os.listdir(input_path) if not os.path.isdir(s)]
-    pattern = r'\_{start:04d}\d\d\_{end:04d}\d\d\_'.format(
+    pattern = r'_{start:04d}\d\d_{end:04d}\d\d_'.format(
         start=start_year,
         end=end_year)
     return [x for x in contents if re.search(pattern=pattern, string=x)]

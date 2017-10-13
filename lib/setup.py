@@ -4,6 +4,7 @@ import logging
 import json
 import time
 import stat
+from pprint import pformat
 from shutil import rmtree
 
 from configobj import ConfigObj
@@ -249,6 +250,8 @@ Please add a space and run again.'''.format(num=line_index)
     config['global']['run_id'] = time.strftime("%Y-%m-%d-%H-%M")
     config['global']['print_file_list'] = True if args.file_list else False
 
+    logging.info('Starting run with config')
+    logging.info(pformat(config))
     return config, filemanager, runmanager
 
 def setup_file_list(**kwargs):
@@ -310,8 +313,8 @@ def verify_config(config, template):
 def finishup(config, job_sets, state_path, event_list, status, display_event, thread_list, kill_event):
     message = 'Performing post run cleanup'
     event_list.push(message=message)
-    if not config.get('global').get('no-cleanup', False):
-        # cleanup(config)
+    if not config.get('global').get('no_cleanup', False):
+        print 'Not cleaning up temp directories'
         tmp = os.path.join(config['global']['output_path'], 'tmp')
         if os.path.exists(tmp):
             rmtree(tmp)

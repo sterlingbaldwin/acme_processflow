@@ -22,6 +22,7 @@ from lib.util import print_debug
 from lib.util import print_message
 from lib.util import create_symlink_dir
 from lib.util import render
+from lib.util import get_climo_output_files
 from lib.slurm import Slurm
 from lib.events import Event_list
 
@@ -138,6 +139,39 @@ class AMWGDiagnostic(object):
             self.event_list.push(message=message)
             logging.info(message)
             return 0
+        
+        # Create directory of regridded climos
+
+        regrid_path = os.path.join(
+            os.sep.join(self.config['test_path_diag'].split(os.sep)[:-2]),
+            'climo_regrid')
+        file_list = get_climo_output_files(
+            input_path=regrid_path,
+            start_year=self.start_year,
+            end_year=self.end_year)
+        if not file_list or len(file_list) == 0:
+            print "ERROR: AMWG: {start:04d}-{end:04d} could not find input climatologies at {path}, did you add ncclimo to this year_set?".format(
+                start=self.start_year,
+                end=self.end_year,
+                path=regrid_path)
+            self.status = JobStatus.FAILED
+        if not os.path.exists(self.config['test_path_climo']):
+            print 'creating temp directory for amwg'
+            os.makedirs(self.config['test_path_climo'])
+        create_symlink_dir(
+            src_dir=regrid_path,
+            src_list=file_list,
+            dst=self.config['test_path_climo'])
+        
+        # Rename the files to the format amwg expects
+        for item in os.listdir(self.config['test_path_climo']):
+            search = re.search(r'\_\d\d\d\d\d\d\_', item)
+            if not search:
+                continue
+            index = search.start()
+            os.rename(
+                os.path.join(self.config['test_path_climo'], item),
+                os.path.join(self.config['test_path_climo'], item[:index] + '_climo.nc'))
 
         # render the csh script into the output directory
         self.output_path = self.config['output_path']

@@ -437,28 +437,6 @@ class RunManager(object):
             logging.error(msg)
             return
 
-        # Create directory of regridded climos
-        regrid_path = os.path.join(
-            self.output_path,
-            'climo_regrid')
-        file_list = get_climo_output_files(
-            input_path=regrid_path,
-            start_year=start_year,
-            end_year=end_year)
-        create_symlink_dir(
-            src_dir=regrid_path,
-            src_list=file_list,
-            dst=temp_path)
-        # Rename the files to the format amwg expects
-        for item in os.listdir(temp_path):
-            search = re.search(r'\_\d\d\d\d\d\d\_', item)
-            if not search:
-                continue
-            index = search.start()
-            os.rename(
-                os.path.join(temp_path, item),
-                os.path.join(temp_path, item[:index] + '_climo.nc'))
-
         config = {
             'web_dir': web_directory,
             'host_url': host_url,
@@ -664,6 +642,7 @@ class RunManager(object):
                     s1=job.status,
                     s2=status,
                     id=job.job_id)
+                print msg
                 self.event_list.push(message=msg)
                 job.status = status
 
@@ -687,7 +666,7 @@ class RunManager(object):
         """
         Perform post execution tasks
         """
-        print ' handling completion for {job}: {start:04d}-{end:04d}'.format(
+        print 'handling completion for {job}: {start:04d}-{end:04d}'.format(
             job=job.type,
             start=job.start_year,
             end=job.end_year)
@@ -702,10 +681,11 @@ class RunManager(object):
             message = 'ERROR: {job}-{start:04d}-{end:04d} does not have expected output'.format(
                 job=job.type,
                 start=job.start_year,
-                end=end_year)
+                end=job.end_year)
             self.event_list.push(
                 message=message,
                 data=job)
+            print message
             logging.error(message)
             job.status = JobStatus.FAILED
             job_set.status = SetStatus.FAILED

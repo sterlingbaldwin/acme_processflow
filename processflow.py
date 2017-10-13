@@ -392,8 +392,10 @@ if __name__ == "__main__":
     state_path = os.path.join(
         config.get('global').get('output_path'),
         'run_state.txt')
-    filemanager.update_remote_status(client)
     filemanager.update_local_status()
+    all_data = filemanager.all_data_local()
+    if not all_data:
+        filemanager.update_remote_status(client)
     write_human_state(
         event_list=event_list,
         job_sets=runmanager.job_sets,
@@ -458,12 +460,11 @@ if __name__ == "__main__":
     # Main loop
     remote_check_delay = 60
     local_check_delay = 2
-    all_data = filemanager.all_data_local()
 
     try:
         loop_count = 0
         print "--- Entering main loop ---"
-        print "    Current status can be found at {}".format(state_path)
+        print "Current status can be found at {}".format(state_path)
         while True:
             # Check the remote status once every 5 minutes
             if not all_data \
