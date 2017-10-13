@@ -6,4 +6,4 @@ backend = '%%backend%%'
 sets = %%sets%%
 results_dir = '%%results_dir%%/'
 multiprocessing = True
-num_workers = 32
+num_workers = 48
