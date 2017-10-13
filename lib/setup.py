@@ -96,9 +96,10 @@ Please add a space and run again.'''.format(num=line_index)
     if os.path.exists(input_config_path) \
     and args.config != input_config_path:
         os.remove(input_config_path)
-    copyfile(
-        src=args.config,
-        dst=input_config_path)
+    if args.config != input_config_path:
+        copyfile(
+            src=args.config,
+            dst=input_config_path)
 
     # setup logging
     if args.log:
