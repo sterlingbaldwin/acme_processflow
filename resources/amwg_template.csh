@@ -106,9 +106,7 @@ setenv DIAG_VERSION 140804  # version number YYMMDD
 
 set test_casename  = %%test_casename%%
 set test_filetype = monthly_history 
-#set test_filetype = time_series
 
-set test_path         =  %%test_path%%
 set test_path_history =  %%test_path_history%%
 set test_path_climo   =  %%test_path_climo%%
 set test_path_diag    =  %%test_path_diag%%

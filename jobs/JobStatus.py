@@ -20,5 +20,6 @@ StatusMap = {
     'SUBMITTED': JobStatus.SUBMITTED,
     'PENDING': JobStatus.PENDING,
     'WAITING_ON_INPUT': JobStatus.WAITING_ON_INPUT,
-    'CANCELLED': JobStatus.CANCELLED
+    'CANCELLED': JobStatus.CANCELLED,
+    'COMPLETING': JobStatus.COMPLETED
 }

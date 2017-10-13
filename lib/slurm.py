@@ -25,17 +25,14 @@ class Slurm(object):
         Returns:
             job id of the new job (int)
         """
-       
+
         out, err = self._submit('sbatch', cmd, sargs)
         if err:
             raise Exception('SLURM ERROR: ' + err)
         out = out.split()
         if 'error' in out:
             return 0
-        try:
-            job_id = int(out[-1])
-        except Exception as e:
-            raise e
+        job_id = int(out[-1])
         return job_id
 
     def run(self, cmd, sargs=False):
@@ -85,17 +82,14 @@ class Slurm(object):
         """
         if not isinstance(jobid, str):
             jobid = str(jobid)
-        tries = 0
-        while tries != 10:
+        success = False
+        while not success:
             proc = Popen(['scontrol', 'show', 'job', jobid], shell=False, stderr=PIPE, stdout=PIPE)
             out, err = proc.communicate()
             if 'Transport endpoint is not connected' in err:
-                tries += 1
-                sleep(tries)
+                sleep(1)
             else:
-                break
-        if tries == 10:
-            raise Exception('SLURM ERROR: Transport endpoint is not connected')
+                success = True
         if 'Invalid job id specified' in err:
             raise Exception('SLURM ERROR: ' + err)
         jobinfo = {}
