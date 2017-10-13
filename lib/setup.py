@@ -93,11 +93,13 @@ Please add a space and run again.'''.format(num=line_index)
 
     # Copy the config into the input directory for safe keeping
     input_config_path = os.path.join(config['global']['input_path'], 'run.cfg')
-    if not os.path.exists(input_config_path):
-        copyfile(
-            src=args.config,
-            dst=input_config_path)
-    
+    if os.path.exists(input_config_path) \
+    and args.config != input_config_path:
+        os.remove(input_config_path)
+    copyfile(
+        src=args.config,
+        dst=input_config_path)
+
     # setup logging
     if args.log:
         log_path = args.log
@@ -127,6 +129,8 @@ Please add a space and run again.'''.format(num=line_index)
     config['global']['set_frequency'] = set_frequency
 
     # setup config for file type directories
+    if not isinstance(config['global']['file_types'], list):
+        config['global']['file_types'] = [config['global']['file_types']]
     for filetype in config['global']['file_types']:
         new_dir = os.path.join(
             config['global']['input_path'],
@@ -325,7 +329,8 @@ def finishup(config, job_sets, state_path, event_list, status, display_event, th
         event_list.push(message='Sending notification email to {}'.format(emailaddr))
         try:
             if status == 1:
-                msg = 'Post processing jobs have completed successfully\n'
+                msg = 'Post processing for {exp} has completed successfully\n'.format(
+                    exp=config['global']['experiment'])
                 for job_set in job_sets:
                     msg += '\nYearSet {start}-{end}: {status}\n'.format(
                         start=job_set.set_start_year,
