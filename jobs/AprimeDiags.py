@@ -23,16 +23,19 @@ class AprimeDiags(object):
         """
         self.event_list = event_list
         self.inputs = {
-            "host_dir": '',
-            "output_base_path": '',
-            "input_path": '',
-            "coupled_diags_home": '',
-            "start_year": '',
-            "end_year": '',
-            "test_atm_res": '',
-            "test_mpas_mesh_name": '',
-            "year_set": '',
-            "run_scripts_path": ''
+            'web_dir': '',
+            'host_url': '',
+            'experiment': '',
+            'run_scripts_path': '',
+            'year_set': '',
+            'input_path': '',
+            'start_year': '',
+            'end_year': '',
+            'output_path': '',
+            'template_path': '',
+            'test_atm_res': '',
+            'test_mpas_mesh_name': '',
+            'aprime_code_path': ''
         }
         self.slurm_args = {
             'num_cores': '-n 16', # 16 cores
@@ -88,22 +91,6 @@ class AprimeDiags(object):
         set_string = '{start:04d}-{end:04d}'.format(
             start=self.start_year,
             end=self.end_year)
-        # Setup output directory
-        output_path = os.path.join(
-            self.config['output_base_path'],
-            'aprime',
-            set_string)
-        if not os.path.exists(output_path):
-            os.makedirs(output_path)
-        self.config['output_path'] = output_path
-        # Setup temp directory
-        tmp_path = os.path.join(
-            self.config['output_base_path'],
-            'tmp', 'aprime',
-            set_string)
-        if not os.path.exists(tmp_path):
-            os.makedirs(tmp_path)
-        self.config['tmp_path'] = tmp_path
 
         if self.year_set == 0:
             self.status = JobStatus.INVALID
@@ -138,13 +125,6 @@ class AprimeDiags(object):
             return False
 
     def setup_input_directory(self, filemanager):
-        tmp_path = self.config.get('tmp_path')
-        input_path = os.path.join(
-            tmp_path,
-            self.config['test_casename'],
-            'run')
-        if not os.path.exists(input_path):
-            os.makedirs(input_path)
 
         for datatype in ['atm', 'ocn', 'ice', 'streams.ocean', 'streams.cice', 'rest']:
             input_files = filemanager.get_file_paths_by_year(
@@ -155,7 +135,7 @@ class AprimeDiags(object):
                 head, tail = os.path.split(file)
                 os.symlink(
                     src=file,
-                    dst=os.path.join(input_path, tail))
+                    dst=os.path.join(self.config['input_path'], tail))
 
     def execute(self):
         """
@@ -171,10 +151,28 @@ class AprimeDiags(object):
         self.output_path = self.config['output_path']
         # create symlinks to the input data
         setup_status = self.setup_input_directory()
+        sys.exit()
         if not setup_status:
             return -1
         elif setup_status == 2:
             return False
+
+        # Setup output directory
+        output_path = os.path.join(
+            self.config['output_base_path'],
+            'aprime',
+            set_string)
+        if not os.path.exists(output_path):
+            os.makedirs(output_path)
+        self.config['output_path'] = output_path
+        # Setup temp directory
+        tmp_path = os.path.join(
+            self.config['output_base_path'],
+            'tmp', 'aprime',
+            set_string)
+        if not os.path.exists(tmp_path):
+            os.makedirs(tmp_path)
+        self.config['tmp_path'] = tmp_path
 
         # render the run_AIMS.csh script
         template_out = self.config.get('rendered_output_path')

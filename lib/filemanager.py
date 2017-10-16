@@ -50,6 +50,7 @@ class FileManager(object):
         self.local_path = kwargs.get('local_path')
         self.local_endpoint = kwargs.get('local_endpoint')
         self.remote_path = kwargs.get('remote_path')
+        self.start_year = 0
         
 
     def __str__(self):
@@ -75,13 +76,20 @@ class FileManager(object):
                 ex: 20170915.beta2.A_WCYCL1850S.ne30_oECv3_ICG.edison
         """
         print 'Creating file table'
+        if self.sta:
+            print 'Using short term archive'
+        else:
+            print 'Short term archive turned off'
+        if not self.start_year:
+            self.start_year = simstart
         newfiles = []
         with self.db.atomic():
             for _type in self.types:
                 if _type not in file_type_map:
                     continue
                 if _type == 'rest':
-                    name = file_type_map[_type].replace('YEAR', '0002')
+                    name = file_type_map[_type].replace(
+                        'YEAR', '{:04d}'.format(simstart + 1))
                     local_path = os.path.join(
                         self.local_path,
                         'input',
@@ -92,7 +100,7 @@ class FileManager(object):
                             self.remote_path,
                             'archive',
                             'rest',
-                            '0002-01-01-00000',
+                            '{year:04d}-01-01-00000'.format(year=simstart + 1),
                             name)
                     else:
                         remote_path = os.path.join(self.remote_path, name)
@@ -187,7 +195,11 @@ class FileManager(object):
         if self.sta:
             for _type in self.types:
                 if _type == 'rest':
-                    remote_path = os.path.join(self.remote_path, 'archive', _type, '0002-01-01-00000')
+                    remote_path = os.path.join(
+                        self.remote_path,
+                        'archive',
+                        _type,
+                        '{year:04d}-01-01-00000'.format(year=self.start_year+1))
                 elif 'streams' in _type:
                     remote_path = os.path.join(self.remote_path, 'run')
                 else:
@@ -215,9 +227,13 @@ class FileManager(object):
                 finally:
                     self.mutex.release()
         else:
-            remote_path = os.path.join(self.remote_path, 'run')
+            head, tail = os.path.split(self.remote_path)
+            if tail != 'run':
+                remote_path = os.path.join(self.remote_path, 'run')
+            else:
+                remote_path = self.remote_path
             res = self._get_ls(
-                client=self.client,
+                client=client,
                 path=remote_path)
             self.mutex.acquire()
             try:
