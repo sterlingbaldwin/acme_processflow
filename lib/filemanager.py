@@ -51,7 +51,6 @@ class FileManager(object):
         self.local_endpoint = kwargs.get('local_endpoint')
         self.remote_path = kwargs.get('remote_path')
         self.start_year = 0
-        
 
     def __str__(self):
         return str({
@@ -137,9 +136,16 @@ class FileManager(object):
                             name = name.replace('MONTH', monthstr)
                             local_path = os.path.join(self.local_path, _type, name)
                             if self.sta:
-                                remote_path = os.path.join(self.remote_path, 'archive', _type, 'hist', name)
+                                remote_path = os.path.join(
+                                    self.remote_path,
+                                    'archive',
+                                    _type,
+                                    'hist',
+                                    name)
                             else:
-                                remote_path = os.path.join(self.remote_path, name)
+                                remote_path = os.path.join(
+                                    self.remote_path,
+                                    name)
                             newfiles = self._add_file(
                                 newfiles=newfiles,
                                 name=name,
