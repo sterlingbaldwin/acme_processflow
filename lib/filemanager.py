@@ -227,9 +227,13 @@ class FileManager(object):
                 finally:
                     self.mutex.release()
         else:
-            remote_path = os.path.join(self.remote_path, 'run')
+            head, tail = os.path.split(self.remote_path)
+            if tail != 'run':
+                remote_path = os.path.join(self.remote_path, 'run')
+            else:
+                remote_path = self.remote_path
             res = self._get_ls(
-                client=self.client,
+                client=client,
                 path=remote_path)
             self.mutex.acquire()
             try:

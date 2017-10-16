@@ -52,6 +52,9 @@ ERROR: line {num} does not have a space after the \'=\', white space is required
 Please add a space and run again.'''.format(num=line_index)
         sys.exit(-1)
 
+    if not os.path.exists(args.config):
+        print "Invalid config, {} does not exist".format(args.config)
+
     # read the config file and setup the config dict
     try:
         config = ConfigObj(args.config)
@@ -161,6 +164,8 @@ Please add a space and run again.'''.format(num=line_index)
     config['global']['simulation_end_year'] = int(config['global']['simulation_end_year'])
     sim_start_year = int(config['global']['simulation_start_year'])
     sim_end_year = int(config['global']['simulation_end_year'])
+
+    config['global']['short_term_archive'] = int(config['global']['short_term_archive'])
 
     # initialize the filemanager
     event_list.push(message='Initializing file manager')
