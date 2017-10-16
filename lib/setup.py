@@ -5,7 +5,7 @@ import json
 import time
 import stat
 from pprint import pformat
-from shutil import rmtree
+from shutil import rmtree, copy
 
 from configobj import ConfigObj
 from YearSet import YearSet, SetStatus
@@ -96,13 +96,7 @@ Please add a space and run again.'''.format(num=line_index)
 
     # Copy the config into the input directory for safe keeping
     input_config_path = os.path.join(config['global']['input_path'], 'run.cfg')
-    if os.path.exists(input_config_path) \
-    and args.config != input_config_path:
-        os.remove(input_config_path)
-    if args.config != input_config_path:
-        copyfile(
-            src=args.config,
-            dst=input_config_path)
+    copy(args.config, input_config_path)
 
     # setup logging
     if args.log:
