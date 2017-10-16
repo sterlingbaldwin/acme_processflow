@@ -83,6 +83,7 @@ class RunManager(object):
         Parameters:
             year_set (YearSet): The YearSet to populate with jobs
             config (dict): the master configuration dict
+            filemanager (FileManager): The global file manager instance
         """
         required_jobs = {}
         for job_type, freqs in config.get('global').get('set_jobs').items():
@@ -139,20 +140,36 @@ class RunManager(object):
                 year_set=year_set,
                 input_path=atm_path,
                 regrid_map_path=config['ncclimo']['regrid_map_path'],
-                var_list=config.get('ncclimo').get('var_list'),
+                var_list=config['ncclimo']['var_list'],
                 output_path=output_base_path,
                 file_list=file_list)
 
         if required_jobs.get('aprime_diags'):
             # Add the aprime job
-            template_path = os.path.join(
-                config['global']['resource_dir'],
-                'run_AIMS_template.csh')
+            web_directory = os.path.join(
+                config['global']['host_directory'],
+                os.environ['USER'],
+                config['global']['experiment'],
+                config['aprime_diags']['host_directory'],
+                set_string)
+            host_url = '/'.join([
+                config['global']['img_host_server'],
+                os.environ['USER'],
+                config['global']['experiment'],
+                config['aprime_diags']['host_directory'],
+                set_string])
 
-            # TODO finish aprime up
-            # runmanager.add_aprime(
-            #     a=a,
-            #     b=b)
+            self.add_aprime(
+                web_directory=web_directory,
+                host_url=host_url,
+                start_year=year_set.set_start_year,
+                end_year=year_set.set_end_year,
+                year_set=year_set,
+                input_base_path=config['global']['input_path'],
+                resource_path=config['global']['resource_dir'],
+                test_atm_res=config['aprime_diags']['test_atm_res'],
+                test_mpas_mesh_name=config['aprime_diags']['test_mpas_mesh_name'],
+                aprime_code_path=config['aprime_diags']['aprime_code_path'])
 
         if required_jobs.get('amwg'):
             # Add AMWG
@@ -312,61 +329,75 @@ class RunManager(object):
         Add an APrime job to the job_list
 
         Parameters:
-            start_year (int): the first year
-            end_year (int): the last year
-            year_set (int): the set number
-            base_host_directory (str): the base directory to hold web hosted content
-            aprime_host_directory (str): the subdirectory to hold aprime output
-            server (str): the hostname of the server doing the web hosting
-            template_path (str): the path to the aprime run template
-            input_base_path (str): the path to the base input directory
-            output_base_path (str): the path for aprime output
+            web_directory (str): The path to the directory to store images for hosting
+            host_url (str): The url to access the images once their hosted
+            year_set (YearSet): The YearSet that this job belongs to
+            start_year (int): The start year of this set
+            end_year (int): The end year of this set
+            input_base_path (str): the global input path
+            resource_path (str): Path to the resource directory
+            test_atm_res (str): the atm resolution for the test input
+            test_mpas_mesh_name (str): The test mpas mesh name
+            aprime_code_path (str): the path to the aprime code
         """
+        web_directory = kwargs['web_directory']
+        host_url = kwargs['host_url']
         year_set = kwargs['year_set']
+        start_year = kwargs['start_year']
+        end_year = kwargs['end_year']
+        input_base_path = kwargs['input_base_path']
+        resource_path = kwargs['resource_path']
+        test_atm_res = kwargs['test_atm_res']
+        test_mpas_mesh_name = kwargs['test_mpas_mesh_name']
+        aprime_code_path = kwargs['aprime_code_path']
+
         if not self._precheck(year_set, 'aprime_diags'):
             return
-        coupled_project_dir = os.path.join(
+
+        year_set_string = '{start:04d}-{end:04d}'.format(
+            start=start_year,
+            end=end_year)
+
+        project_dir = os.path.join(
             self.output_path,
             'aprime_diags',
-            '{start:04d}-{end:04d}'.format(
-                start=start_year,
-                end=end_year))
-        if not os.path.exists(coupled_project_dir):
-            os.makedirs(coupled_project_dir)
-
-        web_directory = os.path.join(
-            host_directory,
-            os.environ['USER'],
-            self.caseID,
+            year_set_string)
+        if not os.path.exists(project_dir):
+            os.makedirs(project_dir)
+        
+        input_path = os.path.join(
+            input_base_path,
+            'tmp',
             'aprime',
-            '{start:04d}-{end:04d}'.format(
-                start=start_year,
-                end=end_year))
-        host_url = '/'.join([
-            server,
-            os.environ['USER'],
-            caseID,
-            'aprime',
-            '{start:04d}-{end:04d}'.format(
-                start=start_year,
-                end=end_year)])
+            year_set_string)
+        if not os.path.exists(input_path):
+            os.makedirs(input_path)
+        
+        # Varify the template
+        template_path = os.path.join(
+            resource_path,
+            'aprime_template.bash')
+        if not os.path.exists(template_path):
+            msg = 'Unable to find amwg template at {path}'.format(
+                path=template_path)
+            print msg
+            logging.error(msg)
+            return
 
         config = {
             'web_dir': web_directory,
             'host_url': host_url,
-            'experiment': this.caseID,
-            'generate_atm_diags': generate_atm_diags,
-            'generate_ocnice_diags': generate_ocnice_diags,
+            'experiment': self.caseID,
             'run_scripts_path': self.scripts_path,
-            'output_path': output_path,
-            'dataset_name': dataset_name,
             'year_set': year_set.set_number,
             'input_path': input_path,
             'start_year': start_year,
             'end_year': end_year,
-            'aprime_project_dir': aprime_project_dir,
-            'test_casename': self.caseID,
-            'coupled_template_path': template_path,
+            'output_path': project_dir,
+            'template_path': template_path,
+            'test_atm_res': test_atm_res,
+            'test_mpas_mesh_name': test_mpas_mesh_name,
+            'aprime_code_path': aprime_code_path
         }
         aprime = AprimeDiags(
             config=config,
@@ -374,7 +405,6 @@ class RunManager(object):
         msg = 'Creating aprime diagnostic: {}'.format(str(aprime))
         logging.info(msg)
         logging.info('Prevalidating aprime')
-        aprime.prevalidate()
         if aprime.status == JobStatus.VALID:
             logging.info('Aprime is valid, adding it to the job_list')
             year_set.add_job(aprime)
