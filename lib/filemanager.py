@@ -96,7 +96,6 @@ class FileManager(object):
         newfiles = []
         with self.db.atomic():
             for _type in self.types:
-                print _type
                 if _type not in file_type_map:
                     continue
                 if _type == 'rest':
