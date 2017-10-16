@@ -163,6 +163,10 @@ Please add a space and run again.'''.format(num=line_index)
 
     # initialize the filemanager
     event_list.push(message='Initializing file manager')
+    head, tail = os.path.split(config['global']['source_path'])
+    if tail == 'run':
+        config['global']['source_path'] = head
+
     filemanager = FileManager(
         database=os.path.join(config['global']['project_path'], 'input', 'workflow.db'),
         types=config['global']['file_types'],
