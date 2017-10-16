@@ -49,8 +49,20 @@ class FileManager(object):
         self.remote_endpoint = kwargs.get('remote_endpoint')
         self.local_path = kwargs.get('local_path')
         self.local_endpoint = kwargs.get('local_endpoint')
-        self.remote_path = kwargs.get('remote_path')
         self.start_year = 0
+
+        head, tail = os.path.split(kwargs.get('remote_path'))
+        if not self.sta:
+            if tail != 'run':
+                self.remote_path = os.path.join(kwargs.get('remote_path'), 'run')
+            else:
+                self.remote_path = kwargs.get('remote_path')
+        else:
+            if tail == 'run':
+                self.remote_path = head
+            else:
+                self.remote_path = kwargs.get('remote_path')
+        
 
     def __str__(self):
         return str({
@@ -84,6 +96,7 @@ class FileManager(object):
         newfiles = []
         with self.db.atomic():
             for _type in self.types:
+                print _type
                 if _type not in file_type_map:
                     continue
                 if _type == 'rest':
@@ -109,7 +122,7 @@ class FileManager(object):
                         local_path=local_path,
                         remote_path=remote_path,
                         _type=_type)
-                if _type == 'streams.ocean' or _type == 'streams.cice':
+                elif _type == 'streams.ocean' or _type == 'streams.cice':
                     name = _type
                     local_path = local_path = os.path.join(
                         self.local_path,
@@ -187,6 +200,15 @@ class FileManager(object):
         })
         return newfiles
 
+    def print_db(self):
+        self.mutex.acquire()
+        for df in DataFile.select():
+            print {
+                'name': df.name,
+                'local_path': df.local_path,
+                'remote_path': df.remote_path
+            }
+
     def update_remote_status(self, client):
         """
         Check remote location for existance of the files on our list
@@ -207,7 +229,7 @@ class FileManager(object):
                         _type,
                         '{year:04d}-01-01-00000'.format(year=self.start_year+1))
                 elif 'streams' in _type:
-                    remote_path = os.path.join(self.remote_path, 'run')
+                    remote_path = self.remote_path
                 else:
                     remote_path = os.path.join(self.remote_path, 'archive', _type, 'hist')
                 print 'Querying globus for {}'.format(_type)
@@ -233,11 +255,10 @@ class FileManager(object):
                 finally:
                     self.mutex.release()
         else:
-            head, tail = os.path.split(self.remote_path)
-            if tail != 'run':
-                remote_path = os.path.join(self.remote_path, 'run')
-            else:
-                remote_path = self.remote_path
+
+            remote_path = self.remote_path
+            print remote_path
+            sys.exit()
             res = self._get_ls(
                 client=client,
                 path=remote_path)
