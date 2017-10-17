@@ -13,6 +13,11 @@ echo "Creating build dir at" $CONDA_BLD_PATH
 mkdir $CONDA_BLD_PATH
 
 conda config --set anaconda_upload no
+if [ ! -z "$1" ]; then
+    export TAG="$1"
+else
+    export TAG="master"
+fi
 conda build -c uvcdat -c conda-forge -c acme -c lukasz .
 
 if [ ! -z "$1" ]; then

@@ -4,7 +4,7 @@ package:
 
 source:
   git_url: git://github.com/ACME-Climate/acme_workflow
-
+  git_tag: {{ environ['TAG'] }}
 build:
   script: python setup.py install
   string: {{ environ['BUILD_NAME'] }}
