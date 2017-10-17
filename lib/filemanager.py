@@ -256,8 +256,6 @@ class FileManager(object):
         else:
 
             remote_path = self.remote_path
-            print remote_path
-            sys.exit()
             res = self._get_ls(
                 client=client,
                 path=remote_path)
