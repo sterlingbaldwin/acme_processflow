@@ -96,7 +96,10 @@ Please add a space and run again.'''.format(num=line_index)
 
     # Copy the config into the input directory for safe keeping
     input_config_path = os.path.join(config['global']['input_path'], 'run.cfg')
-    copy(args.config, input_config_path)
+    try:
+        copy(args.config, input_config_path)
+    except:
+        pass
 
     # setup logging
     if args.log:
