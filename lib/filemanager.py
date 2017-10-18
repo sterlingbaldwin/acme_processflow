@@ -128,7 +128,7 @@ class FileManager(object):
                         'input',
                         'streams',
                         name)
-                    remote_path = os.path.join(self.remote_path, 'run', name)
+                    remote_path = os.path.join(self.remote_path, name)
                     newfiles = self._add_file(
                         newfiles=newfiles,
                         name=name,
@@ -354,6 +354,8 @@ class FileManager(object):
                 ((DataFile.local_status == filestatus['NOT_EXIST']) |
                  (DataFile.local_size != DataFile.remote_size))
             )]
+            if len(required_files) == 0:
+                return False
             target_files = []
             target_size = 1e11 # 100 GB
             total_size = 0
