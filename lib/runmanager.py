@@ -2,6 +2,7 @@ import os
 import logging
 import time
 import re
+from datetime import datetime
 from threading import Thread
 from shutil import copytree
 
@@ -669,15 +670,18 @@ class RunManager(object):
                 job.status = status
 
                 if status == JobStatus.RUNNING:
+                    job.start_time = datetime.now()
                     for job_set in self.job_sets:
                         if job_set.set_number == job.year_set \
                         and job_set.status != SetStatus.FAILED:
                             job_set.status = SetStatus.RUNNING
                             break
                 elif status == JobStatus.COMPLETED:
+                    job.end_time = datetime.now()
                     self.handle_completed_job(job)
                     self.running_jobs.remove(job)
                 elif status == JobStatus.FAILED:
+                    job.end_time = datetime.now()
                     for job_set in self.job_sets:
                         if job_set.set_number == job.year_set:
                             job_set.status = SetStatus.FAILED
@@ -756,6 +760,7 @@ class RunManager(object):
             msg = '{job} hosted at {url}/viewer/index.html'.format(
                 url=job.config.get('host_url'),
                 job=job.type)
+            print msg
             logging.info(msg)
 
     def setup_local_hosting(self, job, img_src):
@@ -781,7 +786,6 @@ class RunManager(object):
                 path=img_src)
             logging.error(msg)
             return
-        print '--- hostdir {}'.format(job.config['host_url'])
         try:
             msg = 'copying images from {src} to {dst}'.format(src=img_src, dst=host_dir)
             logging.info(msg)

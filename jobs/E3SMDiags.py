@@ -103,7 +103,7 @@ class E3SMDiags(object):
         except:
             return False
         else:
-            return bool(len(contents) == len(self.config['sets']))
+            return bool(len(contents) >= len(self.config['sets']))
 
     def execute(self):
 

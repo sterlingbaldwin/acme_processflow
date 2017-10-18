@@ -126,7 +126,7 @@ class FileManager(object):
                     local_path = local_path = os.path.join(
                         self.local_path,
                         'input',
-                        'streams',
+                        _type,
                         name)
                     remote_path = os.path.join(self.remote_path, name)
                     newfiles = self._add_file(
@@ -375,6 +375,7 @@ class FileManager(object):
                     break
         except Exception as e:
             print_debug(e)
+            return False
         finally:
             self.mutex.release()
 
@@ -414,8 +415,10 @@ class FileManager(object):
                     print df.name
         except Exception as e:
             print_debug(e)
+            return False
         finally:
             self.mutex.release()
+
         args = (transfer, event, event_list)
         thread = threading.Thread(
             target=self._handle_transfer,

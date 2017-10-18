@@ -467,29 +467,30 @@ if __name__ == "__main__":
         print "Current status can be found at {}".format(state_path)
         while True:
             # Check the remote status once every 5 minutes
-            if not all_data \
-            and not config.get('global').get('no_monitor', False) \
+            if not config.get('global').get('no_monitor', False) \
             and loop_count == remote_check_delay:
-                print 'Updating remote status'
-                filemanager.update_remote_status(client)
-                filemanager.update_local_status()
-                loop_count = 0
+                all_data = filemanager.all_data_local()
+                if not all_data:
+                    print 'Updating remote status'
+                    filemanager.update_remote_status(client)
+                    filemanager.update_local_status()
+                    loop_count = 0
             # check the local status every 10 seconds
-            if loop_count % local_check_delay == 0 \
+            if loop_count == local_check_delay \
             and not all_data:
                 all_data = filemanager.all_data_local()
                 if not all_data \
                 and filemanager.active_transfers < 2 \
                 and not config['global']['no_monitor']:
-                    print 'starting file transfer'
-                    filemanager.transfer_needed(
+                    if filemanager.transfer_needed(
                         event_list=event_list,
                         event=thread_kill_event,
                         remote_endpoint=config['transfer']['source_endpoint'],
                         ui=config['global']['ui'],
                         display_event=display_event,
                         emailaddr=config['global']['email'],
-                        thread_list=thread_list)
+                        thread_list=thread_list):
+                            print 'starting file transfer'
                 if all_data:
                     print 'All data local, turning off remote checks'
             filemanager.check_year_sets(runmanager.job_sets)
