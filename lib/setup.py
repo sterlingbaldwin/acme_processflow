@@ -4,6 +4,8 @@ import logging
 import json
 import time
 import stat
+import argparse
+
 from pprint import pformat
 from shutil import rmtree, copy
 
@@ -18,7 +20,18 @@ from util import (setup_globus,
                   print_message,
                   print_debug)
 
-def setup(parser, display_event, **kwargs):
+def parse_args(argv):
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-c', '--config', help='Path to configuration file.')   
+    parser.add_argument('-n', '--no-ui', help='Turn off the GUI.', action='store_true')
+    parser.add_argument('-l', '--log', help='Path to logging output file.')
+    parser.add_argument('-u', '--no-cleanup', help='Don\'t perform pre or post run cleanup. This will leave all run scripts in place.', action='store_true')
+    parser.add_argument('-m', '--no-monitor', help='Don\'t run the remote monitor or move any files over globus.', action='store_true')
+    parser.add_argument('-f', '--file-list', help='Turn on debug output of the internal file_list so you can see what the current state of the model files are', action='store_true')
+    parser.add_argument('-r', '--resource-dir', help='Path to custom resource directory')
+    return parser.parse_args(argv)
+
+def setup(argv, display_event, **kwargs):
     """
     Parse the commandline arguments, and setup the master config dict
 
@@ -26,8 +39,9 @@ def setup(parser, display_event, **kwargs):
         parser (argparse.ArgumentParser): The parser object
         display_event (Threadding_event): The event to turn the display on and off
     """
+    print "entering setup"
     # Setup the parser
-    args = parser.parse_args()
+    args = parse_args(argv)
     if not args.config:
         parser.print_help()
         sys.exit()

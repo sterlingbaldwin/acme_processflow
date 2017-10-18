@@ -34,16 +34,6 @@ from lib.filemanager import FileManager
 from lib.runmanager import RunManager
 from lib.util import *
 
-# setup argument parser
-parser = argparse.ArgumentParser()
-parser.add_argument('-c', '--config', help='Path to configuration file.')
-parser.add_argument('-n', '--no-ui', help='Turn off the GUI.', action='store_true')
-parser.add_argument('-l', '--log', help='Path to logging output file.')
-parser.add_argument('-u', '--no-cleanup', help='Don\'t perform pre or post run cleanup. This will leave all run scripts in place.', action='store_true')
-parser.add_argument('-m', '--no-monitor', help='Don\'t run the remote monitor or move any files over globus.', action='store_true')
-parser.add_argument('-f', '--file-list', help='Turn on debug output of the internal file_list so you can see what the current state of the model files are', action='store_true')
-parser.add_argument('-r', '--resource-dir', help='Path to custom resource directory')
-
 # check for NCL
 if not os.environ.get('NCARG_ROOT'):
     ncar_path = '/usr/local/src/NCL-6.3.0/'
@@ -351,7 +341,7 @@ if __name__ == "__main__":
 
     # Read in parameters from config
     config, filemanager, runmanager = setup(
-        parser,
+        sys.argv[1:],
         display_event,
         event_list=event_list,
         thread_list=thread_list,
