@@ -34,6 +34,17 @@ class FileManager(object):
     Manage all files required by jobs
     """
     def __init__(self, database, types, sta=False, **kwargs):
+        """
+        Parameters:
+            mutex (theading.Lock) the mutext for accessing the database
+            sta (bool) is this run short term archived or not (1) yes (0) no
+            types (list(str)): A list of strings of datatypes
+            database (str): the path to where to create the sqlite database file
+            remote_endpoint (str): the Globus UUID for the remote endpoint
+            remote_path (str): the base directory to search for this runs model output
+            local_endpoint (str): The Globus UUID for the local endpoint
+            local_path (str): the local project path
+        """
         self.mutex = kwargs['mutex']
         self.sta = sta
         self.types = types if isinstance(types, list) else [types]
@@ -82,7 +93,6 @@ class FileManager(object):
         Parameters:
             simstart (int): the start year of the simulation,
             simend (int): the end year of the simulation,
-            types (list(str)): the list of file types to add, must be members of file_type_map,
             experiment (str): the name of the experiment 
                 ex: 20170915.beta2.A_WCYCL1850S.ne30_oECv3_ICG.edison
         """

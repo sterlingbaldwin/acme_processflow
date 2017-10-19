@@ -272,7 +272,6 @@ Please add a space and run again.'''.format(num=line_index)
     config['global']['ui'] = False if args.no_ui else True
     config['global']['no_cleanup'] = True if args.no_cleanup else False
     config['global']['no_monitor'] = True if args.no_monitor else False
-    config['global']['run_id'] = time.strftime("%Y-%m-%d-%H-%M")
     config['global']['print_file_list'] = True if args.file_list else False
 
     logging.info('Starting run with config')

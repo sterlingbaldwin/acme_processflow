@@ -3,15 +3,20 @@ import unittest
 import threading
 from lib.setup import setup
 from lib.events import Event_list
-
+from peewee import *
+from lib.models import DataFile
 
 class TestSetup(unittest.TestCase):
-
+    """
+    A test class for validating the project setup
+    
+    These tests should be run from the main project directory
+    """
     def test_expected_config(self):
         base_path = os.getcwd()
-        resource_path = os.path.join(base_path, '..', 'resources')
+        resource_path = os.path.join(base_path, 'resources')
         project_path = os.path.abspath(os.path.join('..', '..', 'testproject'))
-        args = ['-c', os.path.join(base_path, 'test_run_no_sta.cfg'), '-f', '-n', '-r', resource_path]
+        args = ['-c', os.path.join(base_path, 'test', 'test_run_no_sta.cfg'), '-f', '-n', '-r', resource_path]
         display_event = threading.Event()
         thread_kill_event = threading.Event()
         mutex = threading.Lock()
@@ -38,7 +43,7 @@ class TestSetup(unittest.TestCase):
                 'img_host_server': 'https://acme-viewer.llnl.gov', 
                 'host_directory': '/var/www/acme/acme-diags/', 
                 'file_types': ['atm', 'ice', 'ocn', 'rest', 'streams.ocean', 'streams.cice'], 
-                'resource_dir': './resources/', 
+                'resource_dir': resource_path, 
                 'input_path': '/p/cscratch/acme/baldwin32/20171016/input', 
                 'output_path': '/p/cscratch/acme/baldwin32/20171016/output', 
                 'log_path': '/p/cscratch/acme/baldwin32/20171016/output/workflow.log', 
@@ -47,7 +52,6 @@ class TestSetup(unittest.TestCase):
                 'ui': False, 
                 'no_cleanup': False, 
                 'no_monitor': False, 
-                'run_id': '2017-10-18-15-13', 
                 'print_file_list': True, 
                 'set_jobs': {
                     'ncclimo': ['5', '10'], 
@@ -75,7 +79,102 @@ class TestSetup(unittest.TestCase):
                 'aprime_code_path': '/p/cscratch/acme/data/a-prime',
                 'test_atm_res': 'ne30',
                 'test_mpas_mesh_name': 'oEC60to30v3'}}
-        self.assertEqual(expected_config, config)
+
+        for key, value in config.items():
+            if isinstance(value, dict):
+                for k2, v2 in value.items():
+                    self.assertEqual(expected_config[key][k2], config[key][k2])
+            else:
+                self.assertEqual(expected_config[key], config[key])
+
+class TestFileManagerSetup(unittest.TestCase):
+    
+    def test_filemanager_setup_no_sta(self):
+        mutex = threading.Lock()
+        sta = False
+        types = ['atm', 'ice', 'ocn', 'rest', 'streams.cice', 'streams.ocean']
+        database = 'test.db'
+        remote_endpoint = 'b9d02196-6d04-11e5-ba46-22000b92c6ec'
+        remote_path = '/global/homes/r/renata/ACME_simulations/20171011.beta2_FCT2-icedeep_branch.A_WCYCL1850S.ne30_oECv3_ICG.edison/'
+        local_endpoint = 'a871c6de-2acd-11e7-bc7c-22000b9a448b'
+        local_path = os.path.abspath(os.path.join('..', '..', 'testproject'))
         
+        filemanager = FileManager(
+            mutex=mutex,
+            sta=sta,
+            types=types,
+            database=database,
+            remote_endpoint=remote_endpoint,
+            remote_path=remote_path,
+            local_endpoint=local_endpoint,
+            local_path=local_path)
+        
+        self.assertTrue(os.path.exists(database))
+        head, tail = os.path.split(filemanager.remote_path)
+        self.assertEqual(tail, 'run')
+        os.remove(database)
+    
+    def test_filemanager_setup_with_sta(self):
+        mutex = threading.Lock()
+        sta = True
+        types = ['atm', 'ice', 'ocn', 'rest', 'streams.cice', 'streams.ocean']
+        database = 'test.db'
+        remote_endpoint = 'b9d02196-6d04-11e5-ba46-22000b92c6ec'
+        remote_path = '/global/homes/r/renata/ACME_simulations/20171011.beta2_FCT2-icedeep_branch.A_WCYCL1850S.ne30_oECv3_ICG.edison/'
+        local_endpoint = 'a871c6de-2acd-11e7-bc7c-22000b9a448b'
+        local_path = os.path.abspath(os.path.join('..', '..', 'testproject'))
+        
+        filemanager = FileManager(
+            mutex=mutex,
+            sta=sta,
+            types=types,
+            database=database,
+            remote_endpoint=remote_endpoint,
+            remote_path=remote_path,
+            local_endpoint=local_endpoint,
+            local_path=local_path)
+        
+        self.assertTrue(os.path.exists(database))
+        head, tail = os.path.split(filemanager.remote_path)
+        self.assertNotEqual(tail, 'run')
+        os.remove(database)
+    
+    def test_filemanager_populate(self):
+        mutex = threading.Lock()
+        sta = False
+        types = ['atm', 'ice', 'ocn', 'rest', 'streams.cice', 'streams.ocean']
+        database = 'test.db'
+        remote_endpoint = 'b9d02196-6d04-11e5-ba46-22000b92c6ec'
+        remote_path = '/global/homes/r/renata/ACME_simulations/20171011.beta2_FCT2-icedeep_branch.A_WCYCL1850S.ne30_oECv3_ICG.edison/'
+        local_endpoint = 'a871c6de-2acd-11e7-bc7c-22000b9a448b'
+        local_path = os.path.abspath(os.path.join('..', '..', 'testproject'))
+        simstart = 51
+        simend = 60
+        experiment = '20171011.beta2_FCT2-icedeep_branch.A_WCYCL1850S.ne30_oECv3_ICG.edison'
+        filemanager = FileManager(
+            mutex=mutex,
+            sta=sta,
+            types=types,
+            database=database,
+            remote_endpoint=remote_endpoint,
+            remote_path=remote_path,
+            local_endpoint=local_endpoint,
+            local_path=local_path)
+        filemanager.populate_file_list(
+            simstart=simstart,
+            simend=simend,
+            experiment=experiment)
+        
+        simlength = simend - simstart + 1
+        atm_file_names = [x.name for x in DataFile.select().where(_type == 'atm')] 
+        self.assertTrue(len(atm_file_names) = (simlength * 12))
+
+        for year in range(simstart, simend +1):
+            for month in range(13):
+                name = '{exp}.cam.h0.{year:04d}-{month:02d}'.format(
+                    exp=experiment,
+                    year=year,
+                    month=month)
+                self.assertTrue(name in atm_file_names)
 if __name__ == '__main__':
     unittest.main()
