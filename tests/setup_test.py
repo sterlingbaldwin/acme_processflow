@@ -5,6 +5,7 @@ from lib.setup import setup
 from lib.events import Event_list
 from peewee import *
 from lib.models import DataFile
+from lib.filemanager import FileManager
 
 class TestSetup(unittest.TestCase):
     """
@@ -15,8 +16,8 @@ class TestSetup(unittest.TestCase):
     def test_expected_config(self):
         base_path = os.getcwd()
         resource_path = os.path.join(base_path, 'resources')
-        project_path = os.path.abspath(os.path.join('..', '..', 'testproject'))
-        args = ['-c', os.path.join(base_path, 'test', 'test_run_no_sta.cfg'), '-f', '-n', '-r', resource_path]
+        project_path = os.path.abspath(os.path.join('..', 'testproject'))
+        args = ['-c', os.path.join(base_path, 'tests', 'test_run_no_sta.cfg'), '-f', '-n', '-r', resource_path]
         display_event = threading.Event()
         thread_kill_event = threading.Event()
         mutex = threading.Lock()
@@ -44,11 +45,11 @@ class TestSetup(unittest.TestCase):
                 'host_directory': '/var/www/acme/acme-diags/', 
                 'file_types': ['atm', 'ice', 'ocn', 'rest', 'streams.ocean', 'streams.cice'], 
                 'resource_dir': resource_path, 
-                'input_path': '/p/cscratch/acme/baldwin32/20171016/input', 
-                'output_path': '/p/cscratch/acme/baldwin32/20171016/output', 
-                'log_path': '/p/cscratch/acme/baldwin32/20171016/output/workflow.log', 
-                'run_scripts_path': '/p/cscratch/acme/baldwin32/20171016/output/run_scripts', 
-                'tmp_path': '/p/cscratch/acme/baldwin32/20171016/output/tmp', 
+                'input_path': os.path.join(project_path, 'input'), 
+                'output_path': os.path.join(project_path, 'output'), 
+                'log_path': os.path.join(project_path, 'output', 'workflow.log'), 
+                'run_scripts_path': os.path.join(project_path, 'output', 'run_scripts'), 
+                'tmp_path': os.path.join(project_path, 'output', 'tmp'), 
                 'ui': False, 
                 'no_cleanup': False, 
                 'no_monitor': False, 
@@ -166,12 +167,12 @@ class TestFileManagerSetup(unittest.TestCase):
             experiment=experiment)
         
         simlength = simend - simstart + 1
-        atm_file_names = [x.name for x in DataFile.select().where(_type == 'atm')] 
-        self.assertTrue(len(atm_file_names) = (simlength * 12))
+        atm_file_names = [x.name for x in DataFile.select().where(DataFile.datatype == 'atm')] 
+        self.assertTrue(len(atm_file_names) == (simlength * 12))
 
         for year in range(simstart, simend +1):
-            for month in range(13):
-                name = '{exp}.cam.h0.{year:04d}-{month:02d}'.format(
+            for month in range(1, 13):
+                name = '{exp}.cam.h0.{year:04d}-{month:02d}.nc'.format(
                     exp=experiment,
                     year=year,
                     month=month)
