@@ -20,7 +20,7 @@ from util import (setup_globus,
                   print_message,
                   print_debug)
 
-def parse_args(argv):
+def parse_args(argv=None, print_help=None):
     parser = argparse.ArgumentParser()
     parser.add_argument('-c', '--config', help='Path to configuration file.')   
     parser.add_argument('-n', '--no-ui', help='Turn off the GUI.', action='store_true')
@@ -29,6 +29,9 @@ def parse_args(argv):
     parser.add_argument('-m', '--no-monitor', help='Don\'t run the remote monitor or move any files over globus.', action='store_true')
     parser.add_argument('-f', '--file-list', help='Turn on debug output of the internal file_list so you can see what the current state of the model files are', action='store_true')
     parser.add_argument('-r', '--resource-dir', help='Path to custom resource directory')
+    if print_help:
+        parser.print_help()
+        return
     return parser.parse_args(argv)
 
 def setup(argv, display_event, **kwargs):
@@ -41,10 +44,10 @@ def setup(argv, display_event, **kwargs):
     """
     print "entering setup"
     # Setup the parser
-    args = parse_args(argv)
+    args = parse_args(argv=argv)
     if not args.config:
-        parser.print_help()
-        sys.exit()
+        parse_args(print_help=True)
+        return False, False, False
 
     event_list = kwargs['event_list']
     thread_list = kwargs['thread_list']
@@ -58,49 +61,56 @@ def setup(argv, display_event, **kwargs):
         except:
             os.remove(globus_config)
 
+    if not os.path.exists(args.config):
+        print "Invalid config, {} does not exist".format(args.config)
+        return False, False, False
+
     # Check that there are no white space errors in the config file
     line_index = check_config_white_space(args.config)
     if line_index != 0:
         print '''
 ERROR: line {num} does not have a space after the \'=\', white space is required. 
 Please add a space and run again.'''.format(num=line_index)
-        sys.exit(-1)
-
-    if not os.path.exists(args.config):
-        print "Invalid config, {} does not exist".format(args.config)
+        return False, False, False
 
     # read the config file and setup the config dict
     try:
         config = ConfigObj(args.config)
     except Exception as e:
         print "Error parsing config file {}".format(args.config)
-        parser.print_help()
-        sys.exit()
-
-    if args.resource_dir:
-        config['global']['resource_dir'] = args.resource_dir
-    else:
-        config['global']['resource_dir'] = os.path.join(
-            sys.prefix,
-            'share',
-            'processflow',
-            'resources')
-
-    config['global']['input_path'] = os.path.join(config['global']['project_path'], 'input')
-    config['global']['output_path'] = os.path.join(config['global']['project_path'], 'output')
+        parse_args(print_help=True)
+        return False, False, False
 
     # run validator for config file
+    if config.get('global'):
+        if args.resource_dir:
+            config['global']['resource_dir'] = args.resource_dir
+        else:
+            config['global']['resource_dir'] = os.path.join(
+                sys.prefix,
+                'share',
+                'processflow',
+                'resources')
+    else:
+        return False, False, False
+
     template_path = os.path.join(
         config['global']['resource_dir'],
         'config_template.json')
 
     with open(template_path, 'r') as template_file:
         template = json.load(template_file)
+
     valid, messages = verify_config(config, template)
     if not valid:
         for message in messages:
             print message
-        sys.exit(-1)
+        return False, False, False
+
+    
+
+    config['global']['input_path'] = os.path.join(config['global']['project_path'], 'input')
+    config['global']['output_path'] = os.path.join(config['global']['project_path'], 'output')
 
     # setup output and cache directories
     if not os.path.exists(config['global']['input_path']):
@@ -217,8 +227,8 @@ Please add a space and run again.'''.format(num=line_index)
             addr = config.get('global').get('email')
             if not addr:
                 print 'When running in no-ui mode, you must enter an email address.'
-                sys.exit()
-            setup_globus(
+                return False, False, False
+            setup_success = setup_globus(
                 endpoints=endpoints,
                 no_ui=True,
                 src=config.get('global').get('email'),
@@ -239,9 +249,10 @@ Please add a space and run again.'''.format(num=line_index)
                 endpoints=endpoints,
                 display_event=display_event,
                 no_ui=False)
-            if not setup_success:
-                print "Globus setup error"
-                return -1
+        if not setup_success:
+            print "Globus setup error"
+            return False, False, False
+        else:
             print 'Globus authentication complete'
         print 'Checking file access on globus transfer nodes'
         setup_success, endpoint = check_globus(
@@ -252,7 +263,7 @@ Please add a space and run again.'''.format(num=line_index)
         if not setup_success:
             print 'ERROR! Unable to access {} globus node'.format(endpoint['type'])
             print 'The node may be down, or you may not have access to the requested directory'
-            sys.exit(-1)
+            return False, False, False
 
     # setup the runmanager
     runmanager = RunManager(
@@ -277,35 +288,6 @@ Please add a space and run again.'''.format(num=line_index)
     logging.info('Starting run with config')
     logging.info(pformat(config))
     return config, filemanager, runmanager
-
-def setup_file_list(**kwargs):
-    file_list = kwargs['file_list']
-    file_name_list = kwargs['file_name_list']
-    patterns = kwargs['patterns']
-    sim_start_year = kwargs['sim_start_year']
-    sim_end_year = kwargs['sim_end_year']
-    file_type_map = kwargs['file_type_map']
-
-    for key, val in patterns.items():
-        file_list[key] = {}
-        file_name_list[key] = {}
-        if key in file_type_map:
-            if file_type_map[key][1]:
-                for year in range(sim_start_year, sim_end_year + 1):
-                    for month in range(1, 13):
-                        file_key = str(year) + '-' + str(month)
-                        file_list[key][file_key] = SetStatus.NO_DATA
-                        file_name_list[key][file_key] = ''
-            else:
-                if file_type_map[key][2]:
-                    file_list[key][file_type_map[key][2]] = SetStatus.NO_DATA
-
-    file_list['RPT']['rpointer.ocn'] = SetStatus.NO_DATA
-    file_list['RPT']['rpointer.atm'] = SetStatus.NO_DATA
-    file_list['STREAMS']['streams.ocean'] = SetStatus.NO_DATA
-    file_list['STREAMS']['streams.cice'] = SetStatus.NO_DATA
-
-    return file_list
 
 def verify_config(config, template):
     messages = []

@@ -318,8 +318,7 @@ def start_display(config, event):
     except KeyboardInterrupt as e:
         return
 
-if __name__ == "__main__":
-
+def main():
     # The master configuration object
     config = {}
 
@@ -350,7 +349,7 @@ if __name__ == "__main__":
 
     if config == -1:
         print "Error in setup, exiting"
-        sys.exit(1)
+        return
     logging.info('Config setup complete')
     logging.info(str(config))
 
@@ -532,3 +531,6 @@ if __name__ == "__main__":
         thread_kill_event.set()
         for thread in thread_list:
             thread.join(timeout=1.0)
+
+if __name__ == "__main__":
+    main()

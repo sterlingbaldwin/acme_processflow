@@ -222,7 +222,11 @@ def setup_globus(endpoints, no_ui=False, **kwargs):
         for endpoint in endpoints:
             msg = 'activating endpoint {}'.format(endpoint)
             logging.info(msg)
-            r = client.endpoint_autoactivate(endpoint, if_expires_in=3600)
+            try:
+                r = client.endpoint_autoactivate(endpoint, if_expires_in=3600)
+            except Exception as e:
+                print_debug(e)
+                return False
             logging.info(r['code'])
             if r["code"] == "AutoActivationFailed":
                 activated = False

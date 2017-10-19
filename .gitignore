@@ -1,6 +1,7 @@
-*pyc
+*.pyc
+*.swp
 tmp
 config\.json
 \.vscode/
 \.remote-sync\.json
-dist
+.coverage

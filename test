@@ -1,2 +1,14 @@
 #!/bin/bash
-coverage run --source . tests/setup_test.py
+coverage run --source=.,lib,jobs lib/test.py
+
+if [ $? == 0 ]; then
+    coverage report
+    coverage html
+
+    if [ -d /var/www/acme/acme-diags/baldwin32/htmlcov ]; then
+        rm -rf /var/www/acme/acme-diags/baldwin32/htmlcov
+    fi
+    mv htmlcov /var/www/acme/acme-diags/baldwin32
+else
+    echo "Test failure"
+fi
