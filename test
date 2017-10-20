@@ -8,6 +8,7 @@ if [ $? == 0 ]; then
     coverage combine .coverage_setup .coverage_util .coverage_yearset .coverage_filemanager
     coverage report
     coverage html
+    coverage xml
 
     if [ -d /var/www/acme/acme-diags/baldwin32/htmlcov ]; then
         rm -rf /var/www/acme/acme-diags/baldwin32/htmlcov
@@ -16,5 +17,4 @@ if [ $? == 0 ]; then
 else
     echo "Test failure"
 fi
-echo "blorp"
 echo "tests done"
