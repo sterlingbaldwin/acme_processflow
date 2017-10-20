@@ -16,5 +16,5 @@ if [ $? == 0 ]; then
 else
     echo "Test failure"
 fi
-
+echo "blorp"
 echo "tests done"
