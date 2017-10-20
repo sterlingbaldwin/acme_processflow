@@ -16,3 +16,4 @@ fi
 mv htmlcov /var/www/acme/acme-diags/baldwin32
 
 echo "tests done"
+echo "report available at http://acme1.llnl.gov/baldwin32/htmlcov/index.html"
