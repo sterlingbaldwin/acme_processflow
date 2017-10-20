@@ -4,17 +4,15 @@ COVERAGE_FILE=.coverage_yearset coverage run --source=.,lib,jobs  --omit="lib/te
 COVERAGE_FILE=.coverage_filemanager coverage run --source=.,lib,jobs  --omit="lib/test*","*__init__.py" lib/test_filemanager.py
 COVERAGE_FILE=.coverage_util coverage run --source=.,lib,jobs  --omit="lib/test*","*__init__.py" lib/test_util.py
 
-if [ $? == 0 ]; then
-    coverage combine .coverage_setup .coverage_util .coverage_yearset .coverage_filemanager
-    coverage report
-    coverage html
-    coverage xml
+coverage combine .coverage_setup .coverage_util .coverage_yearset .coverage_filemanager
+rm .coverage_setup .coverage_util .coverage_yearset .coverage_filemanager
+coverage report
+coverage html
+coverage xml
 
-    if [ -d /var/www/acme/acme-diags/baldwin32/htmlcov ]; then
-        rm -rf /var/www/acme/acme-diags/baldwin32/htmlcov
-    fi
-    mv htmlcov /var/www/acme/acme-diags/baldwin32
-else
-    echo "Test failure"
+if [ -d /var/www/acme/acme-diags/baldwin32/htmlcov ]; then
+    rm -rf /var/www/acme/acme-diags/baldwin32/htmlcov
 fi
+mv htmlcov /var/www/acme/acme-diags/baldwin32
+
 echo "tests done"
