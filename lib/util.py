@@ -30,31 +30,6 @@ from string import Formatter
 from slurm import Slurm
 from models import DataFile
 
-def cleanup(config):
-    """
-    Clean up temp files created during the run
-    """
-    if config.get('global').get('no_cleanup'):
-        return
-    try:
-        archive_path = os.path.join(
-            config.get('global').get('output_path'),
-            'script_archive',
-            time.strftime("%Y-%m-%d-%I-%M"))
-        if not os.path.exists(archive_path):
-            os.makedirs(archive_path)
-        run_script_path = config.get('global').get('run_scripts_path')
-        if os.path.exists(run_script_path):
-            while os.path.exists(archive_path):
-                archive_path = archive_path[:-1] + str(int(archive_path[-1]) + 1)
-            move(run_script_path, archive_path)
-            move(config['global']['log_path'], archive_path)
-            if config['global'].get('error_path'):
-                move(config['global']['error_path'], archive_path)
-    except Exception as e:
-        logging.error(format_debug(e))
-        logging.error('Error archiving run_scripts directory')
-
 def transfer_directory(**kwargs):
     """
     Transfer all the contents from source_endpoint:src_path to destination_endpoint:dst_path
@@ -283,13 +258,12 @@ def path_exists(config_items):
         if type(options) != dict:
             continue
         for key, val in options.items():
-            if key == 'output_pattern':
-                continue
             if not type(val) == str:
                 continue
             if val.endswith('.nc') and not os.path.exists(val):
                 print "File {key}: {value} does not exist, exiting.".format(key=key, value=val)
-                sys.exit(1)
+                return False
+    return True
 
 def cmd_exists(cmd):
     return any(os.access(os.path.join(path, cmd), os.X_OK) for path in os.environ["PATH"].split(os.pathsep))
@@ -462,13 +436,13 @@ def render(variables, input_path, output_path, delimiter='%%'):
     except IOError as e:
         print 'unable to open input file: {}'.format(input_path)
         print_debug(e)
-        return
+        return False
     try:
         outfile = open(output_path, 'w')
     except IOError as e:
         print 'unable to open output file: {}'.format(output_path)
         print_debug(e)
-        return
+        return False
 
     for line in infile.readlines():
         rendered_string = ''
@@ -490,6 +464,7 @@ def render(variables, input_path, output_path, delimiter='%%'):
         else:
             rendered_string = line
         outfile.write(rendered_string)
+    return True
 
 def create_symlink_dir(src_dir, src_list, dst):
     """

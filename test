@@ -1,7 +1,11 @@
 #!/bin/bash
-coverage run --source=.,lib,jobs lib/test.py
+COVERAGE_FILE=.coverage_setup coverage run --source=.,lib,jobs --omit="lib/test*","*__init__.py" lib/test_setup.py
+COVERAGE_FILE=.coverage_yearset coverage run --source=.,lib,jobs  --omit="lib/test*","*__init__.py" lib/test_yearset.py
+COVERAGE_FILE=.coverage_filemanager coverage run --source=.,lib,jobs  --omit="lib/test*","*__init__.py" lib/test_filemanager.py
+COVERAGE_FILE=.coverage_util coverage run --source=.,lib,jobs  --omit="lib/test*","*__init__.py" lib/test_util.py
 
 if [ $? == 0 ]; then
+    coverage combine .coverage_setup .coverage_util .coverage_yearset .coverage_filemanager
     coverage report
     coverage html
 

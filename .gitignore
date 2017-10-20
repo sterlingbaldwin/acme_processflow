@@ -4,4 +4,4 @@ tmp
 config\.json
 \.vscode/
 \.remote-sync\.json
-.coverage
+.coverage*
