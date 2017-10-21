@@ -1,21 +1,26 @@
 #!/bin/bash
 FAILED=0
+echo "--- testing setup ---"
 COVERAGE_FILE=.coverage_setup coverage run --source=.,lib,jobs --omit="lib/test*","*__init__.py","setup.py" lib/test_setup.py
 if [ ! $? ]; then
     $FAILED=1
 fi
+echo "--- testing YearSet ---"
 COVERAGE_FILE=.coverage_yearset coverage run --source=.,lib,jobs  --omit="lib/test*","*__init__.py","setup.py" lib/test_yearset.py
 if [ ! $? ]; then
     $FAILED=1
 fi
+echo "--- testing FileManager ---"
 COVERAGE_FILE=.coverage_filemanager coverage run --source=.,lib,jobs  --omit="lib/test*","*__init__.py","setup.py" lib/test_filemanager.py
 if [ ! $? ]; then
     $FAILED=1
 fi
+echo "--- testing util ---"
 COVERAGE_FILE=.coverage_util coverage run --source=.,lib,jobs  --omit="lib/test*","*__init__.py","setup.py" lib/test_util.py
 if [ ! $? ]; then
     $FAILED=1
 fi
+echo "--- testing slurm ---"
 COVERAGE_FILE=.coverage_slurm coverage run --source=.,lib,jobs  --omit="lib/test*","*__init__.py","setup.py" lib/test_slurm.py
 if [ ! $? ]; then
     $FAILED=1
