@@ -70,7 +70,7 @@ class Slurm(object):
             raise Exception('SLURM ERROR: ' + err)
 
         return out, err
-     
+
     def showjob(self, jobid):
         """
         A wrapper around scontrol show job

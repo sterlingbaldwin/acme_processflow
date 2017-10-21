@@ -33,6 +33,16 @@ class TestSetup(unittest.TestCase):
             thread_list=thread_list,
             kill_event=thread_kill_event,
             mutex=mutex)
+        if not os.environ.get('JENKINS_URL'):
+            config['global']['project_path'] = project_path
+            config['global']['resource_dir'] = resource_path
+            config['global']['input_path'] = os.path.join(project_path, 'input')
+            config['global']['output_path'] = os.path.join(project_path, 'output')
+            config['global']['log_path'] = os.path.join(project_path, 'output', 'workflow.log')
+            config['global']['run_scripts_path'] = os.path.join(project_path, 'output', 'run_scripts')
+            config['global']['tmp_path'] = os.path.join(project_path, 'output', 'tmp')
+            config['global']['error_path'] = os.path.join(project_path, 'output', 'workflow.error')
+
 
         expected_config = {
             'global': {
@@ -107,6 +117,15 @@ class TestSetup(unittest.TestCase):
             thread_list=thread_list,
             kill_event=thread_kill_event,
             mutex=mutex)
+        if not os.environ.get('JENKINS_URL'):
+            config['global']['project_path'] = project_path
+            config['global']['resource_dir'] = resource_path
+            config['global']['input_path'] = os.path.join(project_path, 'input')
+            config['global']['output_path'] = os.path.join(project_path, 'output')
+            config['global']['log_path'] = os.path.join(project_path, 'output', 'workflow.log')
+            config['global']['run_scripts_path'] = os.path.join(project_path, 'output', 'run_scripts')
+            config['global']['error_path'] = os.path.join(project_path, 'output', 'workflow.error')
+            config['global']['tmp_path'] = os.path.join(project_path, 'output', 'tmp')
 
         expected_config = {
             'global': {
@@ -127,6 +146,7 @@ class TestSetup(unittest.TestCase):
                 'log_path': os.path.join(project_path, 'output', 'workflow.log'), 
                 'run_scripts_path': os.path.join(project_path, 'output', 'run_scripts'), 
                 'tmp_path': os.path.join(project_path, 'output', 'tmp'), 
+                'error_path': os.path.join(project_path, 'output', 'workflow.error'),
                 'ui': False, 
                 'no_cleanup': False, 
                 'no_monitor': False, 
