@@ -35,22 +35,22 @@ class Slurm(object):
         job_id = int(out[-1])
         return job_id
 
-    def run(self, cmd, sargs=False):
-        """
-        Submit to slurm controller in interactive mode
+    # def run(self, cmd, sargs=False):
+    #     """
+    #     Submit to slurm controller in interactive mode
 
-        NOTE: THIS IS A BLOCKING CALL. Control will not return until the command completes
+    #     NOTE: THIS IS A BLOCKING CALL. Control will not return until the command completes
 
-        Parameters:
-            cmd (str): the command to run
-        Returns:
-            the output of the job (str)
-        """
-        out, err = self._submit('srun', cmd, sargs)
-        if 'error' in out:
-            return False, err
-        else:
-            return True, out
+    #     Parameters:
+    #         cmd (str): the command to run
+    #     Returns:
+    #         the output of the job (str)
+    #     """
+    #     out, err = self._submit('srun', cmd, sargs)
+    #     if 'error' in out:
+    #         return False, err
+    #     else:
+    #         return True, out
 
     def _submit(self, subtype, cmd, sargs=False):
 
