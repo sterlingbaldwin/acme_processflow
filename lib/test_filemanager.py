@@ -93,3 +93,6 @@ class TestFileManagerSetup(unittest.TestCase):
                     year=year,
                     month=month)
                 self.assertTrue(name in atm_file_names)
+
+if __name__ == '__main__':
+    unittest.main()
