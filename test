@@ -32,7 +32,7 @@ fi
 mv htmlcov /var/www/acme/acme-diags/baldwin32
 rm slurm-*
 
-if [ $FAILED == 1]; then
+if [ $FAILED == 1 ]; then
     echo "One or more tests failed"
     exit 1
 else
