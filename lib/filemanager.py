@@ -319,10 +319,15 @@ class FileManager(object):
             datafiles = DataFile.select().where(
                 DataFile.local_status == filestatus['NOT_EXIST'])
             for datafile in datafiles:
+                should_save = False
                 if os.path.exists(datafile.local_path):
                     local_size = os.path.getsize(datafile.local_path)
                     if local_size == datafile.remote_size:
                         datafile.local_status = filestatus['EXISTS']
+                        datafile.local_size = local_size
+                        should_save = True
+                    if local_size != datafile.local_size \
+                    or should_save:
                         datafile.local_size = local_size
                         datafile.save()
         except Exception as e:
