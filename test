@@ -1,29 +1,44 @@
 #!/bin/bash
-FAILED=0
+FAILED=false
+
 echo "--- testing setup ---"
-COVERAGE_FILE=.coverage_setup coverage run --source=.,lib,jobs --omit="lib/test*","*__init__.py","setup.py" lib/test_setup.py
-if [ ! $? ]; then
-    $FAILED=1
+if COVERAGE_FILE=.coverage_setup coverage run --source=.,lib,jobs --omit="lib/test*","*__init__.py","setup.py" lib/test_setup.py; then
+    echo "setup test passed"
+else
+    echo "setup test failed"
+    FAILED=true
 fi
+
 echo "--- testing YearSet ---"
-COVERAGE_FILE=.coverage_yearset coverage run --source=.,lib,jobs  --omit="lib/test*","*__init__.py","setup.py" lib/test_yearset.py
-if [ ! $? ]; then
-    $FAILED=1
+if COVERAGE_FILE=.coverage_yearset coverage run --source=.,lib,jobs  --omit="lib/test*","*__init__.py","setup.py" lib/test_yearset.py; then
+    echo "YearSet test passed"
+else
+    echo "YearSet test failed"
+    FAILED=true
 fi
+
 echo "--- testing FileManager ---"
-COVERAGE_FILE=.coverage_filemanager coverage run --source=.,lib,jobs  --omit="lib/test*","*__init__.py","setup.py" lib/test_filemanager.py
-if [ ! $? ]; then
-    $FAILED=1
+if COVERAGE_FILE=.coverage_filemanager coverage run --source=.,lib,jobs  --omit="lib/test*","*__init__.py","setup.py" lib/test_filemanager.py; then
+    echo "filemanager test passed"
+else
+    echo "filemanager test failed"
+    FAILED=true
 fi
+
 echo "--- testing util ---"
-COVERAGE_FILE=.coverage_util coverage run --source=.,lib,jobs  --omit="lib/test*","*__init__.py","setup.py" lib/test_util.py
-if [ ! $? ]; then
-    $FAILED=1
+if COVERAGE_FILE=.coverage_util coverage run --source=.,lib,jobs  --omit="lib/test*","*__init__.py","setup.py" lib/test_util.py; then
+    echo "util test passed"
+else
+    echo "util test failed"
+    FAILED=true
 fi
+
 echo "--- testing slurm ---"
-COVERAGE_FILE=.coverage_slurm coverage run --source=.,lib,jobs  --omit="lib/test*","*__init__.py","setup.py" lib/test_slurm.py
-if [ ! $? ]; then
-    $FAILED=1
+if COVERAGE_FILE=.coverage_slurm coverage run --source=.,lib,jobs  --omit="lib/test*","*__init__.py","setup.py" lib/test_slurm.py; then
+    echo "slurm test passed"
+else
+    echo "slurm test failed"
+    FAILED=true
 fi
 
 coverage combine .coverage_setup .coverage_util .coverage_yearset .coverage_filemanager .coverage_slurm
@@ -37,7 +52,7 @@ fi
 mv htmlcov /var/www/acme/acme-diags/baldwin32
 rm slurm-*
 
-if [ $FAILED == 1 ]; then
+if [ "$FAILED" ]; then
     echo "One or more tests failed"
     exit 1
 else
