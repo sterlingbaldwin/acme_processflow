@@ -38,12 +38,6 @@ class Climo(object):
         self.start_time = None
         self.end_time = None
         self.output_path = None
-        self.outputs = {
-            'status': self.status,
-            'climos': '',
-            'regrid': '',
-            'console_output': ''
-        }
         self.inputs = {
             'start_year': '',
             'end_year': '',

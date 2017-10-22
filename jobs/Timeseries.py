@@ -38,6 +38,7 @@ class Timeseries(object):
         self.end_time = None
         self.output_path = None
         self.inputs = {
+            'year_set': '',
             'annual_mode': '',
             'start_year': '',
             'end_year': '',
