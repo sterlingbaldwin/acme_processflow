@@ -41,7 +41,23 @@ else
     FAILED=true
 fi
 
-coverage combine .coverage_setup .coverage_util .coverage_yearset .coverage_filemanager .coverage_slurm
+echo "--- testing transfer ---"
+if COVERAGE_FILE=.coverage_transfer coverage run --source=.,lib,jobs  --omit="lib/test*","*__init__.py","setup.py" jobs/test_transfer.py; then
+    echo "transfer test passed"
+else
+    echo "transfer test failed"
+    FAILED=true
+fi
+
+echo "--- testing mailer ---"
+if COVERAGE_FILE=.coverage_mailer coverage run --source=.,lib,jobs  --omit="lib/test*","*__init__.py","setup.py" jobs/test_transfer.py; then
+    echo "mailer test passed"
+else
+    echo "mailer test failed"
+    FAILED=true
+fi
+
+coverage combine .coverage_mailer .coverage_transfer .coverage_setup .coverage_util .coverage_yearset .coverage_filemanager .coverage_slurm
 coverage report
 coverage html
 coverage xml

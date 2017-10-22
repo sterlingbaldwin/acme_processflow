@@ -43,7 +43,6 @@ class TestSetup(unittest.TestCase):
             config['global']['tmp_path'] = os.path.join(project_path, 'output', 'tmp')
             config['global']['error_path'] = os.path.join(project_path, 'output', 'workflow.error')
 
-
         expected_config = {
             'global': {
                 'project_path': project_path, 
@@ -100,7 +99,7 @@ class TestSetup(unittest.TestCase):
                 if expected_config[key][k2] != config[key][k2]:
                     print expected_config[key][k2], config[key][k2]
                 self.assertEqual(expected_config[key][k2], config[key][k2])
-    
+
     def test_expected_config_no_ui(self):
         base_path = os.getcwd()
         resource_path = os.path.join(base_path, 'resources')
@@ -183,7 +182,7 @@ class TestSetup(unittest.TestCase):
                 if expected_config[key][k2] != config[key][k2]:
                     print expected_config[key][k2], config[key][k2]
                 self.assertEqual(expected_config[key][k2], config[key][k2])
-    
+
     def test_config_no_white_space(self):
         base_path = os.getcwd()
         resource_path = os.path.join(base_path, 'resources')
@@ -204,7 +203,7 @@ class TestSetup(unittest.TestCase):
         self.assertFalse(config)
         self.assertFalse(filemanager)
         self.assertFalse(runmanager)
-    
+
     def test_config_bad_destination_endpoint(self):
         base_path = os.getcwd()
         resource_path = os.path.join(base_path, 'resources')
@@ -225,7 +224,7 @@ class TestSetup(unittest.TestCase):
         self.assertFalse(config)
         self.assertFalse(filemanager)
         self.assertFalse(runmanager)
-    
+
     def test_config_bad_source_path(self):
         base_path = os.getcwd()
         resource_path = os.path.join(base_path, 'resources')
@@ -246,7 +245,7 @@ class TestSetup(unittest.TestCase):
         self.assertFalse(config)
         self.assertFalse(filemanager)
         self.assertFalse(runmanager)
-    
+
     def test_config_config_doesnt_exist(self):
         base_path = os.getcwd()
         resource_path = os.path.join(base_path, 'resources')
@@ -267,7 +266,7 @@ class TestSetup(unittest.TestCase):
         self.assertFalse(config)
         self.assertFalse(filemanager)
         self.assertFalse(runmanager)
-    
+
     def test_config_invalid_config(self):
         base_path = os.getcwd()
         resource_path = os.path.join(base_path, 'resources')
@@ -288,7 +287,7 @@ class TestSetup(unittest.TestCase):
         self.assertFalse(config)
         self.assertFalse(filemanager)
         self.assertFalse(runmanager)
-    
+
     def test_config_no_config(self):
         base_path = os.getcwd()
         resource_path = os.path.join(base_path, 'resources')
@@ -309,7 +308,7 @@ class TestSetup(unittest.TestCase):
         self.assertFalse(config)
         self.assertFalse(filemanager)
         self.assertFalse(runmanager)
-    
+
     def test_bad_config_key(self):
         base_path = os.getcwd()
         resource_path = os.path.join(base_path, 'resources')
@@ -330,7 +329,7 @@ class TestSetup(unittest.TestCase):
         self.assertFalse(config)
         self.assertFalse(filemanager)
         self.assertFalse(runmanager)
-    
+
     def test_no_global(self):
         base_path = os.getcwd()
         resource_path = os.path.join(base_path, 'resources')

@@ -5,10 +5,10 @@ import shutil
 from filemanager import FileManager
 from models import DataFile
 
-class TestFileManagerSetup(unittest.TestCase):
+class TestFileManager(unittest.TestCase):
     
     def __init__(self, *args, **kwargs):
-        super(TestFileManagerSetup, self).__init__(*args, **kwargs)
+        super(TestFileManager, self).__init__(*args, **kwargs)
         self.mutex = threading.Lock()
 
     def test_filemanager_setup_no_sta(self):
