@@ -18,12 +18,14 @@ class TestYearSet(unittest.TestCase):
         ys.set_number = 99
         self.assertEqual(ys.set_number, 99)
 
-        ys.set_start_year = 101
-        self.assertEqual(ys.set_start_year, 100)
+        new_start_year = 101
+        ys.set_start_year = new_start_year
+        self.assertEqual(ys.set_start_year, new_start_year)
 
-        ys.set_end_year = 110
-        self.assertEqual(ys.set_end_year, 110)
-        self.assertEqual(ys.length, 10)
+        new_end_year = 110
+        ys.set_end_year = new_end_year
+        self.assertEqual(ys.set_end_year, new_end_year)
+        self.assertEqual(ys.length, new_end_year - new_start_year + 1)
 
         ys.status = SetStatus.COMPLETED
         self.assertEqual(ys.status, SetStatus.COMPLETED)
