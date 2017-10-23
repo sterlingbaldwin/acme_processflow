@@ -105,7 +105,7 @@ class E3SMDiags(object):
         else:
             return bool(len(contents) >= len(self.config['sets']))
 
-    def execute(self):
+    def execute(self, dryrun=False):
 
         # Check if the output already exists
         if self.postvalidate():

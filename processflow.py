@@ -347,7 +347,7 @@ def main():
         kill_event=thread_kill_event,
         mutex=mutex)
 
-    if config == -1:
+    if isinstance(config, int):
         print "Error in setup, exiting"
         return
     logging.info('Config setup complete')
@@ -509,7 +509,7 @@ def main():
                         emailaddr=config['global']['email'],
                         thread_list=thread_list)
                     if not started:
-                        sleep(30)
+                        sleep(5)
                     else:
                         print "Transfering additional files"
                 finishup(

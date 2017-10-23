@@ -128,7 +128,7 @@ class AMWGDiagnostic(object):
         else:
             return False
 
-    def execute(self):
+    def execute(self, dryrun=False):
         """
         Perform the actual work
         """
@@ -155,6 +155,7 @@ class AMWGDiagnostic(object):
                 end=self.end_year,
                 path=regrid_path)
             self.status = JobStatus.FAILED
+            return 0
         if not os.path.exists(self.config['test_path_climo']):
             print 'creating temp directory for amwg'
             os.makedirs(self.config['test_path_climo'])
@@ -212,8 +213,9 @@ class AMWGDiagnostic(object):
             batchfile.write(slurm_prefix)
             batchfile.write(cmd)
 
-        prev_dir = os.getcwd()
-        #os.chdir(output_path)
+        if dryrun:
+            self.status = JobStatus.COMPLETED
+            return 0
 
         slurm = Slurm()
         print 'submitting to queue {type}: {start:04d}-{end:04d}'.format(
@@ -221,7 +223,6 @@ class AMWGDiagnostic(object):
             start=self.start_year,
             end=self.end_year)
         self.job_id = slurm.batch(run_script, '--oversubscribe')
-        #os.chdir(prev_dir)
 
         status = slurm.showjob(self.job_id)
         self.status = StatusMap[status.get('JobState')]

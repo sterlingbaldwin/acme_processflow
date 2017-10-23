@@ -7,7 +7,10 @@ from peewee import *
 from models import DataFile
 from YearSet import YearSet
 from shutil import rmtree
+
 from filemanager import FileManager
+from runmanager import RunManager
+
 
 class TestSetup(unittest.TestCase):
     """

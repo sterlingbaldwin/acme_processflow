@@ -84,7 +84,7 @@ class Timeseries(object):
             'year_set': self.year_set
         })
 
-    def execute(self):
+    def execute(self, dryrun=False):
         """
         Calls ncclimo in a subprocess
         """
