@@ -2,6 +2,7 @@ import unittest
 import os
 import shutil
 import threading
+import logging
 
 from lib.util import transfer_directory
 from lib.events import Event_list
@@ -32,7 +33,7 @@ class TestTransfer(unittest.TestCase):
         for item in ['a', 'b', 'c', 'd']:
             self.assertTrue(item in contents)
         shutil.rmtree(project_path)
-    
+
     def test_transfer_file(self):
         source_file = {
             'remote_path': '/global/homes/s/sbaldwin/test_directory/test_file.txt',
@@ -47,7 +48,8 @@ class TestTransfer(unittest.TestCase):
             'destination_path': project_path,
             'src_email': 'baldwin32@llnl.gov',
             'display_event': threading.Event(),
-            'ui': False })
+            'ui': False
+        })
         transfer.execute(event=threading.Event())
         self.assertTrue(transfer.postvalidate())
         self.assertEqual(transfer.status, JobStatus.COMPLETED)
@@ -59,4 +61,3 @@ if __name__ == '__main__':
     unittest.main()
     if os.path.exists(project_path):
         shutil.rmtree(project_path)
-
