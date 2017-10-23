@@ -49,7 +49,7 @@ class TestTransfer(unittest.TestCase):
             'src_email': 'baldwin32@llnl.gov',
             'display_event': threading.Event(),
             'ui': False
-        })
+        }, event_list=Event_list())
         transfer.execute(event=threading.Event())
         self.assertTrue(transfer.postvalidate())
         self.assertEqual(transfer.status, JobStatus.COMPLETED)
