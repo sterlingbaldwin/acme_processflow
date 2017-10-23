@@ -48,7 +48,7 @@ class TestTransfer(unittest.TestCase):
             'src_email': 'baldwin32@llnl.gov',
             'display_event': threading.Event(),
             'ui': False })
-        transfer.execute()
+        transfer.execute(event=threading.Event())
         self.assertTrue(transfer.postvalidate())
         self.assertEqual(transfer.status, JobStatus.COMPLETED)
 
