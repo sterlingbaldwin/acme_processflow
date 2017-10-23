@@ -1,5 +1,4 @@
 #!/bin/bash
-FAILED=false
 PASSED=0
 TOTAL=10
 
@@ -9,7 +8,6 @@ if COVERAGE_FILE=.coverage_setup coverage run --source=.,lib,jobs --omit="lib/te
     let "PASSED+=1"
 else
     echo "setup test failed"
-    let "let FAILED=true"
 fi
 
 echo "--- testing YearSet ---"
@@ -18,7 +16,6 @@ if COVERAGE_FILE=.coverage_yearset coverage run --source=.,lib,jobs  --omit="lib
     let "PASSED+=1"
 else
     echo "YearSet test failed"
-    let "FAILED=true"
 fi
 
 echo "--- testing FileManager ---"
@@ -27,7 +24,6 @@ if COVERAGE_FILE=.coverage_filemanager coverage run --source=.,lib,jobs  --omit=
     let "PASSED+=1"
 else
     echo "filemanager test failed"
-    let "FAILED=true"
 fi
 
 echo "--- testing util ---"
@@ -36,7 +32,6 @@ if COVERAGE_FILE=.coverage_util coverage run --source=.,lib,jobs  --omit="lib/te
     let "PASSED+=1"
 else
     echo "util test failed"
-    let "FAILED=true"
 fi
 
 echo "--- testing slurm ---"
@@ -45,7 +40,6 @@ if COVERAGE_FILE=.coverage_slurm coverage run --source=.,lib,jobs  --omit="lib/t
     let "PASSED+=1"
 else
     echo "slurm test failed"
-    let "FAILED=true"
 fi
 
 echo "--- testing transfer ---"
@@ -54,7 +48,6 @@ if COVERAGE_FILE=.coverage_transfer coverage run --source=.,lib,jobs  --omit="li
     let "PASSED+=1"
 else
     echo "transfer test failed"
-    let "FAILED=true"
 fi
 
 echo "--- testing mailer ---"
@@ -63,7 +56,6 @@ if COVERAGE_FILE=.coverage_mailer coverage run --source=.,lib,jobs  --omit="lib/
     let "PASSED+=1"
 else
     echo "mailer test failed"
-    let "FAILED=true"
 fi
 
 echo "--- testing ncclimo ---"
@@ -72,7 +64,6 @@ if COVERAGE_FILE=.coverage_ncclimo coverage run --source=.,lib,jobs  --omit="lib
     let "PASSED+=1"
 else
     echo "ncclimo test failed"
-    let "FAILED=true"
 fi
 
 echo "--- testing timeseries ---"
@@ -81,7 +72,6 @@ if COVERAGE_FILE=.coverage_timeseries coverage run --source=.,lib,jobs  --omit="
     let "PASSED+=1"
 else
     echo "timeseries test failed"
-    let "FAILED=true"
 fi
 
 echo "--- testing amwg ---"
@@ -90,7 +80,6 @@ if COVERAGE_FILE=.coverage_amwg coverage run --source=.,lib,jobs  --omit="lib/te
     let "PASSED+=1"
 else
     echo "amwg test failed"
-    let "FAILED=true"
 fi
 
 coverage combine .coverage_amwg .coverage_timeseries .coverage_ncclimo .coverage_mailer .coverage_transfer .coverage_setup .coverage_util .coverage_yearset .coverage_filemanager .coverage_slurm
@@ -102,11 +91,10 @@ if [ -d /var/www/acme/acme-diags/baldwin32/htmlcov ]; then
     rm -rf /var/www/acme/acme-diags/baldwin32/htmlcov
 fi
 mv htmlcov /var/www/acme/acme-diags/baldwin32
-rm slurm-*
 
-echo $PASSED " out of " $TOTAL " modules passed their tests"
+echo $PASSED "out of" $TOTAL "modules passed their tests"
 
-if [ "$FAILED" ]; then
+if [ "$PASSED" != "$TOTAL" ]; then
     echo "One or more tests failed"
     exit 1
 else

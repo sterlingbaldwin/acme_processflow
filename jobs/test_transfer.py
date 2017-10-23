@@ -52,7 +52,7 @@ class TestTransfer(unittest.TestCase):
         }, event_list=Event_list())
         transfer.execute(event=threading.Event())
         self.assertTrue(transfer.postvalidate())
-        self.assertTrue(transfer.status == JobStatus.COMPLETED)
+        self.assertEqual(transfer.status.name, 'COMPLETED')
 
 
 if __name__ == '__main__':
