@@ -1,6 +1,6 @@
 #!/bin/bash
 PASSED=0
-TOTAL=10
+TOTAL=11
 
 echo "--- testing setup ---"
 if COVERAGE_FILE=.coverage_setup coverage run --source=.,lib,jobs --omit="lib/test*","*__init__.py","setup.py" lib/test_setup.py; then
@@ -82,7 +82,15 @@ else
     echo "amwg test failed"
 fi
 
-coverage combine .coverage_amwg .coverage_timeseries .coverage_ncclimo .coverage_mailer .coverage_transfer .coverage_setup .coverage_util .coverage_yearset .coverage_filemanager .coverage_slurm
+echo "--- testing runmanager ---"
+if COVERAGE_FILE=.coverage_runmanager coverage run --source=.,lib,jobs  --omit="lib/test*","*__init__.py","setup.py" lib/test_runmanager.py; then
+    echo "runmanager test passed"
+    let "PASSED+=1"
+else
+    echo "runmanager test failed"
+fi
+
+coverage combine .coverage_runmanager .coverage_amwg .coverage_timeseries .coverage_ncclimo .coverage_mailer .coverage_transfer .coverage_setup .coverage_util .coverage_yearset .coverage_filemanager .coverage_slurm
 coverage report
 coverage html
 coverage xml
