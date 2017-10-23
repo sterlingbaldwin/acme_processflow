@@ -215,6 +215,7 @@ Please add a space and run again.'''.format(num=line_index)
         print 'All data is local'
     else:
         print 'Additional data needed'
+
     logging.info("FileManager setup complete")
     logging.info(str(filemanager))
 
