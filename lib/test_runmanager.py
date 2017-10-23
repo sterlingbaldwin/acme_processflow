@@ -72,7 +72,32 @@ class TestRunManager(unittest.TestCase):
                 self.assertTrue('ncclimo' in job_names)
                 self.assertTrue('amwg' in job_names)
                 self.assertTrue('e3sm_diags' in job_names)
-
+    
+    def test_runmanager_write(self):
+        filemanager = FileManager(
+            database=os.path.join(self.project_path, 'test.db'),
+            types=['atm'],
+            sta=False,
+            mutex=self.mutex,
+            remote_endpoint=self.remote_endpoint,
+            remote_path=self.remote_path,
+            local_endpoint=self.local_endpoint)
+        runmanager = RunManager(
+            event_list=Event_list(),
+            output_path=self.output_path,
+            caseID=self.config['global']['experiment'],
+            scripts_path=self.run_scripts_path,
+            thread_list=[],
+            event=threading.Event())
+        runmanager.setup_job_sets(
+            set_frequency=[5, 10],
+            sim_start_year=int(self.config['global']['simulation_start_year']),
+            sim_end_year=int(self.config['global']['simulation_end_year']),
+            config=self.config,
+            filemanager=filemanager)
+        path = os.path.join(self.project_path, 'output', 'job_state.txt')
+        runmanager.write_job_sets(path)
+        self.assertTrue(os.path.exists(path))
 
 if __name__ == '__main__':
     unittest.main()

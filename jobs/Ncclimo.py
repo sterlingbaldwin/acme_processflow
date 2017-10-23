@@ -162,6 +162,10 @@ class Climo(object):
         """
         Post execution validation, also run before execution to determine if the output already extists
         """
+        set_start_year = self.config.get('start_year')
+        set_end_year = self.config.get('end_year')
+        climo_dir = self.config.get('climo_output_directory')
+        regrid_dir = self.config.get('regrid_output_directory')
         # First check the climo directory
         if not os.path.exists(climo_dir):
             return False
