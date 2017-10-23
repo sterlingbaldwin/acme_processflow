@@ -1,4 +1,4 @@
 #!/bin/bash
 
 hostname
-sleep 5
+sleep 50
