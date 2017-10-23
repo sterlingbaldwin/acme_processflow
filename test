@@ -6,91 +6,91 @@ TOTAL=10
 echo "--- testing setup ---"
 if COVERAGE_FILE=.coverage_setup coverage run --source=.,lib,jobs --omit="lib/test*","*__init__.py","setup.py" lib/test_setup.py; then
     echo "setup test passed"
-    $PASSED=$PASSED+1
+    let "PASSED+=1"
 else
     echo "setup test failed"
-    FAILED=true
+    let "let FAILED=true"
 fi
 
 echo "--- testing YearSet ---"
 if COVERAGE_FILE=.coverage_yearset coverage run --source=.,lib,jobs  --omit="lib/test*","*__init__.py","setup.py" lib/test_yearset.py; then
     echo "YearSet test passed"
-    $PASSED=$PASSED+1
+    let "PASSED+=1"
 else
     echo "YearSet test failed"
-    FAILED=true
+    let "FAILED=true"
 fi
 
 echo "--- testing FileManager ---"
 if COVERAGE_FILE=.coverage_filemanager coverage run --source=.,lib,jobs  --omit="lib/test*","*__init__.py","setup.py" lib/test_filemanager.py; then
     echo "filemanager test passed"
-    $PASSED=$PASSED+1
+    let "PASSED+=1"
 else
     echo "filemanager test failed"
-    FAILED=true
+    let "FAILED=true"
 fi
 
 echo "--- testing util ---"
 if COVERAGE_FILE=.coverage_util coverage run --source=.,lib,jobs  --omit="lib/test*","*__init__.py","setup.py" lib/test_util.py; then
     echo "util test passed"
-    $PASSED=$PASSED+1
+    let "PASSED+=1"
 else
     echo "util test failed"
-    FAILED=true
+    let "FAILED=true"
 fi
 
 echo "--- testing slurm ---"
 if COVERAGE_FILE=.coverage_slurm coverage run --source=.,lib,jobs  --omit="lib/test*","*__init__.py","setup.py" lib/test_slurm.py; then
     echo "slurm test passed"
-    $PASSED=$PASSED+1
+    let "PASSED+=1"
 else
     echo "slurm test failed"
-    FAILED=true
+    let "FAILED=true"
 fi
 
 echo "--- testing transfer ---"
 if COVERAGE_FILE=.coverage_transfer coverage run --source=.,lib,jobs  --omit="lib/test*","*__init__.py","setup.py" jobs/test_transfer.py; then
     echo "transfer test passed"
-    $PASSED=$PASSED+1
+    let "PASSED+=1"
 else
     echo "transfer test failed"
-    FAILED=true
+    let "FAILED=true"
 fi
 
 echo "--- testing mailer ---"
 if COVERAGE_FILE=.coverage_mailer coverage run --source=.,lib,jobs  --omit="lib/test*","*__init__.py","setup.py" lib/test_mailer.py; then
     echo "mailer test passed"
-    $PASSED=$PASSED+1
+    let "PASSED+=1"
 else
     echo "mailer test failed"
-    FAILED=true
+    let "FAILED=true"
 fi
 
 echo "--- testing ncclimo ---"
 if COVERAGE_FILE=.coverage_ncclimo coverage run --source=.,lib,jobs  --omit="lib/test*","*__init__.py","setup.py" jobs/test_ncclimo.py; then
     echo "ncclimo test passed"
-    $PASSED=$PASSED+1
+    let "PASSED+=1"
 else
     echo "ncclimo test failed"
-    FAILED=true
+    let "FAILED=true"
 fi
 
 echo "--- testing timeseries ---"
 if COVERAGE_FILE=.coverage_timeseries coverage run --source=.,lib,jobs  --omit="lib/test*","*__init__.py","setup.py" jobs/test_timeseries.py; then
     echo "timeseries test passed"
-    $PASSED=$PASSED+1
+    let "PASSED+=1"
 else
     echo "timeseries test failed"
-    FAILED=true
+    let "FAILED=true"
 fi
 
 echo "--- testing amwg ---"
 if COVERAGE_FILE=.coverage_amwg coverage run --source=.,lib,jobs  --omit="lib/test*","*__init__.py","setup.py" jobs/test_amwg.py; then
     echo "amwg test passed"
-    $PASSED=$PASSED+1
+    let "PASSED+=1"
 else
     echo "amwg test failed"
-    FAILED=true
+    let "FAILED=true"
 fi
 
 coverage combine .coverage_amwg .coverage_timeseries .coverage_ncclimo .coverage_mailer .coverage_transfer .coverage_setup .coverage_util .coverage_yearset .coverage_filemanager .coverage_slurm

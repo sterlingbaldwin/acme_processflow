@@ -1,7 +1,7 @@
 import os
 import unittest
 
-from Ncclimo import Ncclimo
+from Ncclimo import Climo as Ncclimo
 from configobj import ConfigObj
 from JobStatus import JobStatus
 
