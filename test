@@ -3,6 +3,7 @@ PASSED=0
 TOTAL=0
 BRANCH="$(git name-rev --name-only HEAD)"
 echo "running tests for branch $BRANCH"
+
 if [ $BRANCH == "master" ]; then
     let "TOTAL+=1"
     if COVERAGE_FILE=.coverage_processflow coverage run --source=.,lib,jobs --omit="lib/test*","*__init__.py","setup.py" test_processflow.py; then

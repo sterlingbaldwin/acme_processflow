@@ -167,6 +167,7 @@ class E3SMDiags(object):
 
         cmd = 'acme_diags_driver.py -p {template}'.format(
             template=template_out)
+
         slurm_args_str = ['#SBATCH {value}\n'.format(value=v) for k, v in self.slurm_args.items()]
         slurm_prefix = ''.join(slurm_args_str)
         with open(run_script, 'w') as batchfile:
