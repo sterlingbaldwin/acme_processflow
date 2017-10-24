@@ -1,96 +1,34 @@
 #!/bin/bash
 PASSED=0
-TOTAL=11
-
-echo "--- testing setup ---"
-if COVERAGE_FILE=.coverage_setup coverage run --source=.,lib,jobs --omit="lib/test*","*__init__.py","setup.py" lib/test_setup.py; then
-    echo "setup test passed"
-    let "PASSED+=1"
-else
-    echo "setup test failed"
+TOTAL=0
+BRANCH="$(git name-rev --name-only HEAD)"
+echo "running tests for branch $BRANCH"
+if [ $BRANCH == "master" ]; then
+    let "TOTAL+=1"
+    if COVERAGE_FILE=.coverage_processflow coverage run --source=.,lib,jobs --omit="lib/test*","*__init__.py","setup.py" test_processflow.py; then
+        echo "main processflow tests passed"
+        let "PASSED+=1"
+    else
+        echo "processflow tests failed"
+    fi
 fi
 
-echo "--- testing YearSet ---"
-if COVERAGE_FILE=.coverage_yearset coverage run --source=.,lib,jobs  --omit="lib/test*","*__init__.py","setup.py" lib/test_yearset.py; then
-    echo "YearSet test passed"
-    let "PASSED+=1"
-else
-    echo "YearSet test failed"
-fi
+tests=("lib/test_setup.py" "lib/test_yearset.py" "lib/test_filemanager.py" "lib/test_util.py" "lib/test_slurm.py" "jobs/test_transfer.py" "lib/test_mailer.py" "jobs/test_ncclimo.py" "jobs/test_timeseries.py" "jobs/test_amwg.py" "lib/test_runmanager.py")
 
-echo "--- testing FileManager ---"
-if COVERAGE_FILE=.coverage_filemanager coverage run --source=.,lib,jobs  --omit="lib/test*","*__init__.py","setup.py" lib/test_filemanager.py; then
-    echo "filemanager test passed"
-    let "PASSED+=1"
-else
-    echo "filemanager test failed"
-fi
+for test in "${tests[@]}" 
+do
+    let "TOTAL+=1"
+    tname=$(python -c "name='${test}';tname=name.split('/')[-1].split('.')[0];print tname")
+    echo "--- testing ${tname} ---"
+    if COVERAGE_FILE=.coverage_$tname coverage run --source=.,lib,jobs --omit="lib/test*","*__init__.py","setup.py" $test; then
+        echo "${tname} passed"
+        let "PASSED+=1"
+    else
+        echo "${tname} failed"
+    fi
+done
 
-echo "--- testing util ---"
-if COVERAGE_FILE=.coverage_util coverage run --source=.,lib,jobs  --omit="lib/test*","*__init__.py","setup.py" lib/test_util.py; then
-    echo "util test passed"
-    let "PASSED+=1"
-else
-    echo "util test failed"
-fi
-
-echo "--- testing slurm ---"
-if COVERAGE_FILE=.coverage_slurm coverage run --source=.,lib,jobs  --omit="lib/test*","*__init__.py","setup.py" lib/test_slurm.py; then
-    echo "slurm test passed"
-    let "PASSED+=1"
-else
-    echo "slurm test failed"
-fi
-
-echo "--- testing transfer ---"
-if COVERAGE_FILE=.coverage_transfer coverage run --source=.,lib,jobs  --omit="lib/test*","*__init__.py","setup.py" jobs/test_transfer.py; then
-    echo "transfer test passed"
-    let "PASSED+=1"
-else
-    echo "transfer test failed"
-fi
-
-echo "--- testing mailer ---"
-if COVERAGE_FILE=.coverage_mailer coverage run --source=.,lib,jobs  --omit="lib/test*","*__init__.py","setup.py" lib/test_mailer.py; then
-    echo "mailer test passed"
-    let "PASSED+=1"
-else
-    echo "mailer test failed"
-fi
-
-echo "--- testing ncclimo ---"
-if COVERAGE_FILE=.coverage_ncclimo coverage run --source=.,lib,jobs  --omit="lib/test*","*__init__.py","setup.py" jobs/test_ncclimo.py; then
-    echo "ncclimo test passed"
-    let "PASSED+=1"
-else
-    echo "ncclimo test failed"
-fi
-
-echo "--- testing timeseries ---"
-if COVERAGE_FILE=.coverage_timeseries coverage run --source=.,lib,jobs  --omit="lib/test*","*__init__.py","setup.py" jobs/test_timeseries.py; then
-    echo "timeseries test passed"
-    let "PASSED+=1"
-else
-    echo "timeseries test failed"
-fi
-
-echo "--- testing amwg ---"
-if COVERAGE_FILE=.coverage_amwg coverage run --source=.,lib,jobs  --omit="lib/test*","*__init__.py","setup.py" jobs/test_amwg.py; then
-    echo "amwg test passed"
-    let "PASSED+=1"
-else
-    echo "amwg test failed"
-fi
-
-echo "--- testing runmanager ---"
-if COVERAGE_FILE=.coverage_runmanager coverage run --source=.,lib,jobs  --omit="lib/test*","*__init__.py","setup.py" lib/test_runmanager.py; then
-    echo "runmanager test passed"
-    let "PASSED+=1"
-else
-    echo "runmanager test failed"
-fi
-
-coverage combine .coverage_runmanager .coverage_amwg .coverage_timeseries .coverage_ncclimo .coverage_mailer .coverage_transfer .coverage_setup .coverage_util .coverage_yearset .coverage_filemanager .coverage_slurm
+coverage combine .coverage_*
 coverage report
 coverage html
 coverage xml
@@ -102,7 +40,6 @@ mv htmlcov /var/www/acme/acme-diags/baldwin32
 rm slurm-*
 
 echo $PASSED "out of" $TOTAL "modules passed their tests"
-
 
 if [ "$PASSED" != "$TOTAL" ]; then
     echo "One or more tests failed"
