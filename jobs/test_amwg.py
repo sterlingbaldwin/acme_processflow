@@ -85,8 +85,12 @@ class TestAMWGDiagnostic(unittest.TestCase):
         self.assertFalse(amwg.postvalidate())
 
     def test_AMWG_no_file_list(self):
+        """
+        Test that when given a directory with no files, the job
+        marks itself as FAILED and exits
+        """
         start_year = 51
-        end_year = 55
+        end_year = 56
         year_set_string = '{start:04d}-{end:04d}'.format(
             start=start_year,
             end=end_year)
@@ -113,7 +117,7 @@ class TestAMWGDiagnostic(unittest.TestCase):
             os.getcwd(),
             'resources')
         regrid_path = os.path.join(
-            self.config['global']['output_path'], 
+            self.config['global']['output_path'],
             'climo_regrid')
         output_path = os.path.join(
             self.config['global']['output_path'],
@@ -150,7 +154,7 @@ class TestAMWGDiagnostic(unittest.TestCase):
             config=config,
             event_list=Event_list())
         self.assertEqual(amwg.status.name, 'VALID')
-        amwg.execute(dryrun=True)
+        amwg.execute(dryrun=False)
         self.assertEqual(amwg.status.name, 'FAILED')
         self.assertFalse(amwg.postvalidate())
 
