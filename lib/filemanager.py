@@ -138,7 +138,7 @@ class FileManager(object):
                         'input',
                         _type,
                         name)
-                    remote_path = os.path.join(self.remote_path, name)
+                    remote_path = os.path.join(self.remote_path, 'run', name)
                     newfiles = self._add_file(
                         newfiles=newfiles,
                         name=name,
@@ -238,7 +238,7 @@ class FileManager(object):
                         _type,
                         '{year:04d}-01-01-00000'.format(year=self.start_year+1))
                 elif 'streams' in _type:
-                    remote_path = self.remote_path
+                    remote_path = os.path.join(self.remote_path, 'run')
                 else:
                     remote_path = os.path.join(self.remote_path, 'archive', _type, 'hist')
                 print 'Querying globus for {}'.format(_type)
