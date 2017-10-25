@@ -30,6 +30,7 @@ class RunManager(object):
         self.monitor_thread = None
         self.thread_list = thread_list
         self.kill_event = event
+        self._dryrun = False
         self.scripts_path = scripts_path
         if not os.path.exists(self.scripts_path):
             os.makedirs(self.scripts_path)
@@ -639,10 +640,9 @@ class RunManager(object):
                         continue
                     # If the job is valid, start it
                     if job.status == JobStatus.VALID:
-                        job.execute()
+                        job.execute(dryrun=self._dryrun)
                         self.running_jobs.append(job)
                         self.monitor_running_jobs()
-
 
     def monitor_running_jobs(self):
         slurm = Slurm()
@@ -826,3 +826,11 @@ class RunManager(object):
             if job_set.status != SetStatus.COMPLETED:
                 return 0
         return 1
+
+    @property
+    def dryrun(self):
+        return self._dryrun
+
+    @dryrun.setter
+    def dryrun(self, _dryrun):
+        self._dryrun = _dryrun

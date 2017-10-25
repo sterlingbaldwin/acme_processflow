@@ -35,22 +35,22 @@ class Slurm(object):
         job_id = int(out[-1])
         return job_id
 
-    def run(self, cmd, sargs=False):
-        """
-        Submit to slurm controller in interactive mode
+    # def run(self, cmd, sargs=False):
+    #     """
+    #     Submit to slurm controller in interactive mode
 
-        NOTE: THIS IS A BLOCKING CALL. Control will not return until the command completes
+    #     NOTE: THIS IS A BLOCKING CALL. Control will not return until the command completes
 
-        Parameters:
-            cmd (str): the command to run
-        Returns:
-            the output of the job (str)
-        """
-        out, err = self._submit('srun', cmd, sargs)
-        if 'error' in out:
-            return False, err
-        else:
-            return True, out
+    #     Parameters:
+    #         cmd (str): the command to run
+    #     Returns:
+    #         the output of the job (str)
+    #     """
+    #     out, err = self._submit('srun', cmd, sargs)
+    #     if 'error' in out:
+    #         return False, err
+    #     else:
+    #         return True, out
 
     def _submit(self, subtype, cmd, sargs=False):
 
@@ -70,7 +70,7 @@ class Slurm(object):
             raise Exception('SLURM ERROR: ' + err)
 
         return out, err
-     
+
     def showjob(self, jobid):
         """
         A wrapper around scontrol show job
@@ -191,7 +191,7 @@ class Slurm(object):
             raise Exception('SLURM ERROR: Transport endpoint is not connected')
 
         jobinfo = self.showjob(jobid)
-        if jobinfo['JobState'] == 'CANCELLED':
+        if jobinfo['JobState'] in ['CANCELLED', 'COMPLETED', 'COMPLETING']:
             return True
         else:
             return False

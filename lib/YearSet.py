@@ -39,6 +39,9 @@ class YearSet(object):
     @property
     def jobs(self):
         return self._jobs
+
+    def get_job_names(self):
+        return [x.type for x in self._jobs]
     
     @property
     def status(self):
