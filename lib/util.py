@@ -293,7 +293,7 @@ def format_debug(e):
         lineno=traceback.tb_lineno(sys.exc_info()[2]),
         stack=traceback.print_tb(tb))
 
-def write_human_state(event_list, job_sets, mutex, state_path='run_state.txt', ui_mode=True, print_file_list=False, types=None):
+def write_human_state(event_list, job_sets, mutex, state_path='run_state.txt', print_file_list=False):
     """
     Writes out a human readable representation of the current execution state
 
@@ -364,6 +364,7 @@ def write_human_state(event_list, job_sets, mutex, state_path='run_state.txt', u
             os.makedirs(head)
         with open(file_list_path, 'w') as fp:
             mutex.acquire(False)
+            types = [x.datatype for x in DataFile.select(DataFile.datatype).distinct()]
             try:
                 for _type in types:
                     fp.write(_type + ':\n')

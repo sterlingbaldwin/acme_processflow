@@ -14,7 +14,7 @@ class TestFileManager(unittest.TestCase):
     def test_transfer_directory(self):
         project_path = os.path.abspath(os.path.join('..', 'testproject_transfer'))
         transfer_directory(
-            source_endpoint='b9d02196-6d04-11e5-ba46-22000b92c6ec',
+            source_endpoint='9d6d994a-6d04-11e5-ba46-22000b92c6ec',
             destination_endpoint='a871c6de-2acd-11e7-bc7c-22000b9a448b',
             src_path='/global/homes/s/sbaldwin/test_directory',
             dst_path=project_path,
@@ -67,7 +67,7 @@ class TestFileManager(unittest.TestCase):
                 'sets': ['3', '4', '5', '7', '13']}, 
             'transfer': {
                 'destination_endpoint': 'a871c6de-2acd-11e7-bc7c-22000b9a448b', 
-                'source_endpoint': 'b9d02196-6d04-11e5-ba46-22000b92c6ec'}, 
+                'source_endpoint': '9d6d994a-6d04-11e5-ba46-22000b92c6ec'}, 
             'amwg': {
                 'diag_home': '/p/cscratch/acme/amwg/amwg_diag', 
                 'host_directory': 'amwg'},
@@ -122,7 +122,7 @@ class TestFileManager(unittest.TestCase):
                 'sets': ['3', '4', '5', '7', '13']}, 
             'transfer': {
                 'destination_endpoint': 'a871c6de-2acd-11e7-bc7c-22000b9a448b', 
-                'source_endpoint': 'b9d02196-6d04-11e5-ba46-22000b92c6ec'}, 
+                'source_endpoint': '9d6d994a-6d04-11e5-ba46-22000b92c6ec'}, 
             'amwg': {
                 'diag_home': '/p/cscratch/acme/amwg/amwg_diag', 
                 'host_directory': 'amwg'},
