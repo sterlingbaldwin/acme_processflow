@@ -191,7 +191,7 @@ class Slurm(object):
             raise Exception('SLURM ERROR: Transport endpoint is not connected')
 
         jobinfo = self.showjob(jobid)
-        if jobinfo['JobState'] == 'CANCELLED':
+        if jobinfo['JobState'] in ['CANCELLED', 'COMPLETED', 'COMPLETING']:
             return True
         else:
             return False

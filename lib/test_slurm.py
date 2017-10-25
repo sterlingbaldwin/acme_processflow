@@ -24,7 +24,7 @@ class TestSlurm(unittest.TestCase):
                 self.assertTrue(item['STATE'] in ['PD', 'R'])
                 break
         self.assertTrue(in_queue)
-        self.assertTrue(slurm.cancel(job_id))
+        slurm.cancel(job_id)
     
     def test_shownode(self):
         slurm = Slurm()
