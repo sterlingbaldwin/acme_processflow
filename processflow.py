@@ -65,6 +65,7 @@ def main(test=False, **kwargs):
 
     # A flag to tell if we have all the data locally
     all_data = False
+    all_data_remote = False
 
     # get a globus client
     client = get_client()
@@ -120,13 +121,12 @@ def main(test=False, **kwargs):
     all_data = filemanager.all_data_local()
     if not all_data:
         filemanager.update_remote_status(client)
+        all_data_remote = filemanager.all_data_remote()
     write_human_state(
         event_list=event_list,
         job_sets=runmanager.job_sets,
         state_path=state_path,
-        ui_mode=config['global'].get('ui'),
         print_file_list=config['global'].get('print_file_list'),
-        types=filemanager.types,
         mutex=mutex)
 
     dryrun = config['global'].get('dry_run')
@@ -137,9 +137,7 @@ def main(test=False, **kwargs):
             event_list=event_list,
             job_sets=job_sets,
             state_path=state_path,
-            ui_mode=config['global'].get('ui'),
             print_file_list=config['global'].get('print_file_list'),
-            types=filemanager.types,
             mutex=mutex)
         if config['global'].get('ui'):
             sleep(50)
@@ -193,32 +191,38 @@ def main(test=False, **kwargs):
         print "Current status can be found at {}".format(state_path)
         while True:
             # Check the remote status once every 5 minutes
-            if not config.get('global').get('no_monitor', False) \
-            and loop_count == remote_check_delay:
-                all_data = filemanager.all_data_local()
-                if not all_data:
-                    print 'Updating remote status'
-                    filemanager.update_remote_status(client)
-                    filemanager.update_local_status()
-                    loop_count = 0
+            if loop_count == remote_check_delay:
+                loop_count = 0
+                if not config.get('global').get('no_monitor', False):
+                    if not all_data_remote:
+                        all_data_remote = filemanager.all_data_remote()
+                    if not all_data_remote:
+                        print 'Updating remote status'
+                        filemanager.update_remote_status(client)
+                    if not all_data:
+                        all_data = filemanager.all_data_local()
+                    if not all_data or not all_data_remote:
+                        print 'Updating local status'
+                        filemanager.update_local_status()
             # check the local status every 10 seconds
-            if loop_count == local_check_delay \
-            and not all_data:
-                all_data = filemanager.all_data_local()
+            if loop_count == local_check_delay:
+                if not all_data:
+                    all_data = filemanager.all_data_local()
+                else:
+                    print 'All data local, turning off remote checks'
                 if not all_data \
-                and filemanager.active_transfers < 2 \
                 and not config['global']['no_monitor']:
-                    if filemanager.transfer_needed(
+                    transfer_started = filemanager.transfer_needed(
                         event_list=event_list,
                         event=thread_kill_event,
                         remote_endpoint=config['transfer']['source_endpoint'],
                         ui=config['global']['ui'],
                         display_event=display_event,
                         emailaddr=config['global']['email'],
-                        thread_list=thread_list):
-                            print 'starting file transfer'
-                if all_data:
-                    print 'All data local, turning off remote checks'
+                        thread_list=thread_list)
+                    if transfer_started:
+                        print 'starting file transfer'
+
             filemanager.check_year_sets(runmanager.job_sets)
             runmanager.start_ready_job_sets()
             runmanager.monitor_running_jobs()
@@ -226,9 +230,7 @@ def main(test=False, **kwargs):
                 event_list=event_list,
                 job_sets=runmanager.job_sets,
                 state_path=state_path,
-                ui_mode=config.get('global').get('ui'),
                 print_file_list=config.get('global').get('print_file_list'),
-                types=filemanager.types,
                 mutex=mutex)
             status = runmanager.is_all_done()
             if status >= 0:
@@ -258,12 +260,20 @@ def main(test=False, **kwargs):
                     display_event=display_event,
                     thread_list=thread_list,
                     kill_event=thread_kill_event)
+                # SUCCESS EXIT
                 return 0
             sleep(5)
             loop_count += 1
     except KeyboardInterrupt as e:
-        print_message('----- KEYBOARD INTERUPT -----')
+        print_message('----- KEYBOARD INTERRUPT -----')
         print_message('----- cleaning up threads ---', 'ok')
+        event_list.push(message="Exiting due to keyboard interrupt")
+        write_human_state(
+            event_list=event_list,
+            job_sets=runmanager.job_sets,
+            state_path=state_path,
+            print_file_list=True,
+            mutex=mutex)
         display_event.set()
         thread_kill_event.set()
         for thread in thread_list:
@@ -273,6 +283,7 @@ if __name__ == "__main__":
     if sys.argv[1] == 'test':
         config_path = os.path.join(os.getcwd(), 'tests', 'test_run_no_sta.cfg')
         testargs = ['-c', config_path, '-n', '-f']
-        main(test=True, testargs=testargs)
+        ret = main(test=True, testargs=testargs)
     else:
-        main()
+        ret = main()
+    sys.exit(ret)

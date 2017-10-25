@@ -347,6 +347,18 @@ class FileManager(object):
             self.mutex.release()
         return True
 
+    def all_data_remote(self):
+        self.mutex.acquire()
+        try:
+            for data in DataFile.select():
+                if data.remote_status != filestatus['EXISTS']:
+                    return False
+        except Exception as e:
+            print_debug(e)
+        finally:
+            self.mutex.release()
+        return True
+
     def transfer_needed(self, event_list, event, remote_endpoint, ui, display_event, emailaddr, thread_list):
         """
         Start a transfer job for any files that arent local, but do exist remotely
@@ -411,14 +423,13 @@ class FileManager(object):
         transfer = Transfer(
             config=transfer_config,
             event_list=event_list)
-        print 'staring transfer for:'
+        print 'starting transfer for:'
         transfer_names = [x['name'] for x in transfer.file_list]
         for file in transfer.file_list:
-            print file['name']
+            print '   ' + file['name']
             logging.info(file['name'])
         self.mutex.acquire()
         try:
-            print 'should be updating local status'
             DataFile.update(
                 local_status=filestatus['IN_TRANSIT']
             ).where(
@@ -427,7 +438,7 @@ class FileManager(object):
             print 'following files are in transit'
             for df in DataFile.select():
                 if df.local_status == filestatus['IN_TRANSIT']:
-                    print df.name
+                    print '   ' + df.name
         except Exception as e:
             print_debug(e)
             return False
