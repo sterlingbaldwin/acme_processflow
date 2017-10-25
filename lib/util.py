@@ -30,31 +30,6 @@ from string import Formatter
 from slurm import Slurm
 from models import DataFile
 
-def cleanup(config):
-    """
-    Clean up temp files created during the run
-    """
-    if config.get('global').get('no_cleanup'):
-        return
-    try:
-        archive_path = os.path.join(
-            config.get('global').get('output_path'),
-            'script_archive',
-            time.strftime("%Y-%m-%d-%I-%M"))
-        if not os.path.exists(archive_path):
-            os.makedirs(archive_path)
-        run_script_path = config.get('global').get('run_scripts_path')
-        if os.path.exists(run_script_path):
-            while os.path.exists(archive_path):
-                archive_path = archive_path[:-1] + str(int(archive_path[-1]) + 1)
-            move(run_script_path, archive_path)
-            move(config['global']['log_path'], archive_path)
-            if config['global'].get('error_path'):
-                move(config['global']['error_path'], archive_path)
-    except Exception as e:
-        logging.error(format_debug(e))
-        logging.error('Error archiving run_scripts directory')
-
 def transfer_directory(**kwargs):
     """
     Transfer all the contents from source_endpoint:src_path to destination_endpoint:dst_path
@@ -222,7 +197,11 @@ def setup_globus(endpoints, no_ui=False, **kwargs):
         for endpoint in endpoints:
             msg = 'activating endpoint {}'.format(endpoint)
             logging.info(msg)
-            r = client.endpoint_autoactivate(endpoint, if_expires_in=3600)
+            try:
+                r = client.endpoint_autoactivate(endpoint, if_expires_in=3600)
+            except Exception as e:
+                print_debug(e)
+                return False
             logging.info(r['code'])
             if r["code"] == "AutoActivationFailed":
                 activated = False
@@ -279,13 +258,12 @@ def path_exists(config_items):
         if type(options) != dict:
             continue
         for key, val in options.items():
-            if key == 'output_pattern':
-                continue
             if not type(val) == str:
                 continue
             if val.endswith('.nc') and not os.path.exists(val):
                 print "File {key}: {value} does not exist, exiting.".format(key=key, value=val)
-                sys.exit(1)
+                return False
+    return True
 
 def cmd_exists(cmd):
     return any(os.access(os.path.join(path, cmd), os.X_OK) for path in os.environ["PATH"].split(os.pathsep))
@@ -315,7 +293,7 @@ def format_debug(e):
         lineno=traceback.tb_lineno(sys.exc_info()[2]),
         stack=traceback.print_tb(tb))
 
-def write_human_state(event_list, job_sets, mutex, state_path='run_state.txt', ui_mode=True, print_file_list=False, types=None):
+def write_human_state(event_list, job_sets, mutex, state_path='run_state.txt', print_file_list=False):
     """
     Writes out a human readable representation of the current execution state
 
@@ -386,6 +364,7 @@ def write_human_state(event_list, job_sets, mutex, state_path='run_state.txt', u
             os.makedirs(head)
         with open(file_list_path, 'w') as fp:
             mutex.acquire(False)
+            types = [x.datatype for x in DataFile.select(DataFile.datatype).distinct()]
             try:
                 for _type in types:
                     fp.write(_type + ':\n')
@@ -458,13 +437,13 @@ def render(variables, input_path, output_path, delimiter='%%'):
     except IOError as e:
         print 'unable to open input file: {}'.format(input_path)
         print_debug(e)
-        return
+        return False
     try:
         outfile = open(output_path, 'w')
     except IOError as e:
         print 'unable to open output file: {}'.format(output_path)
         print_debug(e)
-        return
+        return False
 
     for line in infile.readlines():
         rendered_string = ''
@@ -486,6 +465,7 @@ def render(variables, input_path, output_path, delimiter='%%'):
         else:
             rendered_string = line
         outfile.write(rendered_string)
+    return True
 
 def create_symlink_dir(src_dir, src_list, dst):
     """

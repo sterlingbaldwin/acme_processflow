@@ -34,6 +34,17 @@ class FileManager(object):
     Manage all files required by jobs
     """
     def __init__(self, database, types, sta=False, **kwargs):
+        """
+        Parameters:
+            mutex (theading.Lock) the mutext for accessing the database
+            sta (bool) is this run short term archived or not (1) yes (0) no
+            types (list(str)): A list of strings of datatypes
+            database (str): the path to where to create the sqlite database file
+            remote_endpoint (str): the Globus UUID for the remote endpoint
+            remote_path (str): the base directory to search for this runs model output
+            local_endpoint (str): The Globus UUID for the local endpoint
+            local_path (str): the local project path
+        """
         self.mutex = kwargs['mutex']
         self.sta = sta
         self.types = types if isinstance(types, list) else [types]
@@ -82,7 +93,6 @@ class FileManager(object):
         Parameters:
             simstart (int): the start year of the simulation,
             simend (int): the end year of the simulation,
-            types (list(str)): the list of file types to add, must be members of file_type_map,
             experiment (str): the name of the experiment 
                 ex: 20170915.beta2.A_WCYCL1850S.ne30_oECv3_ICG.edison
         """
@@ -128,7 +138,7 @@ class FileManager(object):
                         'input',
                         _type,
                         name)
-                    remote_path = os.path.join(self.remote_path, name)
+                    remote_path = os.path.join(self.remote_path, 'run', name)
                     newfiles = self._add_file(
                         newfiles=newfiles,
                         name=name,
@@ -228,7 +238,7 @@ class FileManager(object):
                         _type,
                         '{year:04d}-01-01-00000'.format(year=self.start_year+1))
                 elif 'streams' in _type:
-                    remote_path = self.remote_path
+                    remote_path = os.path.join(self.remote_path, 'run')
                 else:
                     remote_path = os.path.join(self.remote_path, 'archive', _type, 'hist')
                 print 'Querying globus for {}'.format(_type)
@@ -309,10 +319,15 @@ class FileManager(object):
             datafiles = DataFile.select().where(
                 DataFile.local_status == filestatus['NOT_EXIST'])
             for datafile in datafiles:
+                should_save = False
                 if os.path.exists(datafile.local_path):
                     local_size = os.path.getsize(datafile.local_path)
                     if local_size == datafile.remote_size:
                         datafile.local_status = filestatus['EXISTS']
+                        datafile.local_size = local_size
+                        should_save = True
+                    if local_size != datafile.local_size \
+                    or should_save:
                         datafile.local_size = local_size
                         datafile.save()
         except Exception as e:
@@ -325,6 +340,18 @@ class FileManager(object):
         try:
             for data in DataFile.select():
                 if data.local_status != filestatus['EXISTS']:
+                    return False
+        except Exception as e:
+            print_debug(e)
+        finally:
+            self.mutex.release()
+        return True
+
+    def all_data_remote(self):
+        self.mutex.acquire()
+        try:
+            for data in DataFile.select():
+                if data.remote_status != filestatus['EXISTS']:
                     return False
         except Exception as e:
             print_debug(e)
@@ -396,14 +423,13 @@ class FileManager(object):
         transfer = Transfer(
             config=transfer_config,
             event_list=event_list)
-        print 'staring transfer for:'
+        print 'starting transfer for:'
         transfer_names = [x['name'] for x in transfer.file_list]
         for file in transfer.file_list:
-            print file['name']
+            print '   ' + file['name']
             logging.info(file['name'])
         self.mutex.acquire()
         try:
-            print 'should be updating local status'
             DataFile.update(
                 local_status=filestatus['IN_TRANSIT']
             ).where(
@@ -412,7 +438,7 @@ class FileManager(object):
             print 'following files are in transit'
             for df in DataFile.select():
                 if df.local_status == filestatus['IN_TRANSIT']:
-                    print df.name
+                    print '   ' + df.name
         except Exception as e:
             print_debug(e)
             return False

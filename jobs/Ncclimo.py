@@ -38,12 +38,6 @@ class Climo(object):
         self.start_time = None
         self.end_time = None
         self.output_path = None
-        self.outputs = {
-            'status': self.status,
-            'climos': '',
-            'regrid': '',
-            'console_output': ''
-        }
         self.inputs = {
             'start_year': '',
             'end_year': '',
@@ -74,24 +68,30 @@ class Climo(object):
         for i in config:
             if i in self.inputs:
                 self.config[i] = config.get(i)
-        self.config['output_directory'] = self.config['regrid_output_directory']
-        self.output_path = self.config['regrid_output_directory']
         all_inputs = True
         for i in self.inputs:
             if i not in self.config:
                 all_inputs = False
                 message = 'Argument {} missing for Ncclimo, prevalidation failed'.format(i)
                 self.event_list.push(message=message)
+                print message
                 break
+        if all_inputs:
+            self.status = JobStatus.VALID
+        else:
+            JobStatus.INVALID
+            return 0
+        self.config['output_directory'] = self.config['regrid_output_directory']
+        self.output_path = self.config['regrid_output_directory']
 
-        self.status = JobStatus.VALID if all_inputs else JobStatus.INVALID
+        
         if not os.path.exists(self.config.get('run_scripts_path')):
             os.makedirs(self.config.get('run_scripts_path'))
         if self.year_set == 0:
             self.status = JobStatus.INVALID
         return 0
 
-    def execute(self):
+    def execute(self, dryrun=False):
         """
         Calls ncclimo in a subprocess
         """
@@ -137,6 +137,10 @@ class Climo(object):
             batchfile.write(slurm_prefix)
             batchfile.write(slurm_command)
 
+        if dryrun:
+            self.status = JobStatus.COMPLETED
+            return 0
+
         slurm = Slurm()
         print 'submitting to queue {type}: {start:04d}-{end:04d}'.format(
             type=self.type,
@@ -162,13 +166,6 @@ class Climo(object):
         set_end_year = self.config.get('end_year')
         climo_dir = self.config.get('climo_output_directory')
         regrid_dir = self.config.get('regrid_output_directory')
-        if not set_start_year or \
-           not set_end_year or \
-           not climo_dir or \
-           not regrid_dir:
-            self.status = JobStatus.INVALID
-            return False
-
         # First check the climo directory
         if not os.path.exists(climo_dir):
             return False
