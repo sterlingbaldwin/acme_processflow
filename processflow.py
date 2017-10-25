@@ -184,7 +184,7 @@ def main(test=False, **kwargs):
     # Main loop
     remote_check_delay = 60
     local_check_delay = 2
-
+    printed = False
     try:
         loop_count = 0
         print "--- Entering main loop ---"
@@ -193,23 +193,27 @@ def main(test=False, **kwargs):
             # Check the remote status once every 5 minutes
             if loop_count == remote_check_delay:
                 loop_count = 0
-                if not config.get('global').get('no_monitor', False):
-                    if not all_data_remote:
-                        all_data_remote = filemanager.all_data_remote()
-                    if not all_data_remote:
-                        print 'Updating remote status'
-                        filemanager.update_remote_status(client)
-                    if not all_data:
-                        all_data = filemanager.all_data_local()
-                    if not all_data or not all_data_remote:
-                        print 'Updating local status'
-                        filemanager.update_local_status()
+                if config.get('global').get('no_monitor', False):
+                    loop_count += 1
+                    continue
+                if not all_data_remote:
+                    all_data_remote = filemanager.all_data_remote()
+                if not all_data_remote:
+                    print 'Updating remote status'
+                    filemanager.update_remote_status(client)
+                if not all_data:
+                    all_data = filemanager.all_data_local()
+                if not all_data or not all_data_remote:
+                    print 'Updating local status'
+                    filemanager.update_local_status()
             # check the local status every 10 seconds
             if loop_count == local_check_delay:
                 if not all_data:
                     all_data = filemanager.all_data_local()
                 else:
-                    print 'All data local, turning off remote checks'
+                    if not printed:
+                        print 'All data local, turning off remote checks'
+                        printed = True
                 if not all_data \
                 and not config['global']['no_monitor']:
                     transfer_started = filemanager.transfer_needed(
