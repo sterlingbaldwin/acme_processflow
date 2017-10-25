@@ -250,7 +250,7 @@ def main(test=False, **kwargs):
                     if not started:
                         sleep(5)
                     else:
-                        print "Transfering additional files"
+                        print "Transfer started"
                 finishup(
                     config=config,
                     job_sets=runmanager.job_sets,
