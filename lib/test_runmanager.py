@@ -18,7 +18,7 @@ class TestRunManager(unittest.TestCase):
         self.output_path = os.path.join(self.project_path, 'output')
         self.run_scripts_path = os.path.join(self.project_path, 'output', 'run_scripts')
         self.mutex = threading.Lock()
-        self.remote_endpoint = 'b9d02196-6d04-11e5-ba46-22000b92c6ec'
+        self.remote_endpoint = '9d6d994a-6d04-11e5-ba46-22000b92c6ec'
         self.remote_path = '/global/homes/r/renata/ACME_simulations/20171011.beta2_FCT2-icedeep_branch.A_WCYCL1850S.ne30_oECv3_ICG.edison/'
         self.local_endpoint = 'a871c6de-2acd-11e7-bc7c-22000b9a448b'
         self.config['global']['output_path'] = self.output_path

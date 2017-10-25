@@ -84,7 +84,7 @@ class TestSetup(unittest.TestCase):
                 'sets': ['3', '4', '5', '7', '13']}, 
             'transfer': {
                 'destination_endpoint': 'a871c6de-2acd-11e7-bc7c-22000b9a448b', 
-                'source_endpoint': 'b9d02196-6d04-11e5-ba46-22000b92c6ec'}, 
+                'source_endpoint': '9d6d994a-6d04-11e5-ba46-22000b92c6ec'}, 
             'amwg': {
                 'diag_home': '/p/cscratch/acme/amwg/amwg_diag', 
                 'host_directory': 'amwg'},
@@ -167,7 +167,7 @@ class TestSetup(unittest.TestCase):
                 'sets': ['3', '4', '5', '7', '13']}, 
             'transfer': {
                 'destination_endpoint': 'a871c6de-2acd-11e7-bc7c-22000b9a448b', 
-                'source_endpoint': 'b9d02196-6d04-11e5-ba46-22000b92c6ec'}, 
+                'source_endpoint': '9d6d994a-6d04-11e5-ba46-22000b92c6ec'}, 
             'amwg': {
                 'diag_home': '/p/cscratch/acme/amwg/amwg_diag', 
                 'host_directory': 'amwg'},

@@ -16,12 +16,12 @@ class TestTransfer(unittest.TestCase):
 
     def __init__(self, *args, **kwargs):
         super(TestTransfer, self).__init__(*args, **kwargs)
-        self.source_endpoint = 'b9d02196-6d04-11e5-ba46-22000b92c6ec'
+        self.source_endpoint = '9d6d994a-6d04-11e5-ba46-22000b92c6ec'
         self.destination_endpoint = 'a871c6de-2acd-11e7-bc7c-22000b9a448b'
 
     def test_transfer_directory(self):
         transfer_directory(
-            source_endpoint='b9d02196-6d04-11e5-ba46-22000b92c6ec',
+            source_endpoint='9d6d994a-6d04-11e5-ba46-22000b92c6ec',
             destination_endpoint='a871c6de-2acd-11e7-bc7c-22000b9a448b',
             src_path='/global/homes/s/sbaldwin/test_directory',
             dst_path=project_path,

@@ -15,7 +15,7 @@ class TestFileManager(unittest.TestCase):
         sta = False
         types = ['atm', 'ice', 'ocn', 'rest', 'streams.cice', 'streams.ocean']
         database = 'test.db'
-        remote_endpoint = 'b9d02196-6d04-11e5-ba46-22000b92c6ec'
+        remote_endpoint = '9d6d994a-6d04-11e5-ba46-22000b92c6ec'
         remote_path = '/global/homes/r/renata/ACME_simulations/20171011.beta2_FCT2-icedeep_branch.A_WCYCL1850S.ne30_oECv3_ICG.edison/'
         local_endpoint = 'a871c6de-2acd-11e7-bc7c-22000b9a448b'
         local_path = os.path.abspath(os.path.join('..', '..', 'testproject'))
@@ -39,7 +39,7 @@ class TestFileManager(unittest.TestCase):
         sta = True
         types = ['atm', 'ice', 'ocn', 'rest', 'streams.cice', 'streams.ocean']
         database = 'test.db'
-        remote_endpoint = 'b9d02196-6d04-11e5-ba46-22000b92c6ec'
+        remote_endpoint = '9d6d994a-6d04-11e5-ba46-22000b92c6ec'
         remote_path = '/global/homes/r/renata/ACME_simulations/20171011.beta2_FCT2-icedeep_branch.A_WCYCL1850S.ne30_oECv3_ICG.edison/'
         local_endpoint = 'a871c6de-2acd-11e7-bc7c-22000b9a448b'
         local_path = os.path.abspath(os.path.join('..', '..', 'testproject'))
@@ -63,7 +63,7 @@ class TestFileManager(unittest.TestCase):
         sta = False
         types = ['atm', 'ice', 'ocn', 'rest', 'streams.cice', 'streams.ocean']
         database = 'test.db'
-        remote_endpoint = 'b9d02196-6d04-11e5-ba46-22000b92c6ec'
+        remote_endpoint = '9d6d994a-6d04-11e5-ba46-22000b92c6ec'
         remote_path = '/global/homes/r/renata/ACME_simulations/20171011.beta2_FCT2-icedeep_branch.A_WCYCL1850S.ne30_oECv3_ICG.edison/'
         local_endpoint = 'a871c6de-2acd-11e7-bc7c-22000b9a448b'
         local_path = os.path.abspath(os.path.join('..', '..', 'testproject'))
@@ -100,7 +100,7 @@ class TestFileManager(unittest.TestCase):
         sta = False
         types = ['atm', 'ice', 'ocn', 'rest', 'streams.cice', 'streams.ocean']
         database = 'test.db'
-        remote_endpoint = 'b9d02196-6d04-11e5-ba46-22000b92c6ec'
+        remote_endpoint = '9d6d994a-6d04-11e5-ba46-22000b92c6ec'
         remote_path = '/global/homes/r/renata/ACME_simulations/20171011.beta2_FCT2-icedeep_branch.A_WCYCL1850S.ne30_oECv3_ICG.edison/'
         local_endpoint = 'a871c6de-2acd-11e7-bc7c-22000b9a448b'
         local_path = os.path.abspath(os.path.join('..', '..', 'testproject'))
@@ -139,7 +139,7 @@ class TestFileManager(unittest.TestCase):
         sta = True
         types = ['atm', 'ice', 'ocn', 'rest', 'streams.cice', 'streams.ocean']
         database = 'test.db'
-        remote_endpoint = 'b9d02196-6d04-11e5-ba46-22000b92c6ec'
+        remote_endpoint = '9d6d994a-6d04-11e5-ba46-22000b92c6ec'
         remote_path = '/global/homes/r/renata/ACME_simulations/20171011.beta2_FCT2-icedeep_branch.A_WCYCL1850S.ne30_oECv3_ICG.edison/'
         local_endpoint = 'a871c6de-2acd-11e7-bc7c-22000b9a448b'
         local_path = os.path.abspath(os.path.join('..', '..', 'testproject'))
