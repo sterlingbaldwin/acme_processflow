@@ -83,6 +83,8 @@ class E3SMDiags(object):
 
         if not os.path.exists(self.config.get('run_scripts_path')):
             os.makedirs(self.config.get('run_scripts_path'))
+        if isinstance(self.config['seasons'], str):
+            self.config['seasons'] = [self.config['seasons']]
         if self.year_set == 0:
             self.status = JobStatus.INVALID
         if valid:
