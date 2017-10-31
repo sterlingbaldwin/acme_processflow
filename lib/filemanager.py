@@ -1,4 +1,5 @@
 import os
+import re
 import sys
 import threading
 import logging
@@ -47,6 +48,7 @@ class FileManager(object):
         """
         self.mutex = kwargs['mutex']
         self.sta = sta
+        self.updated_rest = False
         self.types = types if isinstance(types, list) else [types]
         self.active_transfers = 0
         self.db_path = database
@@ -232,11 +234,20 @@ class FileManager(object):
         if self.sta:
             for _type in self.types:
                 if _type == 'rest':
-                    remote_path = os.path.join(
-                        self.remote_path,
-                        'archive',
-                        _type,
-                        '{year:04d}-01-01-00000'.format(year=self.start_year+1))
+                    if not self.updated_rest:
+                        self.mutex.acquire()
+                        name, path, size = self.update_remote_rest_sta_path(client)
+                        DataFile.update(
+                            remote_status=filestatus['EXISTS'],
+                            remote_size=size,
+                            remote_path=path,
+                            name=name
+                        ).where(
+                            DataFile.datatype == 'rest'
+                        ).execute()
+                        self.mutex.release()
+                        self.updated_rest = True
+                    continue
                 elif 'streams' in _type:
                     remote_path = os.path.join(self.remote_path, 'run')
                 else:
@@ -300,11 +311,43 @@ class FileManager(object):
             except Exception as e:
                 sleep(fail_count)
                 if fail_count >= 9:
-                    from lib.util import print_debug
                     print_debug(e)
                     sys.exit()
             else:
                 return res
+    
+    def update_remote_rest_sta_path(self, client):
+        if not self.sta:
+            return
+        path = os.path.join(
+            self.remote_path,
+            'archive',
+            'rest')
+        res = self._get_ls(
+            client=client,
+            path=path)
+        contents = res['DATA']
+        subdir = contents[1]['name']
+        path = os.path.join(path, subdir)
+        contents = self._get_ls(
+            client=client,
+            path=path)
+        pattern = 'mpaso.rst'
+        remote_name = ''
+        remote_path = ''
+        size = 0
+        for remote_file in contents:
+            if re.search(pattern=pattern, string=remote_file['name']):
+                remote_name = remote_file['name']
+                remote_path = os.path.join(
+                    self.remote_path,
+                    'archive',
+                    'rest',
+                    subdir,
+                    remote_file['name'])
+                size = remote_file['size']
+                break
+        return remote_name, remote_path, size
 
     def update_local_status(self):
         """
