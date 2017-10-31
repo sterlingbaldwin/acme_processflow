@@ -1,20 +1,16 @@
 #!/bin/bash
 PASSED=0
 TOTAL=0
+SECONDS=0
 BRANCH="$(git name-rev --name-only HEAD)"
 echo "running tests for branch $BRANCH"
 
-if [ $BRANCH == "master" ]; then
-    let "TOTAL+=1"
-    if COVERAGE_FILE=.coverage_processflow coverage run --source=.,lib,jobs --omit="lib/test*","*__init__.py","setup.py" test_processflow.py; then
-        echo "main processflow tests passed"
-        let "PASSED+=1"
-    else
-        echo "processflow tests failed"
-    fi
+tests=("jobs/test_e3sm.py" "lib/test_setup.py" "lib/test_yearset.py" "lib/test_filemanager.py" "lib/test_util.py" "lib/test_slurm.py" "jobs/test_transfer.py" "lib/test_mailer.py" "jobs/test_ncclimo.py" "jobs/test_timeseries.py" "jobs/test_amwg.py" "lib/test_runmanager.py")
+
+if [ $BRANCH == "nightly" ]; then
+    tests+= "test_processflow.py"
 fi
 
-tests=("lib/test_setup.py" "lib/test_yearset.py" "lib/test_filemanager.py" "lib/test_util.py" "lib/test_slurm.py" "jobs/test_transfer.py" "lib/test_mailer.py" "jobs/test_ncclimo.py" "jobs/test_timeseries.py" "jobs/test_amwg.py" "lib/test_runmanager.py")
 
 for test in "${tests[@]}" 
 do
@@ -41,6 +37,9 @@ mv htmlcov /var/www/acme/acme-diags/baldwin32
 rm slurm-*
 
 echo $PASSED "out of" $TOTAL "modules passed their tests"
+duration=$SECONDS
+echo "Tests ran in $(($duration / 60)) minutes and $(($duration % 60)) seconds."
+
 
 if [ "$PASSED" != "$TOTAL" ]; then
     echo "One or more tests failed"
