@@ -206,6 +206,27 @@ class TestSetup(unittest.TestCase):
         self.assertFalse(config)
         self.assertFalse(filemanager)
         self.assertFalse(runmanager)
+    
+    def test_config_extra_white_space(self):
+        base_path = os.getcwd()
+        resource_path = os.path.join(base_path, 'resources')
+        project_path = os.path.abspath(os.path.join('..', 'testproject'))
+        args = ['-c', os.path.join(base_path, 'tests', 'test_run_no_sta_whitespace.cfg'), '-f', '-n', '-r', resource_path]
+        display_event = threading.Event()
+        thread_kill_event = threading.Event()
+        mutex = threading.Lock()
+        event_list = Event_list()
+        thread_list = []
+        config, filemanager, runmanager = setup(
+            args,
+            display_event,
+            event_list=event_list,
+            thread_list=thread_list,
+            kill_event=thread_kill_event,
+            mutex=mutex)
+        self.assertTrue(isinstance(config), dict)
+        self.assertTrue(isinstance(filemanager, FileManager))
+        self.assertTrue(isinstance(runmanager, RunManager))
 
     def test_config_bad_destination_endpoint(self):
         base_path = os.getcwd()
