@@ -101,9 +101,9 @@ class Transfer(object):
         TODO: validate that all files were moved correctly
         """
         for datafile in self.config['file_list']:
-           if not os.path.exists(datafile.local_path):
-               self.status = JobStatus.FAILED
-               return False
+            if not os.path.exists(datafile['local_path']):
+                self.status = JobStatus.FAILED
+                return False
         self.status = JobStatus.COMPLETED
         return True
 

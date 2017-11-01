@@ -1,4 +1,5 @@
 import os
+import re
 import sys
 import threading
 import logging
@@ -34,8 +35,20 @@ class FileManager(object):
     Manage all files required by jobs
     """
     def __init__(self, database, types, sta=False, **kwargs):
+        """
+        Parameters:
+            mutex (theading.Lock) the mutext for accessing the database
+            sta (bool) is this run short term archived or not (1) yes (0) no
+            types (list(str)): A list of strings of datatypes
+            database (str): the path to where to create the sqlite database file
+            remote_endpoint (str): the Globus UUID for the remote endpoint
+            remote_path (str): the base directory to search for this runs model output
+            local_endpoint (str): The Globus UUID for the local endpoint
+            local_path (str): the local project path
+        """
         self.mutex = kwargs['mutex']
         self.sta = sta
+        self.updated_rest = False
         self.types = types if isinstance(types, list) else [types]
         self.active_transfers = 0
         self.db_path = database
@@ -82,7 +95,6 @@ class FileManager(object):
         Parameters:
             simstart (int): the start year of the simulation,
             simend (int): the end year of the simulation,
-            types (list(str)): the list of file types to add, must be members of file_type_map,
             experiment (str): the name of the experiment 
                 ex: 20170915.beta2.A_WCYCL1850S.ne30_oECv3_ICG.edison
         """
@@ -126,7 +138,7 @@ class FileManager(object):
                     local_path = local_path = os.path.join(
                         self.local_path,
                         'input',
-                        'streams',
+                        _type,
                         name)
                     remote_path = os.path.join(self.remote_path, 'run', name)
                     newfiles = self._add_file(
@@ -222,13 +234,22 @@ class FileManager(object):
         if self.sta:
             for _type in self.types:
                 if _type == 'rest':
-                    remote_path = os.path.join(
-                        self.remote_path,
-                        'archive',
-                        _type,
-                        '{year:04d}-01-01-00000'.format(year=self.start_year+1))
+                    if not self.updated_rest:
+                        self.mutex.acquire()
+                        name, path, size = self.update_remote_rest_sta_path(client)
+                        DataFile.update(
+                            remote_status=filestatus['EXISTS'],
+                            remote_size=size,
+                            remote_path=path,
+                            name=name
+                        ).where(
+                            DataFile.datatype == 'rest'
+                        ).execute()
+                        self.mutex.release()
+                        self.updated_rest = True
+                    continue
                 elif 'streams' in _type:
-                    remote_path = self.remote_path
+                    remote_path = os.path.join(self.remote_path, 'run')
                 else:
                     remote_path = os.path.join(self.remote_path, 'archive', _type, 'hist')
                 print 'Querying globus for {}'.format(_type)
@@ -290,11 +311,43 @@ class FileManager(object):
             except Exception as e:
                 sleep(fail_count)
                 if fail_count >= 9:
-                    from lib.util import print_debug
                     print_debug(e)
                     sys.exit()
             else:
                 return res
+    
+    def update_remote_rest_sta_path(self, client):
+        if not self.sta:
+            return
+        path = os.path.join(
+            self.remote_path,
+            'archive',
+            'rest')
+        res = self._get_ls(
+            client=client,
+            path=path)
+        contents = res['DATA']
+        subdir = contents[1]['name']
+        path = os.path.join(path, subdir)
+        contents = self._get_ls(
+            client=client,
+            path=path)
+        pattern = 'mpaso.rst'
+        remote_name = ''
+        remote_path = ''
+        size = 0
+        for remote_file in contents:
+            if re.search(pattern=pattern, string=remote_file['name']):
+                remote_name = remote_file['name']
+                remote_path = os.path.join(
+                    self.remote_path,
+                    'archive',
+                    'rest',
+                    subdir,
+                    remote_file['name'])
+                size = remote_file['size']
+                break
+        return remote_name, remote_path, size
 
     def update_local_status(self):
         """
@@ -309,10 +362,15 @@ class FileManager(object):
             datafiles = DataFile.select().where(
                 DataFile.local_status == filestatus['NOT_EXIST'])
             for datafile in datafiles:
+                should_save = False
                 if os.path.exists(datafile.local_path):
                     local_size = os.path.getsize(datafile.local_path)
                     if local_size == datafile.remote_size:
                         datafile.local_status = filestatus['EXISTS']
+                        datafile.local_size = local_size
+                        should_save = True
+                    if local_size != datafile.local_size \
+                    or should_save:
                         datafile.local_size = local_size
                         datafile.save()
         except Exception as e:
@@ -325,6 +383,18 @@ class FileManager(object):
         try:
             for data in DataFile.select():
                 if data.local_status != filestatus['EXISTS']:
+                    return False
+        except Exception as e:
+            print_debug(e)
+        finally:
+            self.mutex.release()
+        return True
+
+    def all_data_remote(self):
+        self.mutex.acquire()
+        try:
+            for data in DataFile.select():
+                if data.remote_status != filestatus['EXISTS']:
                     return False
         except Exception as e:
             print_debug(e)
@@ -354,6 +424,8 @@ class FileManager(object):
                 ((DataFile.local_status == filestatus['NOT_EXIST']) |
                  (DataFile.local_size != DataFile.remote_size))
             )]
+            if len(required_files) == 0:
+                return False
             target_files = []
             target_size = 1e11 # 100 GB
             total_size = 0
@@ -373,6 +445,7 @@ class FileManager(object):
                     break
         except Exception as e:
             print_debug(e)
+            return False
         finally:
             self.mutex.release()
 
@@ -393,14 +466,13 @@ class FileManager(object):
         transfer = Transfer(
             config=transfer_config,
             event_list=event_list)
-        print 'staring transfer for:'
+        print 'starting transfer for:'
         transfer_names = [x['name'] for x in transfer.file_list]
         for file in transfer.file_list:
-            print file['name']
+            print '   ' + file['name']
             logging.info(file['name'])
         self.mutex.acquire()
         try:
-            print 'should be updating local status'
             DataFile.update(
                 local_status=filestatus['IN_TRANSIT']
             ).where(
@@ -409,11 +481,13 @@ class FileManager(object):
             print 'following files are in transit'
             for df in DataFile.select():
                 if df.local_status == filestatus['IN_TRANSIT']:
-                    print df.name
+                    print '   ' + df.name
         except Exception as e:
             print_debug(e)
+            return False
         finally:
             self.mutex.release()
+
         args = (transfer, event, event_list)
         thread = threading.Thread(
             target=self._handle_transfer,

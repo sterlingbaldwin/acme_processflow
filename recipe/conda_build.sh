@@ -1,5 +1,4 @@
-
-export VERSION="0.4.10"
+export VERSION="0.4.23"
 export BUILD_NAME="devel"
 export CONDA_BLD_PATH=~/conda-bld
 USER="acme"
@@ -15,9 +14,11 @@ mkdir $CONDA_BLD_PATH
 conda config --set anaconda_upload no
 if [ ! -z "$1" ]; then
     export TAG="$1"
+    echo "Cloning from branch $1" 
 else
     export TAG="master"
 fi
+echo "Building version " $VESION
 conda build -c uvcdat -c conda-forge -c acme -c lukasz .
 
 if [ ! -z "$1" ]; then

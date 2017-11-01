@@ -83,6 +83,8 @@ class E3SMDiags(object):
 
         if not os.path.exists(self.config.get('run_scripts_path')):
             os.makedirs(self.config.get('run_scripts_path'))
+        if isinstance(self.config['seasons'], str):
+            self.config['seasons'] = [self.config['seasons']]
         if self.year_set == 0:
             self.status = JobStatus.INVALID
         if valid:
@@ -103,9 +105,9 @@ class E3SMDiags(object):
         except:
             return False
         else:
-            return bool(len(contents) == len(self.config['sets']))
+            return bool(len(contents) >= len(self.config['sets']))
 
-    def execute(self):
+    def execute(self, dryrun=False):
 
         # Check if the output already exists
         if self.postvalidate():
@@ -167,6 +169,7 @@ class E3SMDiags(object):
 
         cmd = 'acme_diags_driver.py -p {template}'.format(
             template=template_out)
+
         slurm_args_str = ['#SBATCH {value}\n'.format(value=v) for k, v in self.slurm_args.items()]
         slurm_prefix = ''.join(slurm_args_str)
         with open(run_script, 'w') as batchfile:

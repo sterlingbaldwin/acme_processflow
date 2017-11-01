@@ -137,7 +137,7 @@ class AprimeDiags(object):
                     src=file,
                     dst=os.path.join(self.config['input_path'], tail))
 
-    def execute(self):
+    def execute(self, dryrun=False):
         """
         Perform the actual work
         """
