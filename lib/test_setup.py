@@ -228,6 +228,8 @@ class TestSetup(unittest.TestCase):
         self.assertTrue(isinstance(filemanager, FileManager))
         self.assertTrue(isinstance(runmanager, RunManager))
 
+        self.assertEqual(config['global']['source_path'], '/global/homes/r/renata/ACME_simulations/20171011.beta2_FCT2-icedeep_branch.A_WCYCL1850S.ne30_oECv3_ICG.edison/')
+
     def test_config_bad_destination_endpoint(self):
         base_path = os.getcwd()
         resource_path = os.path.join(base_path, 'resources')
