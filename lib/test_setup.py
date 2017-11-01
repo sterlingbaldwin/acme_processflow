@@ -224,10 +224,8 @@ class TestSetup(unittest.TestCase):
             thread_list=thread_list,
             kill_event=thread_kill_event,
             mutex=mutex)
-        self.assertTrue(isinstance(config), dict)
-        self.assertTrue(isinstance(filemanager, FileManager))
-        self.assertTrue(isinstance(runmanager, RunManager))
 
+        self.assertTrue(isinstance(config, dict))
         self.assertEqual(config['global']['source_path'], '/global/homes/r/renata/ACME_simulations/20171011.beta2_FCT2-icedeep_branch.A_WCYCL1850S.ne30_oECv3_ICG.edison/')
 
     def test_config_bad_destination_endpoint(self):
