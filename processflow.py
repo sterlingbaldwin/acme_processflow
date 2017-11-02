@@ -188,7 +188,7 @@ def main(test=False, **kwargs):
     local_check_delay = 2
     printed = False
     try:
-        loop_count = 0
+        loop_count = remote_check_delay
         print "--- Entering main loop ---"
         print "Current status can be found at {}".format(state_path)
         while True:
