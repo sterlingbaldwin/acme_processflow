@@ -59,7 +59,8 @@ class FileManager(object):
         if DataFile.table_exists():
             DataFile.drop_table()
         DataFile.create_table()
-        self.mutex.release()
+        if self.mutex.locked():
+            self.mutex.release()
         self.remote_endpoint = kwargs.get('remote_endpoint')
         self.local_path = kwargs.get('local_path')
         self.local_endpoint = kwargs.get('local_endpoint')
@@ -190,7 +191,8 @@ class FileManager(object):
             except Exception as e:
                 print_debug(e)
             finally:
-                self.mutex.release()
+                if self.mutex.locked():
+                    self.mutex.release()
             print 'Database update complete'
 
     def _add_file(self, newfiles, **kwargs):
@@ -250,7 +252,8 @@ class FileManager(object):
                         ).where(
                             DataFile.datatype == 'rest'
                         ).execute()
-                        self.mutex.release()
+                        if self.mutex.locked():
+                            self.mutex.release()
                         self.updated_rest = True
                     continue
                 elif 'streams' in _type:
@@ -283,7 +286,8 @@ class FileManager(object):
                     print_debug(e)
                     print "Do you have the correct start and end dates?"
                 finally:
-                    self.mutex.release()
+                    if self.mutex.locked():
+                        self.mutex.release()
         else:
 
             remote_path = self.remote_path
@@ -312,7 +316,8 @@ class FileManager(object):
             except Exception as e:
                 print_debug(e)
             finally:
-                self.mutex.release()
+                if self.mutex.locked():
+                    self.mutex.release()
 
     def _get_ls(self, client, path):
         for fail_count in xrange(10):
@@ -390,7 +395,8 @@ class FileManager(object):
         except Exception as e:
             print_debug(e)
         finally:
-            self.mutex.release()
+            if self.mutex.locked():
+                self.mutex.release()
 
     def all_data_local(self):
         self.mutex.acquire()
@@ -401,7 +407,8 @@ class FileManager(object):
         except Exception as e:
             print_debug(e)
         finally:
-            self.mutex.release()
+            if self.mutex.locked():
+                self.mutex.release()
         return True
 
     def all_data_remote(self):
@@ -413,7 +420,8 @@ class FileManager(object):
         except Exception as e:
             print_debug(e)
         finally:
-            self.mutex.release()
+            if self.mutex.locked():
+                self.mutex.release()
         return True
 
     def transfer_needed(self, event_list, event, remote_endpoint, ui, display_event, emailaddr, thread_list):
@@ -461,7 +469,8 @@ class FileManager(object):
             print_debug(e)
             return False
         finally:
-            self.mutex.release()
+            if self.mutex.locked():
+                self.mutex.release()
 
         logging.info('Transfering required files')
         print 'total transfer size {size} for {nfiles} files'.format(
@@ -500,7 +509,8 @@ class FileManager(object):
             print_debug(e)
             return False
         finally:
-            self.mutex.release()
+            if self.mutex.locked():
+                self.mutex.release()
 
         args = (transfer, event, event_list)
         thread = threading.Thread(
@@ -537,7 +547,8 @@ class FileManager(object):
                 datafile.local_size = 0
             datafile.save()
         try:
-            self.mutex.release()
+            if self.mutex.locked():
+                self.mutex.release()
         except:
             pass
         print 'table update complete'
@@ -571,7 +582,8 @@ class FileManager(object):
         except Exception as e:
             print_debug(e)
         finally:
-            self.mutex.release()
+            if self.mutex.locked():
+                self.mutex.release()
 
         if data_ready:
             return 1
@@ -594,7 +606,8 @@ class FileManager(object):
         except Exception as e:
             print_debug(e)
         finally:
-            self.mutex.release()
+            if self.mutex.locked():
+                self.mutex.release()
         return files
 
     def check_year_sets(self, job_sets):

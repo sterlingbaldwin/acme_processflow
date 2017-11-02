@@ -123,7 +123,8 @@ class TestFileManager(unittest.TestCase):
             os.makedirs(head)
         with open(df[0].local_path, 'w') as fp:
             fp.write('this is a test file')
-        self.mutex.release()
+        if self.mutex.locked():
+            self.mutex.release()
         filemanager.update_local_status()
         self.mutex.acquire()
         df = DataFile.select().where(DataFile.name == name)[0]
@@ -155,7 +156,8 @@ class TestFileManager(unittest.TestCase):
         self.mutex.acquire()
         for datafile in DataFile.select():
             self.assertEqual(datafile.remote_status, 0)
-        self.mutex.release()
+        if self.mutex.locked():
+            self.mutex.release()
         self.assertTrue(filemanager.all_data_remote())
 
     def test_filemanager_update_remote_yes_sta(self):
@@ -186,7 +188,8 @@ class TestFileManager(unittest.TestCase):
             if datafile.remote_status != 0:
                 print datafile.name, datafile.remote_path
             self.assertEqual(datafile.remote_status, 0)
-        self.mutex.release()
+        if self.mutex.locked():
+            self.mutex.release()
         self.assertTrue(filemanager.all_data_remote())
 
     def test_filemanager_all_data_local(self):
@@ -226,7 +229,8 @@ class TestFileManager(unittest.TestCase):
             df.remote_size = size
             df.local_size = size
             df.save()
-        self.mutex.release()
+        if self.mutex.locked():
+            self.mutex.release()
         filemanager.update_local_status()
         self.assertTrue(filemanager.all_data_local())
 

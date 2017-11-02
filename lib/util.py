@@ -374,7 +374,7 @@ def write_human_state(event_list, job_sets, mutex, state_path='run_state.txt', p
         if not os.path.exists(head):
             os.makedirs(head)
         with open(file_list_path, 'w') as fp:
-            mutex.acquire(False)
+            mutex.acquire()
             types = [x.datatype for x in DataFile.select(
                 DataFile.datatype).distinct()]
             try:
@@ -408,7 +408,8 @@ def write_human_state(event_list, job_sets, mutex, state_path='run_state.txt', p
             except Exception as e:
                 print_debug(e)
             finally:
-                mutex.release()
+                if mutex.locked():
+                    mutex.release()
 
 
 class colors:
