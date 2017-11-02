@@ -121,6 +121,7 @@ def main(test=False, **kwargs):
     filemanager.update_local_status()
     all_data = filemanager.all_data_local()
     if not all_data:
+        print "Updating remote file status"
         filemanager.update_remote_status(client)
         all_data_remote = filemanager.all_data_remote()
     write_human_state(

@@ -47,7 +47,7 @@ class TestTransfer(unittest.TestCase):
             'destination_endpoint': self.destination_endpoint,
             'source_path': source_path,
             'destination_path': project_path,
-            'src_email': 'baldwin32@llnl.gov',
+            'source_email': 'baldwin32@llnl.gov',
             'display_event': threading.Event(),
             'ui': False
         }, event_list=Event_list())

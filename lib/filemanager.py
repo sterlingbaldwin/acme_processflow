@@ -482,7 +482,7 @@ class FileManager(object):
             'destination_endpoint': self.local_endpoint,
             'source_path': self.remote_path,
             'destination_path': self.local_path,
-            'src_email': emailaddr,
+            'source_email': emailaddr,
             'display_event': display_event,
             'ui': ui,
         }

@@ -216,11 +216,12 @@ def setup_globus(endpoints, no_ui=False, **kwargs):
                 for server in server_document['DATA']:
                     hostname = server["hostname"]
                     break
-                message = """\n
+                message = """
 Data transfer server {server} requires manual activation.
-Please open the following URL in a browser to activate the endpoint:\n
-https://www.globus.org/app/endpoints/{endpoint}/activate \n\n
-""".format(endpoint=endpoint, server=server)
+Please open the following URL in a browser to activate the endpoint:
+https://www.globus.org/app/endpoints/{endpoint}/activate
+
+""".format(endpoint=endpoint, server=server['hostname'])
                 print message
                 if no_ui:
                     email_msg += message

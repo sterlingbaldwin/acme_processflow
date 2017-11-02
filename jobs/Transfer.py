@@ -42,7 +42,7 @@ class Transfer(object):
             'destination_endpoint': '',
             'source_path': '',
             'destination_path': '',
-            'src_email': '',
+            'source_email': '',
             'display_event': '',
             'ui': '',
         }
@@ -196,8 +196,8 @@ class Transfer(object):
             endpoints=endpoints,
             event_list=self.event_list,
             no_ui=not self.config.get('ui', True),
-            src=self.config.get('src'),
-            dst=self.config.get('src'),
+            src=self.config.get('source_email'),
+            dst=self.config.get('source_email'),
             display_event=self.config.get('display_event'))
         client = get_client()
         try:
