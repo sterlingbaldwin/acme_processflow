@@ -49,6 +49,7 @@ os.environ['UVCDAT_ANONYMOUS_LOG'] = 'False'
 # create global Event_list
 event_list = Event_list()
 
+
 def main(test=False, **kwargs):
     # The master configuration object
     config = {}
@@ -159,7 +160,8 @@ def main(test=False, **kwargs):
         print msg
         event_list.push(message=msg)
         logging.info(msg)
-        src_path = os.path.join(config['global']['source_path'], 'case_scripts')
+        src_path = os.path.join(
+            config['global']['source_path'], 'case_scripts')
         while True:
             try:
                 args = {
@@ -215,7 +217,7 @@ def main(test=False, **kwargs):
                         print 'All data local, turning off remote checks'
                         printed = True
                 if not all_data \
-                and not config['global']['no_monitor']:
+                        and not config['global']['no_monitor']:
                     transfer_started = filemanager.transfer_needed(
                         event_list=event_list,
                         event=thread_kill_event,
@@ -282,6 +284,7 @@ def main(test=False, **kwargs):
         thread_kill_event.set()
         for thread in thread_list:
             thread.join(timeout=1.0)
+
 
 if __name__ == "__main__":
     if sys.argv[1] == 'test':
