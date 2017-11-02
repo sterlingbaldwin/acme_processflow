@@ -154,6 +154,10 @@ def setup_globus(endpoints, no_ui=False, **kwargs):
     display_event = kwargs.get('display_event')
 
     if no_ui:
+        if kwargs.get('src') is None or kwargs.get('dst') is None:
+            logging.error('No source or destination given to setup_globus')
+            print "No email address found"
+            return False
         mailer = Mailer(
             src='processflowbot@llnl.gov',
             dst=kwargs['dst'])
@@ -162,9 +166,6 @@ def setup_globus(endpoints, no_ui=False, **kwargs):
     while not check_logged_in():
         # if in no_ui mode, send an email to the user with a link to log in
         if no_ui:
-            if not kwargs.get('src') or not kwargs.get('dst'):
-                logging.error('No source or destination given to setup_globus')
-                return False
             if kwargs.get('event_list'):
                 line = 'Waiting on user to log into globus, email sent to {addr}'.format(
                     addr=kwargs['src'])
@@ -174,7 +175,7 @@ def setup_globus(endpoints, no_ui=False, **kwargs):
                 message = 'Your automated post processing job requires you log into globus. Please ssh into {host} activate the environment and run {cmd}\n\n'.format(
                     host=socket.gethostname(),
                     cmd='"globus login"')
-                print 'sending login message to {}'.format(kwargs['dst'])
+                print 'sending login message to {}'.format(kwargs['src'])
                 message_sent = mailer.send(
                     status=status,
                     msg=message)
@@ -192,6 +193,7 @@ def setup_globus(endpoints, no_ui=False, **kwargs):
         return True
     if isinstance(endpoints, str):
         endpoints = [endpoints]
+
     message_sent = False
     activated = False
     email_msg = ''
@@ -214,18 +216,19 @@ def setup_globus(endpoints, no_ui=False, **kwargs):
                 for server in server_document['DATA']:
                     hostname = server["hostname"]
                     break
-                message = '\n{server} requires manual activation, please open the following URL in a browser to activate the endpoint:\n'.format(
-                    server=hostname)
-                message += "https://www.globus.org/app/endpoints/{endpoint}/activate \n\n".format(
-                    endpoint=endpoint)
+                message = """\n
+Data transfer server {server} requires manual activation.
+Please open the following URL in a browser to activate the endpoint:\n
+https://www.globus.org/app/endpoints/{endpoint}/activate \n\n
+""".format(endpoint=endpoint, server=server)
+                print message
                 if no_ui:
                     email_msg += message
                 else:
-                    print message
                     raw_input("Press ENTER after activating the endpoint")
-                r = client.endpoint_autoactivate(endpoint, if_expires_in=3600)
-                if not r["code"] == "AutoActivationFailed":
-                    activated = True
+                    r = client.endpoint_autoactivate(endpoint, if_expires_in=3600)
+                    if not r["code"] == "AutoActivationFailed":
+                        activated = True
 
         if not activated:
             if not message_sent:
@@ -233,6 +236,10 @@ def setup_globus(endpoints, no_ui=False, **kwargs):
                 message_sent = mailer.send(
                     status='Endpoint activation required',
                     msg=email_msg)
+                if not message_sent:
+                    print "Error sending notification email"
+                    logging.error("Unable to send notification email")
+                    return False
             sleep(30)
     if not no_ui:
         display_event.clear()

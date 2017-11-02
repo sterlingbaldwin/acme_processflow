@@ -284,6 +284,13 @@ def main(test=False, **kwargs):
         thread_kill_event.set()
         for thread in thread_list:
             thread.join(timeout=1.0)
+    except Exception as e:
+        print_message('----- UNEXPECTED EXCEPTION OCCURED -----')
+        print_debug(e)
+        display_event.set()
+        thread_kill_event.set()
+        for thread in thread_list:
+            thread.join(timeout=1.0)
 
 
 if __name__ == "__main__":
