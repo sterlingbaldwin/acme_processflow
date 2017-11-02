@@ -12,6 +12,7 @@ from JobStatus import JobStatus
 
 project_path = os.path.abspath(os.path.join('..', 'testproject_transfer'))
 
+
 class TestTransfer(unittest.TestCase):
 
     def __init__(self, *args, **kwargs):

@@ -38,9 +38,9 @@ class AprimeDiags(object):
             'aprime_code_path': ''
         }
         self.slurm_args = {
-            'num_cores': '-n 16', # 16 cores
-            'run_time': '-t 0-02:00', # 1 hour run time
-            'num_machines': '-N 1', # run on one machine
+            'num_cores': '-n 16',  # 16 cores
+            'run_time': '-t 0-02:00',  # 1 hour run time
+            'num_machines': '-N 1',  # run on one machine
             'oversubscribe': '--oversubscribe'
         }
         self.start_time = None
@@ -197,7 +197,8 @@ class AprimeDiags(object):
             start='{:04d}'.format(self.config.get('test_begin_yr_climo')),
             end='{:04d}'.format(self.config.get('test_end_yr_climo')))
 
-        run_script = os.path.join(self.config.get('run_scripts_path'), expected_name)
+        run_script = os.path.join(self.config.get(
+            'run_scripts_path'), expected_name)
         if os.path.exists(run_script):
             os.remove(run_script)
 
@@ -205,7 +206,8 @@ class AprimeDiags(object):
             out=run_script + '.out')
         self.slurm_args['working_dir'] = '--workdir {dir}'.format(
             dir=self.config.get('coupled_diags_home'))
-        slurm_args = ['#SBATCH {}'.format(self.slurm_args[s]) for s in self.slurm_args]
+        slurm_args = ['#SBATCH {}'.format(
+            self.slurm_args[s]) for s in self.slurm_args]
         slurm_prefix = '\n'.join(slurm_args) + '\n'
 
         with open(run_script, 'w') as batchfile:

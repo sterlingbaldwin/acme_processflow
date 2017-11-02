@@ -45,7 +45,7 @@ class TestAMWGDiagnostic(unittest.TestCase):
             os.getcwd(),
             'resources')
         regrid_path = os.path.join(
-            self.config['global']['output_path'], 
+            self.config['global']['output_path'],
             'climo_regrid')
         output_path = os.path.join(
             self.config['global']['output_path'],
@@ -189,7 +189,7 @@ class TestAMWGDiagnostic(unittest.TestCase):
             os.getcwd(),
             'resources')
         regrid_path = os.path.join(
-            self.config['global']['output_path'], 
+            self.config['global']['output_path'],
             'climo_regrid')
         output_path = os.path.join(
             self.config['global']['output_path'],
@@ -239,7 +239,7 @@ class TestAMWGDiagnostic(unittest.TestCase):
         amwg.execute(dryrun=True)
         self.assertEqual(amwg.status.name, 'COMPLETED')
         self.assertFalse(amwg.postvalidate())
-    
+
     def test_AMWG_execute_completed(self):
         start_year = 56
         end_year = 60
@@ -271,7 +271,7 @@ class TestAMWGDiagnostic(unittest.TestCase):
             os.getcwd(),
             'resources')
         regrid_path = os.path.join(
-            self.config['global']['output_path'], 
+            self.config['global']['output_path'],
             'climo_regrid')
         output_path = os.path.join(
             self.config['global']['output_path'],
@@ -311,6 +311,7 @@ class TestAMWGDiagnostic(unittest.TestCase):
         amwg.execute(dryrun=True)
         self.assertEqual(amwg.status.name, 'COMPLETED')
         self.assertTrue(amwg.postvalidate())
+
 
 if __name__ == '__main__':
     unittest.main()

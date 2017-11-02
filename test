@@ -14,7 +14,6 @@ else
     echo "Skipping end to end tests"
 fi
 
-
 for test in "${tests[@]}" 
 do
     let "TOTAL+=1"
@@ -42,7 +41,6 @@ rm slurm-*
 echo $PASSED "out of" $TOTAL "modules passed their tests"
 duration=$SECONDS
 echo "Tests ran in $(($duration / 60)) minutes and $(($duration % 60)) seconds."
-
 
 if [ "$PASSED" != "$TOTAL" ]; then
     echo "One or more tests failed"

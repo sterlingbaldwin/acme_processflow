@@ -8,7 +8,7 @@ from lib.events import Event_list
 
 
 class TestE3SM(unittest.TestCase):
-    
+
     def __init__(self, *args, **kwargs):
         super(TestE3SM, self).__init__(*args, **kwargs)
         config_path = os.path.join(os.getcwd(), 'tests', 'test_run_no_sta.cfg')
@@ -45,7 +45,7 @@ class TestE3SM(unittest.TestCase):
             os.getcwd(),
             'resources')
         regrid_path = os.path.join(
-            self.config['global']['output_path'], 
+            self.config['global']['output_path'],
             'climo_regrid')
         output_path = os.path.join(
             self.config['global']['output_path'],
@@ -85,6 +85,7 @@ class TestE3SM(unittest.TestCase):
             config=config,
             event_list=self.event_list)
         self.assertTrue(isinstance(e3sm_diag.config['seasons'], list))
+
 
 if __name__ == '__main__':
     unittest.main()

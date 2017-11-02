@@ -154,7 +154,7 @@ class TestNcclimo(unittest.TestCase):
             event_list=Event_list())
         self.assertEqual(ncclimo.status, JobStatus.VALID)
         self.assertFalse(ncclimo.postvalidate())
-    
+
     def test_ncclimo_execute_bad_regrid_dir(self):
         start_year = 56
         end_year = 60
@@ -181,7 +181,7 @@ class TestNcclimo(unittest.TestCase):
             event_list=Event_list())
         self.assertEqual(ncclimo.status, JobStatus.VALID)
         self.assertFalse(ncclimo.postvalidate())
-    
+
     def test_ncclimo_execute_bad_climo_dir(self):
         start_year = 56
         end_year = 60
@@ -208,6 +208,7 @@ class TestNcclimo(unittest.TestCase):
             event_list=Event_list())
         self.assertEqual(ncclimo.status, JobStatus.VALID)
         self.assertFalse(ncclimo.postvalidate())
+
 
 if __name__ == '__main__':
     unittest.main()
