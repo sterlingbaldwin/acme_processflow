@@ -96,7 +96,7 @@ class FileManager(object):
         Parameters:
             simstart (int): the start year of the simulation,
             simend (int): the end year of the simulation,
-            experiment (str): the name of the experiment 
+            experiment (str): the name of the experiment
                 ex: 20170915.beta2.A_WCYCL1850S.ne30_oECv3_ICG.edison
         """
         print 'Creating file table'

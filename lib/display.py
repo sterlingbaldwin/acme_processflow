@@ -139,7 +139,6 @@ def display(stdscr, event, job_sets):
                     if job.status == JobStatus.RUNNING:
                         delta = now - job.start_time
                         deltastr = strfdelta(delta, "{H}:{M}:{S}")
-                        #deltastr = str(delta)
                         line = '{status} elapsed time: {time}'.format(
                             status=job.status,
                             time=deltastr)

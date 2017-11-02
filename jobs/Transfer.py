@@ -88,7 +88,7 @@ class Transfer(object):
                     self.config[i] = config.get(i)
 
         for i in self.inputs:
-            if i not in self.config or self.config[i] == None:
+            if i not in self.config or self.config[i] is None:
                 if i == 'recursive':
                     self.config[i] = False
                 else:
