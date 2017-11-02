@@ -7,7 +7,7 @@ echo "running tests for branch $BRANCH"
 
 tests=("jobs/test_e3sm.py" "lib/test_setup.py" "lib/test_yearset.py" "lib/test_filemanager.py" "lib/test_util.py" "lib/test_slurm.py" "jobs/test_transfer.py" "lib/test_mailer.py" "jobs/test_ncclimo.py" "jobs/test_timeseries.py" "jobs/test_amwg.py" "lib/test_runmanager.py")
 
-if [ $BRANCH == "nightly" ] && [ "$1" ]; then
+if [ "$1" == "all" ]; then
     echo "Running end to end tests"
     tests+=("./test_processflow.py")
 else
