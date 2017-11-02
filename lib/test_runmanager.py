@@ -8,6 +8,7 @@ from runmanager import RunManager
 from filemanager import FileManager
 from events import Event_list
 
+
 class TestRunManager(unittest.TestCase):
 
     def __init__(self, *args, **kwargs):
@@ -16,7 +17,8 @@ class TestRunManager(unittest.TestCase):
         self.config = ConfigObj(config_path)
         self.project_path = os.path.join(os.getcwd(), '..', 'testproject')
         self.output_path = os.path.join(self.project_path, 'output')
-        self.run_scripts_path = os.path.join(self.project_path, 'output', 'run_scripts')
+        self.run_scripts_path = os.path.join(
+            self.project_path, 'output', 'run_scripts')
         self.mutex = threading.Lock()
         self.remote_endpoint = '9d6d994a-6d04-11e5-ba46-22000b92c6ec'
         self.remote_path = '/global/homes/r/renata/ACME_simulations/20171011.beta2_FCT2-icedeep_branch.A_WCYCL1850S.ne30_oECv3_ICG.edison/'
@@ -47,7 +49,7 @@ class TestRunManager(unittest.TestCase):
             sim_end_year=int(self.config['global']['simulation_end_year']),
             config=self.config,
             filemanager=filemanager)
-        
+
         self.assertEqual(len(runmanager.job_sets), 3)
         for job_set in runmanager.job_sets:
             if job_set.set_number == 1:
@@ -72,7 +74,7 @@ class TestRunManager(unittest.TestCase):
                 self.assertTrue('ncclimo' in job_names)
                 self.assertTrue('amwg' in job_names)
                 self.assertTrue('e3sm_diags' in job_names)
-    
+
     def test_runmanager_write(self):
         filemanager = FileManager(
             database=os.path.join(self.project_path, 'test.db'),
@@ -98,6 +100,7 @@ class TestRunManager(unittest.TestCase):
         path = os.path.join(self.project_path, 'output', 'job_state.txt')
         runmanager.write_job_sets(path)
         self.assertTrue(os.path.exists(path))
+
 
 if __name__ == '__main__':
     unittest.main()

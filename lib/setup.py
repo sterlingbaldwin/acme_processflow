@@ -20,19 +20,26 @@ from util import (setup_globus,
                   print_message,
                   print_debug)
 
+
 def parse_args(argv=None, print_help=None):
     parser = argparse.ArgumentParser()
-    parser.add_argument('-c', '--config', help='Path to configuration file.')   
-    parser.add_argument('-n', '--no-ui', help='Turn off the GUI.', action='store_true')
+    parser.add_argument('-c', '--config', help='Path to configuration file.')
+    parser.add_argument(
+        '-n', '--no-ui', help='Turn off the GUI.', action='store_true')
     parser.add_argument('-l', '--log', help='Path to logging output file.')
-    parser.add_argument('-u', '--no-cleanup', help='Don\'t perform pre or post run cleanup. This will leave all run scripts in place.', action='store_true')
-    parser.add_argument('-m', '--no-monitor', help='Don\'t run the remote monitor or move any files over globus.', action='store_true')
-    parser.add_argument('-f', '--file-list', help='Turn on debug output of the internal file_list so you can see what the current state of the model files are', action='store_true')
-    parser.add_argument('-r', '--resource-dir', help='Path to custom resource directory')
+    parser.add_argument(
+        '-u', '--no-cleanup', help='Don\'t perform pre or post run cleanup. This will leave all run scripts in place.', action='store_true')
+    parser.add_argument(
+        '-m', '--no-monitor', help='Don\'t run the remote monitor or move any files over globus.', action='store_true')
+    parser.add_argument(
+        '-f', '--file-list', help='Turn on debug output of the internal file_list so you can see what the current state of the model files are', action='store_true')
+    parser.add_argument('-r', '--resource-dir',
+                        help='Path to custom resource directory')
     if print_help:
         parser.print_help()
         return
     return parser.parse_args(argv)
+
 
 def setup(argv, display_event, **kwargs):
     """
@@ -107,10 +114,10 @@ Please add a space and run again.'''.format(num=line_index)
             print message
         return False, False, False
 
-    
-
-    config['global']['input_path'] = os.path.join(config['global']['project_path'], 'input')
-    config['global']['output_path'] = os.path.join(config['global']['project_path'], 'output')
+    config['global']['input_path'] = os.path.join(
+        config['global']['project_path'], 'input')
+    config['global']['output_path'] = os.path.join(
+        config['global']['project_path'], 'output')
 
     # setup output and cache directories
     if not os.path.exists(config['global']['input_path']):
@@ -181,12 +188,15 @@ Please add a space and run again.'''.format(num=line_index)
     os.makedirs(tmp_path)
 
     # setup the year_set list
-    config['global']['simulation_start_year'] = int(config['global']['simulation_start_year'])
-    config['global']['simulation_end_year'] = int(config['global']['simulation_end_year'])
+    config['global']['simulation_start_year'] = int(
+        config['global']['simulation_start_year'])
+    config['global']['simulation_end_year'] = int(
+        config['global']['simulation_end_year'])
     sim_start_year = int(config['global']['simulation_start_year'])
     sim_end_year = int(config['global']['simulation_end_year'])
 
-    config['global']['short_term_archive'] = int(config['global']['short_term_archive'])
+    config['global']['short_term_archive'] = int(
+        config['global']['short_term_archive'])
 
     # initialize the filemanager
     event_list.push(message='Initializing file manager')
@@ -195,7 +205,8 @@ Please add a space and run again.'''.format(num=line_index)
         config['global']['source_path'] = head
 
     filemanager = FileManager(
-        database=os.path.join(config['global']['project_path'], 'input', 'workflow.db'),
+        database=os.path.join(
+            config['global']['project_path'], 'input', 'workflow.db'),
         types=config['global']['file_types'],
         sta=config['global']['short_term_archive'],
         remote_path=config['global']['source_path'],
@@ -290,12 +301,14 @@ Please add a space and run again.'''.format(num=line_index)
     logging.info(pformat(config))
     return config, filemanager, runmanager
 
+
 def verify_config(config, template):
     messages = []
     valid = True
     for key, val in config.items():
         if key not in template:
-            msg = '{key} is not a valid config option, is it misspelled?'.format(key=key)
+            msg = '{key} is not a valid config option, is it misspelled?'.format(
+                key=key)
             messages.append(msg)
             valid = False
     for key, val in template.items():
@@ -317,6 +330,7 @@ def verify_config(config, template):
                 valid = False
     return valid, messages
 
+
 def finishup(config, job_sets, state_path, event_list, status, display_event, thread_list, kill_event):
     message = 'Performing post run cleanup'
     event_list.push(message=message)
@@ -329,7 +343,8 @@ def finishup(config, job_sets, state_path, event_list, status, display_event, th
     message = 'All processing complete' if status == 1 else "One or more job failed"
     emailaddr = config.get('global').get('email')
     if emailaddr:
-        event_list.push(message='Sending notification email to {}'.format(emailaddr))
+        event_list.push(
+            message='Sending notification email to {}'.format(emailaddr))
         try:
             if status == 1:
                 msg = 'Post processing for {exp} has completed successfully\n'.format(
@@ -377,6 +392,7 @@ def finishup(config, job_sets, state_path, event_list, status, display_event, th
         kill_event.set()
         t.join(timeout=1.0)
     time.sleep(2)
+
 
 def check_config_white_space(filepath):
     line_index = 0

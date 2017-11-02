@@ -1,10 +1,12 @@
 import smtplib
 from email.mime.text import MIMEText
 
+
 class Mailer(object):
     """
     A simple class for sending email
     """
+
     def __init__(self, src, dst):
         """
         Initialize the mailer with source = src and destination = dst

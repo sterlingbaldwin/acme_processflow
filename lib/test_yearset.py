@@ -35,5 +35,6 @@ class TestYearSet(unittest.TestCase):
         for i in range(5):
             self.assertTrue(i in ys.jobs)
 
+
 if __name__ == '__main__':
     unittest.main()

@@ -3,11 +3,13 @@ from datetime import datetime
 from time import sleep
 from lib.YearSet import SetStatus
 
+
 def xy_check(x, y, hmax, wmax):
     if y >= hmax or x >= wmax:
         return -1
     else:
         return 0
+
 
 def write_line(pad, line, x=None, y=None, color=None):
     if not color:
@@ -16,6 +18,7 @@ def write_line(pad, line, x=None, y=None, color=None):
         pad.addstr(y, x, line, color)
     except:
         pass
+
 
 def display(stdscr, event, job_sets):
     """
@@ -54,7 +57,7 @@ def display(stdscr, event, job_sets):
             if resize is True:
                 height, width = stdscr.getmaxyx()
                 hmax = height - 3
-                wmax = width - 5 
+                wmax = width - 5
                 stdscr.clear()
                 curses.resizeterm(height, width)
                 stdscr.refresh()
@@ -112,8 +115,8 @@ def display(stdscr, event, job_sets):
 
                 # if the job_set is done collapse it
                 if year_set.status == SetStatus.COMPLETED \
-                    or year_set.status == SetStatus.NO_DATA \
-                    or year_set.status == SetStatus.PARTIAL_DATA:
+                        or year_set.status == SetStatus.NO_DATA \
+                        or year_set.status == SetStatus.PARTIAL_DATA:
                     continue
                 for job in year_set.jobs:
                     line = '  >   {type} -- {id} '.format(
@@ -142,8 +145,8 @@ def display(stdscr, event, job_sets):
                             time=deltastr)
                     # if job has ended, print total time
                     elif job.status in [JobStatus.COMPLETED, JobStatus.FAILED] \
-                         and job.end_time \
-                         and job.start_time:
+                            and job.end_time \
+                            and job.start_time:
                         delta = job.end_time - job.start_time
                         line = '{status} elapsed time: {time}'.format(
                             status=job.status,
@@ -226,7 +229,8 @@ def display(stdscr, event, job_sets):
                             if percent < 100:
                                 y += 1
                                 try:
-                                    pad.addstr(y, x, line.message, curses.color_pair(4))
+                                    pad.addstr(y, x, line.message,
+                                               curses.color_pair(4))
                                 except:
                                     pass
                                 pad.clrtoeol()
@@ -262,9 +266,11 @@ def display(stdscr, event, job_sets):
     except KeyboardInterrupt as e:
         raise
 
+
 def sigwinch_handler(n, frame):
     curses.endwin()
     curses.initscr()
+
 
 def start_display(event, job_sets):
     try:

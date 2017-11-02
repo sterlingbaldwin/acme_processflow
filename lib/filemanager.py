@@ -34,6 +34,7 @@ class FileManager(object):
     """
     Manage all files required by jobs
     """
+
     def __init__(self, database, types, sta=False, **kwargs):
         """
         Parameters:
@@ -67,7 +68,8 @@ class FileManager(object):
         head, tail = os.path.split(kwargs.get('remote_path'))
         if not self.sta:
             if tail != 'run':
-                self.remote_path = os.path.join(kwargs.get('remote_path'), 'run')
+                self.remote_path = os.path.join(
+                    kwargs.get('remote_path'), 'run')
             else:
                 self.remote_path = kwargs.get('remote_path')
         else:
@@ -75,7 +77,6 @@ class FileManager(object):
                 self.remote_path = head
             else:
                 self.remote_path = kwargs.get('remote_path')
-        
 
     def __str__(self):
         return str({
@@ -151,14 +152,16 @@ class FileManager(object):
                     for year in xrange(simstart, simend + 1):
                         for month in xrange(1, 13):
                             if _type == 'atm':
-                                name = file_type_map[_type].replace('EXPERIMENT', experiment)
+                                name = file_type_map[_type].replace(
+                                    'EXPERIMENT', experiment)
                             else:
                                 name = file_type_map[_type]
                             yearstr = '{0:04d}'.format(year)
                             monthstr = '{0:02d}'.format(month)
                             name = name.replace('YEAR', yearstr)
                             name = name.replace('MONTH', monthstr)
-                            local_path = os.path.join(self.local_path, _type, name)
+                            local_path = os.path.join(
+                                self.local_path, _type, name)
                             if self.sta:
                                 remote_path = os.path.join(
                                     self.remote_path,
@@ -228,7 +231,8 @@ class FileManager(object):
         Parameters:
             client (globus_sdk.client): the globus client to use for remote query
         """
-        result = client.endpoint_autoactivate(self.remote_endpoint, if_expires_in=2880)
+        result = client.endpoint_autoactivate(
+            self.remote_endpoint, if_expires_in=2880)
         if result['code'] == "AutoActivationFailed":
             return False
         if self.sta:
@@ -236,7 +240,8 @@ class FileManager(object):
                 if _type == 'rest':
                     if not self.updated_rest:
                         self.mutex.acquire()
-                        name, path, size = self.update_remote_rest_sta_path(client)
+                        name, path, size = self.update_remote_rest_sta_path(
+                            client)
                         DataFile.update(
                             remote_status=filestatus['EXISTS'],
                             remote_size=size,
@@ -251,7 +256,8 @@ class FileManager(object):
                 elif 'streams' in _type:
                     remote_path = os.path.join(self.remote_path, 'run')
                 else:
-                    remote_path = os.path.join(self.remote_path, 'archive', _type, 'hist')
+                    remote_path = os.path.join(
+                        self.remote_path, 'archive', _type, 'hist')
                 print 'Querying globus for {}'.format(_type)
                 res = self._get_ls(
                     client=client,
@@ -259,12 +265,16 @@ class FileManager(object):
 
                 self.mutex.acquire()
                 try:
-                    names = [x.name for x in DataFile.select().where(DataFile.datatype == _type)]
-                    to_update_name = [x['name'] for x in res if x['name'] in names]
-                    to_update_size = [x['size'] for x in res if x['name'] in names]
+                    names = [x.name for x in DataFile.select().where(
+                        DataFile.datatype == _type)]
+                    to_update_name = [x['name']
+                                      for x in res if x['name'] in names]
+                    to_update_size = [x['size']
+                                      for x in res if x['name'] in names]
                     q = DataFile.update(
                         remote_status=filestatus['EXISTS'],
-                        remote_size=to_update_size[to_update_name.index(DataFile.name)]
+                        remote_size=to_update_size[to_update_name.index(
+                            DataFile.name)]
                     ).where(
                         (DataFile.name << to_update_name) &
                         (DataFile.datatype == _type))
@@ -283,13 +293,17 @@ class FileManager(object):
             self.mutex.acquire()
             try:
                 for _type in self.types:
-                    names = [x.name for x in DataFile.select().where(DataFile.datatype == _type)]
-                    to_update_name = [x['name'] for x in res if x['name'] in names]
-                    to_update_size = [x['size'] for x in res if x['name'] in names]
+                    names = [x.name for x in DataFile.select().where(
+                        DataFile.datatype == _type)]
+                    to_update_name = [x['name']
+                                      for x in res if x['name'] in names]
+                    to_update_size = [x['size']
+                                      for x in res if x['name'] in names]
 
                     q = DataFile.update(
                         remote_status=filestatus['EXISTS'],
-                        remote_size=to_update_size[to_update_name.index(DataFile.name)]
+                        remote_size=to_update_size[to_update_name.index(
+                            DataFile.name)]
                     ).where(
                         (DataFile.name << to_update_name) &
                         (DataFile.datatype == _type))
@@ -315,7 +329,7 @@ class FileManager(object):
                     sys.exit()
             else:
                 return res
-    
+
     def update_remote_rest_sta_path(self, client):
         if not self.sta:
             return
@@ -370,7 +384,7 @@ class FileManager(object):
                         datafile.local_size = local_size
                         should_save = True
                     if local_size != datafile.local_size \
-                    or should_save:
+                            or should_save:
                         datafile.local_size = local_size
                         datafile.save()
         except Exception as e:
@@ -427,7 +441,7 @@ class FileManager(object):
             if len(required_files) == 0:
                 return False
             target_files = []
-            target_size = 1e11 # 100 GB
+            target_size = 1e11  # 100 GB
             total_size = 0
             for file in required_files:
                 if total_size + file.remote_size < target_size:
@@ -515,7 +529,7 @@ class FileManager(object):
         names = [x['name'] for x in transfer.file_list]
         for datafile in DataFile.select().where(DataFile.name << names):
             if os.path.exists(datafile.local_path) \
-            and os.path.getsize(datafile.local_path) == datafile.remote_size:
+                    and os.path.getsize(datafile.local_path) == datafile.remote_size:
                 datafile.local_status = filestatus['EXISTS']
                 datafile.local_size = os.path.getsize(datafile.local_path)
             else:
@@ -527,7 +541,6 @@ class FileManager(object):
         except:
             pass
         print 'table update complete'
-
 
     def years_ready(self, start_year, end_year):
         """
@@ -584,16 +597,15 @@ class FileManager(object):
             self.mutex.release()
         return files
 
-
     def check_year_sets(self, job_sets):
         """
         Checks the file_list, and sets the year_set status to ready if all the files are in place,
         otherwise, checks if there is partial data, or zero data
         """
         incomplete_job_sets = [s for s in job_sets
-                            if s.status != SetStatus.COMPLETED
-                            and s.status != SetStatus.RUNNING
-                            and s.status != SetStatus.FAILED]
+                               if s.status != SetStatus.COMPLETED
+                               and s.status != SetStatus.RUNNING
+                               and s.status != SetStatus.FAILED]
 
         for job_set in incomplete_job_sets:
             data_ready = self.years_ready(

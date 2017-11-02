@@ -30,6 +30,7 @@ from string import Formatter
 from slurm import Slurm
 from models import DataFile
 
+
 def transfer_directory(**kwargs):
     """
     Transfer all the contents from source_endpoint:src_path to destination_endpoint:dst_path
@@ -62,7 +63,7 @@ def transfer_directory(**kwargs):
         task_id = result['task_id']
     except:
         return False
-    
+
     directory_name = src_path.split(os.sep)[-1]
     msg = '{dir} transfer starting'.format(dir=directory_name)
     event_list.push(message=msg)
@@ -80,6 +81,7 @@ def transfer_directory(**kwargs):
         else:
             event_list.push(message=msg)
             sleep(5)
+
 
 def check_globus(**kwargs):
     """
@@ -116,11 +118,12 @@ def check_globus(**kwargs):
         print "Access granted"
         return True, None
 
+
 def strfdelta(tdelta, fmt):
     f = Formatter()
     d = {}
     l = {'D': 86400, 'H': 3600, 'M': 60, 'S': 1}
-    k = map( lambda x: x[1], list(f.parse(fmt)))
+    k = map(lambda x: x[1], list(f.parse(fmt)))
     rem = int(tdelta.total_seconds())
 
     for i in ('D', 'H', 'M', 'S'):
@@ -129,11 +132,12 @@ def strfdelta(tdelta, fmt):
 
     return f.format(fmt, **d)
 
+
 def setup_globus(endpoints, no_ui=False, **kwargs):
     """
     Check globus login status and login as nessisary, then
     iterate over a list of endpoints and activate them all
-    
+
     Parameters:
        endpoints: list of strings containing globus endpoint UUIDs
        no_ui: a boolean flag, true if running without the UI
@@ -148,7 +152,7 @@ def setup_globus(endpoints, no_ui=False, **kwargs):
     """
     message_sent = False
     display_event = kwargs.get('display_event')
-    
+
     if no_ui:
         mailer = Mailer(
             src='processflowbot@llnl.gov',
@@ -192,7 +196,7 @@ def setup_globus(endpoints, no_ui=False, **kwargs):
     activated = False
     email_msg = ''
     client = get_client()
-    while not activated: 
+    while not activated:
         activated = True
         for endpoint in endpoints:
             msg = 'activating endpoint {}'.format(endpoint)
@@ -212,7 +216,8 @@ def setup_globus(endpoints, no_ui=False, **kwargs):
                     break
                 message = '\n{server} requires manual activation, please open the following URL in a browser to activate the endpoint:\n'.format(
                     server=hostname)
-                message += "https://www.globus.org/app/endpoints/{endpoint}/activate \n\n".format(endpoint=endpoint)
+                message += "https://www.globus.org/app/endpoints/{endpoint}/activate \n\n".format(
+                    endpoint=endpoint)
                 if no_ui:
                     email_msg += message
                 else:
@@ -233,6 +238,7 @@ def setup_globus(endpoints, no_ui=False, **kwargs):
         display_event.clear()
     return True
 
+
 def get_climo_output_files(input_path, start_year, end_year):
     """
     Return a list of ncclimo climatologies from start_year to end_year
@@ -250,6 +256,7 @@ def get_climo_output_files(input_path, start_year, end_year):
         end=end_year)
     return [x for x in contents if re.search(pattern=pattern, string=x)]
 
+
 def path_exists(config_items):
     """
     Checks the config for any netCDF file paths and validates that they exist
@@ -265,8 +272,10 @@ def path_exists(config_items):
                 return False
     return True
 
+
 def cmd_exists(cmd):
     return any(os.access(os.path.join(path, cmd), os.X_OK) for path in os.environ["PATH"].split(os.pathsep))
+
 
 def print_debug(e):
     """
@@ -280,6 +289,7 @@ def print_debug(e):
     _, _, tb = sys.exc_info()
     print '6', traceback.print_tb(tb)
 
+
 def format_debug(e):
     """
     Return a string of an exceptions relavent information
@@ -292,6 +302,7 @@ def format_debug(e):
         exec_1=sys.exc_info()[1],
         lineno=traceback.tb_lineno(sys.exc_info()[2]),
         stack=traceback.print_tb(tb))
+
 
 def write_human_state(event_list, job_sets, mutex, state_path='run_state.txt', print_file_list=False):
     """
@@ -309,14 +320,14 @@ def write_human_state(event_list, job_sets, mutex, state_path='run_state.txt', p
                 datetime.now().strftime('%d, %b %Y %I:%M'))
             out_str = line
             out_str += 'Running under process {0}\n\n'.format(os.getpid())
-            
+
             for year_set in job_sets:
                 line = 'Year_set {num}: {start} - {end}\n'.format(
                     num=year_set.set_number,
                     start=year_set.set_start_year,
                     end=year_set.set_end_year)
                 out_str += line
-               
+
                 line = 'status: {status}\n'.format(
                     status=year_set.status)
                 out_str += line
@@ -327,9 +338,9 @@ def write_human_state(event_list, job_sets, mutex, state_path='run_state.txt', p
                         id=job.job_id,
                         status=job.status)
                     out_str += line
-                   
+
                 out_str += '\n'
-              
+
             out_str += '\n'
             for line in event_list.list:
                 if 'Transfer' in line.message:
@@ -337,7 +348,7 @@ def write_human_state(event_list, job_sets, mutex, state_path='run_state.txt', p
                 if 'hosted' in line.message:
                     continue
                 out_str += line.message + '\n'
-               
+
             # out_str += line.message + '\n'
             for line in event_list.list:
                 if 'Transfer' not in line.message:
@@ -364,14 +375,15 @@ def write_human_state(event_list, job_sets, mutex, state_path='run_state.txt', p
             os.makedirs(head)
         with open(file_list_path, 'w') as fp:
             mutex.acquire(False)
-            types = [x.datatype for x in DataFile.select(DataFile.datatype).distinct()]
+            types = [x.datatype for x in DataFile.select(
+                DataFile.datatype).distinct()]
             try:
                 for _type in types:
                     fp.write(_type + ':\n')
                     datafiles = DataFile.select().where(DataFile.datatype == _type)
                     for datafile in datafiles:
-                        
-                        filestr = '------------------------------------------' 
+
+                        filestr = '------------------------------------------'
                         filestr += '\n     name: ' + datafile.name + '\n     local_status: '
                         if datafile.local_status == 0:
                             filestr += ' present, '
@@ -386,15 +398,18 @@ def write_human_state(event_list, job_sets, mutex, state_path='run_state.txt', p
                             filestr += ' missing'
                         else:
                             filestr += ' in transit'
-                        filestr += '\n     local_size: ' + str(datafile.local_size)
+                        filestr += '\n     local_size: ' + \
+                            str(datafile.local_size)
                         filestr += '\n     local_path: ' + datafile.local_path
-                        filestr += '\n     remote_size: ' + str(datafile.remote_size)
+                        filestr += '\n     remote_size: ' + \
+                            str(datafile.remote_size)
                         filestr += '\n     remote_path: ' + datafile.remote_path + '\n'
                         fp.write(filestr)
             except Exception as e:
                 print_debug(e)
             finally:
                 mutex.release()
+
 
 class colors:
     HEADER = '\033[95m'
@@ -406,11 +421,13 @@ class colors:
     BOLD = '\033[1m'
     UNDERLINE = '\033[4m'
 
+
 def print_message(message, status='error'):
     if status == 'error':
         print colors.FAIL + '[-] ' + colors.ENDC + colors.BOLD + str(message) + colors.ENDC
     elif status == 'ok':
         print colors.OKGREEN + '[+] ' + colors.ENDC + str(message)
+
 
 def render(variables, input_path, output_path, delimiter='%%'):
     """
@@ -453,19 +470,23 @@ def render(variables, input_path, output_path, delimiter='%%'):
             if len(delim_index) < 2:
                 continue
 
-            template_string = line[delim_index[0] + len(delimiter): delim_index[1]]
+            template_string = line[delim_index[0] +
+                                   len(delimiter): delim_index[1]]
             for item in variables:
                 if item == template_string:
                     rendered_start = line[:delim_index[0]]
                     rendered_middle = variables[item]
-                    rendered_end = line[delim_index[0] + len(delimiter) + len(item) + len(delimiter):]
-                    rendered_string += str(rendered_start) + str(rendered_middle) + str(rendered_end)
+                    rendered_end = line[delim_index[0] +
+                                        len(delimiter) + len(item) + len(delimiter):]
+                    rendered_string += str(rendered_start) + \
+                        str(rendered_middle) + str(rendered_end)
                 else:
                     continue
         else:
             rendered_string = line
         outfile.write(rendered_string)
     return True
+
 
 def create_symlink_dir(src_dir, src_list, dst):
     """
@@ -487,6 +508,7 @@ def create_symlink_dir(src_dir, src_list, dst):
         except Exception as e:
             msg = format_debug(e)
             logging.error(e)
+
 
 def thread_sleep(seconds, event):
     """
