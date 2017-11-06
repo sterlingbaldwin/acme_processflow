@@ -20,7 +20,6 @@ requirements:
     - alabaster
     - asn1crypto
     - astroid
-    - autopep8
     - babel
     - backports.functools_lru_cache
     - backports.shutil_get_terminal_size
@@ -90,10 +89,6 @@ requirements:
     - jinja2
     - jpeg
     - jsonschema
-    - jupyter
-    - jupyter_client
-    - jupyter_console
-    - jupyter_core
     - lapack
     - lazy-object-proxy
     - libcdms
@@ -119,8 +114,6 @@ requirements:
     - mpich
     - mpmath
     - msgpack-python
-    - nb_conda
-    - nb_conda_kernels
     - nbconvert
     - nbformat
     - nco
@@ -139,7 +132,6 @@ requirements:
     - pandocfilters
     - partd
     - pathlib2
-    - pep8
     - pexpect
     - pickleshare
     - pillow
@@ -154,14 +146,12 @@ requirements:
     - pyepsg
     - pyflakes
     - pygments
-    - pylint
     - pyopenssl
     - pyparsing
     - pyproj
     - pyshp
     - pysocks
     - pyspharm
-    - pytest
     - python
     - python-dateutil
     - pytz
@@ -181,8 +171,6 @@ requirements:
     - six
     - snowballstemmer
     - sortedcontainers
-    - sphinx
-    - sphinxcontrib-websupport
     - spyder
     - sqlite
     - ssl_match_hostname
