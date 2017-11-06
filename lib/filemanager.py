@@ -142,7 +142,7 @@ class FileManager(object):
                         'input',
                         _type,
                         name)
-                    if sta:
+                    if self.sta:
                         remote_path = os.path.join(self.remote_path, 'run', name)
                     newfiles = self._add_file(
                         newfiles=newfiles,
