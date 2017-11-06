@@ -109,7 +109,8 @@ class RunManager(object):
             start=start_year,
             end=end_year)
 
-        atm_path = os.path.join(config['global']['project_path'], 'input', 'atm')
+        atm_path = os.path.join(
+            config['global']['project_path'], 'input', 'atm')
         output_base_path = config['global']['output_path']
         run_scripts_path = config['global']['run_scripts_path']
 
@@ -322,7 +323,8 @@ class RunManager(object):
         timeseries = Timeseries(
             config=config,
             event_list=self.event_list)
-        msg = 'Adding Timeseries job to the job list: {}'.format(str(timeseries))
+        msg = 'Adding Timeseries job to the job list: {}'.format(
+            str(timeseries))
         logging.info(msg)
         year_set.add_job(timeseries)
 
@@ -366,7 +368,7 @@ class RunManager(object):
             year_set_string)
         if not os.path.exists(project_dir):
             os.makedirs(project_dir)
-        
+
         input_path = os.path.join(
             input_base_path,
             'tmp',
@@ -374,7 +376,7 @@ class RunManager(object):
             year_set_string)
         if not os.path.exists(input_path):
             os.makedirs(input_path)
-        
+
         # Varify the template
         template_path = os.path.join(
             resource_path,
@@ -490,7 +492,8 @@ class RunManager(object):
         amwg_diag = AMWGDiagnostic(
             config=config,
             event_list=self.event_list)
-        msg = 'Adding AMWGDiagnostic job to the job list: {}'.format(str(amwg_diag))
+        msg = 'Adding AMWGDiagnostic job to the job list: {}'.format(
+            str(amwg_diag))
         logging.info(msg)
         year_set.add_job(amwg_diag)
 
@@ -518,7 +521,6 @@ class RunManager(object):
         backend = kwargs['backend']
         sets = kwargs['sets']
         resource_path = kwargs['resource_path']
-
 
         if not self._precheck(year_set, 'e3sm_diags'):
             print 'rejecting e3sm_diags'
@@ -673,7 +675,7 @@ class RunManager(object):
                     job.start_time = datetime.now()
                     for job_set in self.job_sets:
                         if job_set.set_number == job.year_set \
-                        and job_set.status != SetStatus.FAILED:
+                                and job_set.status != SetStatus.FAILED:
                             job_set.status = SetStatus.RUNNING
                             break
                 elif status == JobStatus.COMPLETED:
@@ -740,7 +742,7 @@ class RunManager(object):
             # msg = '{job} hosted at {url}/index.html'.format(
             #     url=url,
             #     job=job.type)
-            #logging.info(msg)
+            # logging.info(msg)
         elif job.type == 'amwg':
             img_dir = '{start:04d}-{end:04d}{casename}-obs'.format(
                 start=job.config.get('start_year'),
@@ -787,10 +789,11 @@ class RunManager(object):
             logging.error(msg)
             return
         try:
-            msg = 'copying images from {src} to {dst}'.format(src=img_src, dst=host_dir)
+            msg = 'copying images from {src} to {dst}'.format(
+                src=img_src, dst=host_dir)
             logging.info(msg)
             copytree(src=img_src, dst=host_dir)
-            #recursive_file_permissions(host_dir)
+            # recursive_file_permissions(host_dir)
             from subprocess import Popen
             p = Popen(['chmod', '-R', '0755', host_dir])
             out, err = p.communicate()
@@ -819,7 +822,7 @@ class RunManager(object):
         # First check for pending jobs
         for job_set in self.job_sets:
             if job_set.status != SetStatus.COMPLETED \
-            and job_set.status != SetStatus.FAILED:
+                    and job_set.status != SetStatus.FAILED:
                 return -1
         # all job sets are either complete or failed
         for job_set in self.job_sets:

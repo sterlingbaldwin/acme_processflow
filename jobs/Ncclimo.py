@@ -25,6 +25,7 @@ class Climo(object):
     """
     A wrapper around ncclimo, used to compute the climotologies from raw output data
     """
+
     def __init__(self, config, event_list):
         self.event_list = event_list
         self.config = {}
@@ -51,9 +52,9 @@ class Climo(object):
             'run_scripts_path': ''
         }
         self.slurm_args = {
-            'num_cores': '-n 16', # 16 cores
-            'run_time': '-t 0-05:00', # 2 hours run time
-            'num_machines': '-N 1', # run on one machine
+            'num_cores': '-n 16',  # 16 cores
+            'run_time': '-t 0-05:00',  # 2 hours run time
+            'num_machines': '-N 1',  # run on one machine
             'oversubscribe': '--oversubscribe'
             # 'oversubscribe': '--oversubscribe'
         }
@@ -72,7 +73,8 @@ class Climo(object):
         for i in self.inputs:
             if i not in self.config:
                 all_inputs = False
-                message = 'Argument {} missing for Ncclimo, prevalidation failed'.format(i)
+                message = 'Argument {} missing for Ncclimo, prevalidation failed'.format(
+                    i)
                 self.event_list.push(message=message)
                 print message
                 break
@@ -84,7 +86,6 @@ class Climo(object):
         self.config['output_directory'] = self.config['regrid_output_directory']
         self.output_path = self.config['regrid_output_directory']
 
-        
         if not os.path.exists(self.config.get('run_scripts_path')):
             os.makedirs(self.config.get('run_scripts_path'))
         if self.year_set == 0:
@@ -119,18 +120,20 @@ class Climo(object):
         ]
         slurm_command = ' '.join(cmd)
 
-
         # Submitting the job to SLURM
         expected_name = 'ncclimo_set_{year_set}_{start}_{end}'.format(
             year_set=self.config.get('year_set'),
             start='{:04d}'.format(self.config.get('start_year')),
             end='{:04d}'.format(self.config.get('end_year')))
-        run_script = os.path.join(self.config.get('run_scripts_path'), expected_name)
+        run_script = os.path.join(self.config.get(
+            'run_scripts_path'), expected_name)
         if os.path.exists(run_script):
             os.remove(run_script)
 
-        self.slurm_args['output_file'] = '-o {output_file}'.format(output_file=run_script + '.out')
-        slurm_prefix = '\n'.join(['#SBATCH ' + self.slurm_args[s] for s in self.slurm_args]) + '\n'
+        self.slurm_args['output_file'] = '-o {output_file}'.format(
+            output_file=run_script + '.out')
+        slurm_prefix = '\n'.join(['#SBATCH ' + self.slurm_args[s]
+                                  for s in self.slurm_args]) + '\n'
 
         with open(run_script, 'w') as batchfile:
             batchfile.write('#!/bin/bash\n')
@@ -208,4 +211,3 @@ class Climo(object):
     @status.setter
     def status(self, status):
         self._status = status
-

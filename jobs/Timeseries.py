@@ -24,6 +24,7 @@ class Timeseries(object):
     """
     A wrapper around ncclimo, used to compute the climotologies from raw output data
     """
+
     def __init__(self, config, event_list):
         self.event_list = event_list
         self.config = {}
@@ -50,9 +51,9 @@ class Timeseries(object):
             'file_list': '',
         }
         self.slurm_args = {
-            'num_cores': '-n 16', # 16 cores
-            'run_time': '-t 0-05:00', # 2 hours run time
-            'num_machines': '-N 1', # run on one machine
+            'num_cores': '-n 16',  # 16 cores
+            'run_time': '-t 0-05:00',  # 2 hours run time
+            'num_machines': '-N 1',  # run on one machine
             'oversubscribe': '--oversubscribe'
         }
         self.prevalidate(config)
@@ -114,12 +115,15 @@ class Timeseries(object):
             year_set=self.year_set,
             start='{:04d}'.format(self.config.get('start_year')),
             end='{:04d}'.format(self.config.get('end_year')))
-        run_script = os.path.join(self.config.get('run_scripts_path'), expected_name)
+        run_script = os.path.join(self.config.get(
+            'run_scripts_path'), expected_name)
         if os.path.exists(run_script):
             os.remove(run_script)
 
-        self.slurm_args['output_file'] = '-o {output_file}'.format(output_file=run_script + '.out')
-        slurm_prefix = '\n'.join(['#SBATCH ' + self.slurm_args[s] for s in self.slurm_args]) + '\n'
+        self.slurm_args['output_file'] = '-o {output_file}'.format(
+            output_file=run_script + '.out')
+        slurm_prefix = '\n'.join(['#SBATCH ' + self.slurm_args[s]
+                                  for s in self.slurm_args]) + '\n'
 
         with open(run_script, 'w') as batchfile:
             batchfile.write('#!/bin/bash\n')
@@ -141,7 +145,7 @@ class Timeseries(object):
         self.event_list.push(message=message)
 
         return self.job_id
-    
+
     def _find_year(self, filename):
         pattern = '_\d\d\d\d\d\d_\d\d\d\d\d\d.*'
         match = re.search(pattern=pattern, string=filename)

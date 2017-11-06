@@ -38,9 +38,9 @@ class E3SMDiags(object):
             'output_path': ''
         }
         self.slurm_args = {
-            'num_cores': '-n 16', # 16 cores
-            'run_time': '-t 0-02:00', # 2 hour max run time
-            'num_machines': '-N 1', # run on one machine
+            'num_cores': '-n 16',  # 16 cores
+            'run_time': '-t 0-02:00',  # 2 hour max run time
+            'num_machines': '-N 1',  # run on one machine
             'oversubscribe': '--oversubscribe'
         }
         self.start_time = None
@@ -170,7 +170,8 @@ class E3SMDiags(object):
         cmd = 'acme_diags_driver.py -p {template}'.format(
             template=template_out)
 
-        slurm_args_str = ['#SBATCH {value}\n'.format(value=v) for k, v in self.slurm_args.items()]
+        slurm_args_str = ['#SBATCH {value}\n'.format(
+            value=v) for k, v in self.slurm_args.items()]
         slurm_prefix = ''.join(slurm_args_str)
         with open(run_script, 'w') as batchfile:
             batchfile.write('#!/bin/bash\n')
@@ -193,7 +194,6 @@ class E3SMDiags(object):
         self.event_list.push(message=message)
 
         return self.job_id
-
 
     def __str__(self):
         return pformat({

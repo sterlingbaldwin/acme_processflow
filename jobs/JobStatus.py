@@ -1,5 +1,6 @@
 from enum import Enum
 
+
 class JobStatus(Enum):
     VALID = 0
     INVALID = 1
@@ -10,6 +11,7 @@ class JobStatus(Enum):
     PENDING = 6
     WAITING_ON_INPUT = 7
     CANCELLED = 8
+
 
 StatusMap = {
     'VALID': JobStatus.VALID,

@@ -1,5 +1,6 @@
 from peewee import *
 
+
 class DataFile(Model):
     name = CharField()
     local_path = CharField()

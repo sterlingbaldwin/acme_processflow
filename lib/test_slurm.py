@@ -14,7 +14,8 @@ class TestSlurm(unittest.TestCase):
         self.assertTrue(isinstance(job_id, int))
 
         info = slurm.showjob(job_id)
-        self.assertTrue(info['JobState'] in ['PENDING', 'RUNNING', 'COMPLETE', 'COMPLETING'])
+        self.assertTrue(info['JobState'] in ['PENDING',
+                                             'RUNNING', 'COMPLETE', 'COMPLETING'])
 
         info = slurm.queue()
         in_queue = False
@@ -25,20 +26,21 @@ class TestSlurm(unittest.TestCase):
                 break
         self.assertTrue(in_queue)
         slurm.cancel(job_id)
-    
+
     def test_shownode(self):
         slurm = Slurm()
         node = 'acme1'
         node_info = slurm.shownode(node)
         self.assertTrue(node_info['Arch'] == 'x86_64')
         self.assertTrue(node_info['CoresPerSocket'] == '24')
-    
+
     # def test_slurmrun(self):
     #     slurm = Slurm()
     #     command = 'hostname'
     #     sargs = '-n 1 -N 1'
     #     output = slurm.run(command, sargs=sargs)
     #     self.assertEqual(output, 'acme1.llnl.gov')
+
 
 if __name__ == '__main__':
     unittest.main()

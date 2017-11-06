@@ -31,5 +31,6 @@ class TestTimeseries(unittest.TestCase):
         }, Event_list())
         self.assertEqual(timeseries.status, JobStatus.VALID)
 
+
 if __name__ == '__main__':
     unittest.main()

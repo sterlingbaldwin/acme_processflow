@@ -7,14 +7,15 @@ class Slurm(object):
     """
     A python interface for slurm using subprocesses
     """
+
     def __init__(self):
         """
         Check if the system has Slurm installed
         """
         if not any(os.access(os.path.join(path, 'sinfo'), os.X_OK) for path in os.environ["PATH"].split(os.pathsep)):
-            raise Exception('Unable to find slurm, is it installed on this sytem?')
+            raise Exception(
+                'Unable to find slurm, is it installed on this sytem?')
 
-    
     def batch(self, cmd, sargs):
         """
         Submit to the batch queue in non-interactive mode
@@ -84,7 +85,8 @@ class Slurm(object):
             jobid = str(jobid)
         success = False
         while not success:
-            proc = Popen(['scontrol', 'show', 'job', jobid], shell=False, stderr=PIPE, stdout=PIPE)
+            proc = Popen(['scontrol', 'show', 'job', jobid],
+                         shell=False, stderr=PIPE, stdout=PIPE)
             out, err = proc.communicate()
             if 'Transport endpoint is not connected' in err:
                 sleep(1)
@@ -112,7 +114,8 @@ class Slurm(object):
         """
         tries = 0
         while tries != 10:
-            proc = Popen(['scontrol', 'show', 'node', nodeid], shell=False, stderr=PIPE, stdout=PIPE)
+            proc = Popen(['scontrol', 'show', 'node', nodeid],
+                         shell=False, stderr=PIPE, stdout=PIPE)
             out, err = proc.communicate()
             if 'Transport endpoint is not connected' in err:
                 tries += 1
@@ -170,7 +173,7 @@ class Slurm(object):
     def cancel(self, jobid):
         """
         Cancel a job by id
-        
+
         Parameters:
             jobid (str): The id of the job to cancel
         Returns:
@@ -180,7 +183,8 @@ class Slurm(object):
             jobid = str(jobid)
         tries = 0
         while tries != 10:
-            proc = Popen(['scancel', jobid], shell=False, stderr=PIPE, stdout=PIPE)
+            proc = Popen(['scancel', jobid], shell=False,
+                         stderr=PIPE, stdout=PIPE)
             out, err = proc.communicate()
             if 'Transport endpoint is not connected' in err:
                 tries += 1

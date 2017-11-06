@@ -26,10 +26,12 @@ from lib.util import get_climo_output_files
 from lib.slurm import Slurm
 from lib.events import Event_list
 
+
 class AMWGDiagnostic(object):
     """
     A job class to perform the NCAR AMWG Diagnostic
     """
+
     def __init__(self, config, event_list):
         """
         Setup class attributes
@@ -73,13 +75,13 @@ class AMWGDiagnostic(object):
         self.job_id = 0
         self.depends_on = ['ncclimo']
         self.slurm_args = {
-            'num_cores': '-n 16', # 16 cores
-            'run_time': '-t 0-02:00', # 2 hours run time
-            'num_machines': '-N 1', # run on one machine
+            'num_cores': '-n 16',  # 16 cores
+            'run_time': '-t 0-02:00',  # 2 hours run time
+            'num_machines': '-N 1',  # run on one machine
             'oversubscribe': '--oversubscribe'
         }
         self.prevalidate(config)
-    
+
     def __str__(self):
         return pformat({
             'type': self.type,
@@ -139,7 +141,7 @@ class AMWGDiagnostic(object):
             self.event_list.push(message=message)
             logging.info(message)
             return 0
-        
+
         # Create directory of regridded climos
 
         regrid_path = os.path.join(
@@ -150,10 +152,11 @@ class AMWGDiagnostic(object):
             start_year=self.start_year,
             end_year=self.end_year)
         if not file_list or len(file_list) == 0:
-            print "ERROR: AMWG: {start:04d}-{end:04d} could not find input climatologies at {path}, did you add ncclimo to this year_set?".format(
-                start=self.start_year,
-                end=self.end_year,
-                path=regrid_path)
+            print """
+ERROR: AMWG: {start:04d}-{end:04d} could not find input climatologies at {path}\n
+did you add ncclimo to this year_set?""".format(start=self.start_year,
+                                                end=self.end_year,
+                                                path=regrid_path)
             self.status = JobStatus.FAILED
             return 0
         if not os.path.exists(self.config['test_path_climo']):
@@ -163,7 +166,7 @@ class AMWGDiagnostic(object):
             src_dir=regrid_path,
             src_list=file_list,
             dst=self.config['test_path_climo'])
-        
+
         # Rename the files to the format amwg expects
         for item in os.listdir(self.config['test_path_climo']):
             search = re.search(r'\_\d\d\d\d\d\d\_', item)
@@ -206,7 +209,8 @@ class AMWGDiagnostic(object):
             output_file=run_script + '.out')
         cmd = '\ncsh {template}'.format(
             template=template_out)
-        slurm_args_str = ['#SBATCH {value}'.format(value=v) for k, v in self.slurm_args.items()]
+        slurm_args_str = ['#SBATCH {value}'.format(
+            value=v) for k, v in self.slurm_args.items()]
         slurm_prefix = '\n'.join(slurm_args_str)
         with open(run_script, 'w') as batchfile:
             batchfile.write('#!/bin/bash\n')

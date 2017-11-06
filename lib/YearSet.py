@@ -1,6 +1,7 @@
 from enum import Enum
 from pprint import pformat
 
+
 class SetStatus(Enum):
     NO_DATA = 0
     PARTIAL_DATA = 1
@@ -31,7 +32,7 @@ class YearSet(object):
 
     def add_job(self, job):
         self._jobs.append(job)
-    
+
     @property
     def length(self):
         return self._set_end_year - (self._set_start_year - 1)
@@ -42,35 +43,35 @@ class YearSet(object):
 
     def get_job_names(self):
         return [x.type for x in self._jobs]
-    
+
     @property
     def status(self):
         return self._status
-    
+
     @status.setter
     def status(self, status):
         self._status = status
-    
+
     @property
     def set_number(self):
         return self._set_number
-    
+
     @set_number.setter
     def set_number(self, num):
         self._set_number = num
-    
+
     @property
     def set_start_year(self):
         return self._set_start_year
-    
+
     @set_start_year.setter
     def set_start_year(self, num):
         self._set_start_year = num
-    
+
     @property
     def set_end_year(self):
         return self._set_end_year
-    
+
     @set_end_year.setter
     def set_end_year(self, num):
         self._set_end_year = num

@@ -49,6 +49,7 @@ os.environ['UVCDAT_ANONYMOUS_LOG'] = 'False'
 # create global Event_list
 event_list = Event_list()
 
+
 def main(test=False, **kwargs):
     # The master configuration object
     config = {}
@@ -120,6 +121,7 @@ def main(test=False, **kwargs):
     filemanager.update_local_status()
     all_data = filemanager.all_data_local()
     if not all_data:
+        print "Updating remote file status"
         filemanager.update_remote_status(client)
         all_data_remote = filemanager.all_data_remote()
     write_human_state(
@@ -159,7 +161,8 @@ def main(test=False, **kwargs):
         print msg
         event_list.push(message=msg)
         logging.info(msg)
-        src_path = os.path.join(config['global']['source_path'], 'case_scripts')
+        src_path = os.path.join(
+            config['global']['source_path'], 'case_scripts')
         while True:
             try:
                 args = {
@@ -186,7 +189,7 @@ def main(test=False, **kwargs):
     local_check_delay = 2
     printed = False
     try:
-        loop_count = 0
+        loop_count = remote_check_delay
         print "--- Entering main loop ---"
         print "Current status can be found at {}".format(state_path)
         while True:
@@ -215,7 +218,7 @@ def main(test=False, **kwargs):
                         print 'All data local, turning off remote checks'
                         printed = True
                 if not all_data \
-                and not config['global']['no_monitor']:
+                        and not config['global']['no_monitor']:
                     transfer_started = filemanager.transfer_needed(
                         event_list=event_list,
                         event=thread_kill_event,
@@ -282,6 +285,14 @@ def main(test=False, **kwargs):
         thread_kill_event.set()
         for thread in thread_list:
             thread.join(timeout=1.0)
+    except Exception as e:
+        print_message('----- UNEXPECTED EXCEPTION OCCURED -----')
+        print_debug(e)
+        display_event.set()
+        thread_kill_event.set()
+        for thread in thread_list:
+            thread.join(timeout=1.0)
+
 
 if __name__ == "__main__":
     if sys.argv[1] == 'test':

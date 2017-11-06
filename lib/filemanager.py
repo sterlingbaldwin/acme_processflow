@@ -34,6 +34,7 @@ class FileManager(object):
     """
     Manage all files required by jobs
     """
+
     def __init__(self, database, types, sta=False, **kwargs):
         """
         Parameters:
@@ -58,7 +59,8 @@ class FileManager(object):
         if DataFile.table_exists():
             DataFile.drop_table()
         DataFile.create_table()
-        self.mutex.release()
+        if self.mutex.locked():
+            self.mutex.release()
         self.remote_endpoint = kwargs.get('remote_endpoint')
         self.local_path = kwargs.get('local_path')
         self.local_endpoint = kwargs.get('local_endpoint')
@@ -67,7 +69,8 @@ class FileManager(object):
         head, tail = os.path.split(kwargs.get('remote_path'))
         if not self.sta:
             if tail != 'run':
-                self.remote_path = os.path.join(kwargs.get('remote_path'), 'run')
+                self.remote_path = os.path.join(
+                    kwargs.get('remote_path'), 'run')
             else:
                 self.remote_path = kwargs.get('remote_path')
         else:
@@ -75,7 +78,6 @@ class FileManager(object):
                 self.remote_path = head
             else:
                 self.remote_path = kwargs.get('remote_path')
-        
 
     def __str__(self):
         return str({
@@ -95,7 +97,7 @@ class FileManager(object):
         Parameters:
             simstart (int): the start year of the simulation,
             simend (int): the end year of the simulation,
-            experiment (str): the name of the experiment 
+            experiment (str): the name of the experiment
                 ex: 20170915.beta2.A_WCYCL1850S.ne30_oECv3_ICG.edison
         """
         print 'Creating file table'
@@ -151,14 +153,16 @@ class FileManager(object):
                     for year in xrange(simstart, simend + 1):
                         for month in xrange(1, 13):
                             if _type == 'atm':
-                                name = file_type_map[_type].replace('EXPERIMENT', experiment)
+                                name = file_type_map[_type].replace(
+                                    'EXPERIMENT', experiment)
                             else:
                                 name = file_type_map[_type]
                             yearstr = '{0:04d}'.format(year)
                             monthstr = '{0:02d}'.format(month)
                             name = name.replace('YEAR', yearstr)
                             name = name.replace('MONTH', monthstr)
-                            local_path = os.path.join(self.local_path, _type, name)
+                            local_path = os.path.join(
+                                self.local_path, _type, name)
                             if self.sta:
                                 remote_path = os.path.join(
                                     self.remote_path,
@@ -187,7 +191,8 @@ class FileManager(object):
             except Exception as e:
                 print_debug(e)
             finally:
-                self.mutex.release()
+                if self.mutex.locked():
+                    self.mutex.release()
             print 'Database update complete'
 
     def _add_file(self, newfiles, **kwargs):
@@ -228,7 +233,8 @@ class FileManager(object):
         Parameters:
             client (globus_sdk.client): the globus client to use for remote query
         """
-        result = client.endpoint_autoactivate(self.remote_endpoint, if_expires_in=2880)
+        result = client.endpoint_autoactivate(
+            self.remote_endpoint, if_expires_in=2880)
         if result['code'] == "AutoActivationFailed":
             return False
         if self.sta:
@@ -236,7 +242,8 @@ class FileManager(object):
                 if _type == 'rest':
                     if not self.updated_rest:
                         self.mutex.acquire()
-                        name, path, size = self.update_remote_rest_sta_path(client)
+                        name, path, size = self.update_remote_rest_sta_path(
+                            client)
                         DataFile.update(
                             remote_status=filestatus['EXISTS'],
                             remote_size=size,
@@ -245,13 +252,15 @@ class FileManager(object):
                         ).where(
                             DataFile.datatype == 'rest'
                         ).execute()
-                        self.mutex.release()
+                        if self.mutex.locked():
+                            self.mutex.release()
                         self.updated_rest = True
                     continue
                 elif 'streams' in _type:
                     remote_path = os.path.join(self.remote_path, 'run')
                 else:
-                    remote_path = os.path.join(self.remote_path, 'archive', _type, 'hist')
+                    remote_path = os.path.join(
+                        self.remote_path, 'archive', _type, 'hist')
                 print 'Querying globus for {}'.format(_type)
                 res = self._get_ls(
                     client=client,
@@ -259,12 +268,16 @@ class FileManager(object):
 
                 self.mutex.acquire()
                 try:
-                    names = [x.name for x in DataFile.select().where(DataFile.datatype == _type)]
-                    to_update_name = [x['name'] for x in res if x['name'] in names]
-                    to_update_size = [x['size'] for x in res if x['name'] in names]
+                    names = [x.name for x in DataFile.select().where(
+                        DataFile.datatype == _type)]
+                    to_update_name = [x['name']
+                                      for x in res if x['name'] in names]
+                    to_update_size = [x['size']
+                                      for x in res if x['name'] in names]
                     q = DataFile.update(
                         remote_status=filestatus['EXISTS'],
-                        remote_size=to_update_size[to_update_name.index(DataFile.name)]
+                        remote_size=to_update_size[to_update_name.index(
+                            DataFile.name)]
                     ).where(
                         (DataFile.name << to_update_name) &
                         (DataFile.datatype == _type))
@@ -273,7 +286,8 @@ class FileManager(object):
                     print_debug(e)
                     print "Do you have the correct start and end dates?"
                 finally:
-                    self.mutex.release()
+                    if self.mutex.locked():
+                        self.mutex.release()
         else:
 
             remote_path = self.remote_path
@@ -283,13 +297,17 @@ class FileManager(object):
             self.mutex.acquire()
             try:
                 for _type in self.types:
-                    names = [x.name for x in DataFile.select().where(DataFile.datatype == _type)]
-                    to_update_name = [x['name'] for x in res if x['name'] in names]
-                    to_update_size = [x['size'] for x in res if x['name'] in names]
+                    names = [x.name for x in DataFile.select().where(
+                        DataFile.datatype == _type)]
+                    to_update_name = [x['name']
+                                      for x in res if x['name'] in names]
+                    to_update_size = [x['size']
+                                      for x in res if x['name'] in names]
 
                     q = DataFile.update(
                         remote_status=filestatus['EXISTS'],
-                        remote_size=to_update_size[to_update_name.index(DataFile.name)]
+                        remote_size=to_update_size[to_update_name.index(
+                            DataFile.name)]
                     ).where(
                         (DataFile.name << to_update_name) &
                         (DataFile.datatype == _type))
@@ -298,7 +316,8 @@ class FileManager(object):
             except Exception as e:
                 print_debug(e)
             finally:
-                self.mutex.release()
+                if self.mutex.locked():
+                    self.mutex.release()
 
     def _get_ls(self, client, path):
         for fail_count in xrange(10):
@@ -315,7 +334,7 @@ class FileManager(object):
                     sys.exit()
             else:
                 return res
-    
+
     def update_remote_rest_sta_path(self, client):
         if not self.sta:
             return
@@ -370,13 +389,14 @@ class FileManager(object):
                         datafile.local_size = local_size
                         should_save = True
                     if local_size != datafile.local_size \
-                    or should_save:
+                            or should_save:
                         datafile.local_size = local_size
                         datafile.save()
         except Exception as e:
             print_debug(e)
         finally:
-            self.mutex.release()
+            if self.mutex.locked():
+                self.mutex.release()
 
     def all_data_local(self):
         self.mutex.acquire()
@@ -387,7 +407,8 @@ class FileManager(object):
         except Exception as e:
             print_debug(e)
         finally:
-            self.mutex.release()
+            if self.mutex.locked():
+                self.mutex.release()
         return True
 
     def all_data_remote(self):
@@ -399,7 +420,8 @@ class FileManager(object):
         except Exception as e:
             print_debug(e)
         finally:
-            self.mutex.release()
+            if self.mutex.locked():
+                self.mutex.release()
         return True
 
     def transfer_needed(self, event_list, event, remote_endpoint, ui, display_event, emailaddr, thread_list):
@@ -427,7 +449,7 @@ class FileManager(object):
             if len(required_files) == 0:
                 return False
             target_files = []
-            target_size = 1e11 # 100 GB
+            target_size = 1e11  # 100 GB
             total_size = 0
             for file in required_files:
                 if total_size + file.remote_size < target_size:
@@ -447,7 +469,8 @@ class FileManager(object):
             print_debug(e)
             return False
         finally:
-            self.mutex.release()
+            if self.mutex.locked():
+                self.mutex.release()
 
         logging.info('Transfering required files')
         print 'total transfer size {size} for {nfiles} files'.format(
@@ -459,7 +482,7 @@ class FileManager(object):
             'destination_endpoint': self.local_endpoint,
             'source_path': self.remote_path,
             'destination_path': self.local_path,
-            'src_email': emailaddr,
+            'source_email': emailaddr,
             'display_event': display_event,
             'ui': ui,
         }
@@ -486,7 +509,8 @@ class FileManager(object):
             print_debug(e)
             return False
         finally:
-            self.mutex.release()
+            if self.mutex.locked():
+                self.mutex.release()
 
         args = (transfer, event, event_list)
         thread = threading.Thread(
@@ -515,7 +539,7 @@ class FileManager(object):
         names = [x['name'] for x in transfer.file_list]
         for datafile in DataFile.select().where(DataFile.name << names):
             if os.path.exists(datafile.local_path) \
-            and os.path.getsize(datafile.local_path) == datafile.remote_size:
+                    and os.path.getsize(datafile.local_path) == datafile.remote_size:
                 datafile.local_status = filestatus['EXISTS']
                 datafile.local_size = os.path.getsize(datafile.local_path)
             else:
@@ -523,11 +547,11 @@ class FileManager(object):
                 datafile.local_size = 0
             datafile.save()
         try:
-            self.mutex.release()
+            if self.mutex.locked():
+                self.mutex.release()
         except:
             pass
         print 'table update complete'
-
 
     def years_ready(self, start_year, end_year):
         """
@@ -558,7 +582,8 @@ class FileManager(object):
         except Exception as e:
             print_debug(e)
         finally:
-            self.mutex.release()
+            if self.mutex.locked():
+                self.mutex.release()
 
         if data_ready:
             return 1
@@ -581,9 +606,9 @@ class FileManager(object):
         except Exception as e:
             print_debug(e)
         finally:
-            self.mutex.release()
+            if self.mutex.locked():
+                self.mutex.release()
         return files
-
 
     def check_year_sets(self, job_sets):
         """
@@ -591,9 +616,9 @@ class FileManager(object):
         otherwise, checks if there is partial data, or zero data
         """
         incomplete_job_sets = [s for s in job_sets
-                            if s.status != SetStatus.COMPLETED
-                            and s.status != SetStatus.RUNNING
-                            and s.status != SetStatus.FAILED]
+                               if s.status != SetStatus.COMPLETED
+                               and s.status != SetStatus.RUNNING
+                               and s.status != SetStatus.FAILED]
 
         for job_set in incomplete_job_sets:
             data_ready = self.years_ready(

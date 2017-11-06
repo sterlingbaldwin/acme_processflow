@@ -22,10 +22,12 @@ from lib.util import strfdelta
 from lib.events import Event_list
 from jobs.JobStatus import JobStatus
 
+
 class Transfer(object):
     """
     Uses Globus to transfer files between DTNs
     """
+
     def __init__(self, config=None, event_list=None):
         self.event_list = event_list
         self.config = {}
@@ -40,7 +42,7 @@ class Transfer(object):
             'destination_endpoint': '',
             'source_path': '',
             'destination_path': '',
-            'src_email': '',
+            'source_email': '',
             'display_event': '',
             'ui': '',
         }
@@ -51,7 +53,7 @@ class Transfer(object):
     @property
     def file_list(self):
         return self.config.get('file_list')
-    
+
     @file_list.setter
     def file_list(self, _file_list):
         self.config['file_list'] = _file_list
@@ -86,7 +88,7 @@ class Transfer(object):
                     self.config[i] = config.get(i)
 
         for i in self.inputs:
-            if i not in self.config or self.config[i] == None:
+            if i not in self.config or self.config[i] is None:
                 if i == 'recursive':
                     self.config[i] = False
                 else:
@@ -106,7 +108,6 @@ class Transfer(object):
                 return False
         self.status = JobStatus.COMPLETED
         return True
-
 
     def get_destination_path(self, srcpath, dstpath, recursive):
         '''
@@ -166,7 +167,7 @@ class Transfer(object):
     def execute(self, event):
         """
         Start the transfer
-        
+
         Parameters:
             event (thread.event): event to trigger job cancel
         """
@@ -195,8 +196,8 @@ class Transfer(object):
             endpoints=endpoints,
             event_list=self.event_list,
             no_ui=not self.config.get('ui', True),
-            src=self.config.get('src'),
-            dst=self.config.get('src'),
+            src=self.config.get('source_email'),
+            dst=self.config.get('source_email'),
             display_event=self.config.get('display_event'))
         client = get_client()
         try:
@@ -249,38 +250,44 @@ class Transfer(object):
                     else:
                         break
                 if status['status'] == 'SUCCEEDED':
-                    logging.info('progress %d/%d', status['files_transferred'], status['files'])
+                    logging.info('progress %d/%d',
+                                 status['files_transferred'], status['files'])
                     percent_complete = 100.0
                     self.display_status(
                         percent_complete=percent_complete,
                         task_id=task_id,
-                        num_completed=int(status['files_transferred']) + int(status['files_skipped']) ,
+                        num_completed=int(
+                            status['files_transferred']) + int(status['files_skipped']),
                         num_total=status['files'])
                     message = 'Transfer job completed'
                     self.status = JobStatus.COMPLETED
                     return
                 elif status['status'] == 'FAILED':
-                    logging.error('Error transfering files %s', status.get('nice_status_details'))
+                    logging.error('Error transfering files %s',
+                                  status.get('nice_status_details'))
                     self.status = JobStatus.FAILED
                     return
                 elif status['status'] == 'ACTIVE':
                     if number_transfered < status['files_transferred']:
                         number_transfered = status['files_transferred']
-                        logging.info('progress %d/%d', status['files_transferred'], status['files'])
-                        percent_complete = (float(status['files_transferred'] + float(status['files_skipped'])) / float(status['files'])) * 100
+                        logging.info(
+                            'progress %d/%d', status['files_transferred'], status['files'])
+                        percent_complete = (float(status['files_transferred'] + float(
+                            status['files_skipped'])) / float(status['files'])) * 100
                         self.display_status(
                             percent_complete=percent_complete,
                             task_id=task_id,
-                            num_completed=int(status['files_transferred']) + int(status['files_skipped']),
+                            num_completed=int(
+                                status['files_transferred']) + int(status['files_skipped']),
                             num_total=status['files'])
                     self.status = JobStatus.RUNNING
                 if event and event.is_set():
                     client.cancel_task(task_id)
-                    #self.error_cleanup()
+                    # self.error_cleanup()
                     return
             except Exception as e:
                 logging.error(format_debug(e))
                 client.cancel_task(task_id)
-                #self.error_cleanup()
+                # self.error_cleanup()
                 return
             time.sleep(5)
