@@ -138,10 +138,12 @@ class FileManager(object):
                     name = _type
                     local_path = local_path = os.path.join(
                         self.local_path,
-                        'streams',
+                        _type,
                         name)
                     if self.sta:
                         remote_path = os.path.join(self.remote_path, 'run', name)
+                    else:
+                        remote_path = os.path.join(self.remote_path, name)
                     newfiles = self._add_file(
                         newfiles=newfiles,
                         name=name,
@@ -533,12 +535,11 @@ class FileManager(object):
             event_list.push(message='Tranfer failed')
             return
 
-        print 'Updating table with new files info'
         self.mutex.acquire()
         names = [x['name'] for x in transfer.file_list]
         for datafile in DataFile.select().where(DataFile.name << names):
             if os.path.exists(datafile.local_path) \
-                    and os.path.getsize(datafile.local_path) == datafile.remote_size:
+            and os.path.getsize(datafile.local_path) == datafile.remote_size:
                 datafile.local_status = filestatus['EXISTS']
                 datafile.local_size = os.path.getsize(datafile.local_path)
             else:
@@ -550,7 +551,6 @@ class FileManager(object):
                 self.mutex.release()
         except:
             pass
-        print 'table update complete'
 
     def years_ready(self, start_year, end_year):
         """
