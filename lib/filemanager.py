@@ -117,7 +117,6 @@ class FileManager(object):
                         'YEAR', '{:04d}'.format(simstart + 1))
                     local_path = os.path.join(
                         self.local_path,
-                        'input',
                         'rest',
                         name)
                     if self.sta:
@@ -139,8 +138,7 @@ class FileManager(object):
                     name = _type
                     local_path = local_path = os.path.join(
                         self.local_path,
-                        'input',
-                        _type,
+                        'streams',
                         name)
                     if self.sta:
                         remote_path = os.path.join(self.remote_path, 'run', name)
