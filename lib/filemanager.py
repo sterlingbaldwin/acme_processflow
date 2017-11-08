@@ -26,7 +26,9 @@ file_type_map = {
     'ocn': 'mpaso.hist.am.timeSeriesStatsMonthly.YEAR-MONTH-01.nc',
     'rest': 'mpaso.rst.YEAR-01-01_00000.nc',
     'streams.ocean': 'streams.ocean',
-    'streams.cice': 'streams.cice'
+    'streams.cice': 'streams.cice',
+    'mpas-cice_in': 'mpas-cice_in',
+    'mpas-o_in': 'mpas-o_in'
 }
 
 

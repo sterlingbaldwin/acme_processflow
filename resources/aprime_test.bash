@@ -82,37 +82,37 @@
 # Root directory where all analysis output is stored
 # (e.g., plots will go in a specific subdirectory of $output_base_dir,
 # as will log files, generated climatologies, etc)
-export output_base_dir=%%output_base_dir%%
+export output_base_dir=/p/cscratch/acme/baldwin32/aprime_test_20171107
 
 # ** Variables relevant for main test case **
 #  Case Name (NB: $test_casename will be appended to $test_archive_dir)
-export test_casename=%%test_casename%%
+export test_casename=20171011.beta2_FCT2-icedeep_branch.A_WCYCL1850S.ne30_oECv3_ICG.edison
 #  Root directory pointing to model data. If test_short_term_archive=0,
-#  $test_casename/run will be appended to test_archive_dir. If 
-# test_short_term_archive=1, $test_casename/archive/modelcomponent/hist
+#  $test_casename/run will be appended to test_archive_dir. If
+#  test_short_term_archive=1, $test_casename/archive/modelcomponent/hist
 #  will instead be appended.
-export test_archive_dir=%%test_archive_dir%%
+export test_archive_dir=/p/cscratch/acme/baldwin32/aprime_test_20171107
 #  Short-term archive option
 export test_short_term_archive=0
 
 #  Atmosphere grid resolution name (e.g. ne30, ne60, ne120) 
-export test_atm_res=%%test_atm_res%%
+export test_atm_res=ne30
 #  MPAS mesh name (e.g. oEC60to30v1, oEC60to30v3, oRRS18to6v3)
 #  NB: test_atm_res and test_mpas_mesh_name may change with a different choice
 #  of test_casename. For example, the MPAS meshes ending with 'v1' should be
 #  used for beta0 and older runs, while those ending with 'v3' should be
 #  used for beta1 and newer runs.
-export test_mpas_mesh_name=%%test_mpas_mesh_name%%
+export test_mpas_mesh_name=oEC60to30v3
 #  Year start/end for climatologies
-export test_begin_yr_climo=%%test_begin_yr_climo%%
-export test_end_yr_climo=%%test_end_yr_climo%%
+export test_begin_yr_climo=51
+export test_end_yr_climo=60
 #  Year start/end for time series
-export test_begin_yr_ts=%%test_begin_yr_ts%%
-export test_end_yr_ts=%%test_end_yr_ts%%
-#  Year start/end for ocean Nino3.4 index diagnostics (1-9999 loads in the full
-#  available time series)
+export test_begin_yr_ts=51
+export test_end_yr_ts=60
+#  Year start/end for ocean Nino3.4 index diagnostics (both ocn/ice and
+#  atm diagnostics)
 export test_begin_yr_climateIndex_ts=1
-export test_end_yr_climateIndex_ts=9999
+export test_end_yr_climateIndex_ts=10
 
 #  Atmosphere switches (True(1)/False(0)) to condense variables, compute climos, remap climos and condensed time series file
 #  If no pre-processing is done (climatology, remapping), all the switches below should be 1
@@ -126,6 +126,10 @@ export test_remap_climo=1
 export test_condense_field_climo=1
 export test_condense_field_ts=1
 export test_remap_ts=1
+export test_compute_climo_enso_atm=1
+export test_condense_field_enso_atm=1
+export test_remap_climo_enso_atm=1
+export test_remap_ts_enso_atm=1
 
 # In the following we define some machine specific variables (such as
 # projdir or the location of observational data) that the user is 
@@ -164,11 +168,11 @@ fi
 # ** Reference case variables (similar to test_case variables) **
 export ref_case=obs
 if [ $machname == "nersc" ]; then
-  export ref_archive_dir=$projdir/obs_for_diagnostics
+  export ref_archive_dir=$projdir/observations/Atm
 elif [ $machname == "olcf" ]; then
-  export ref_archive_dir=/lustre/atlas1/cli900/world-shared/obs_for_diagnostics
+  export ref_archive_dir=$projdir/observations/Atm
 elif [ $machname == "aims4" ] || [ $machname == "acme1" ]; then
-  export ref_archive_dir=/space2/ACME_obs_data/acme-repo/acme/obs_for_diagnostics
+  export ref_archive_dir=$projdir/diagnostics/observations/Atm
 elif [ $machname == "lanl" ]; then
   export ref_archive_dir=$projdir/obs_for_diagnostics
 fi
@@ -201,16 +205,22 @@ export ref_begin_yr_climo=95
 export ref_end_yr_climo=100
 export ref_begin_yr_ts=95
 export ref_end_yr_ts=100
-export ref_begin_yr_climateIndex_ts=1
-export ref_end_yr_climateIndex_ts=9999
+# NB: if ref_case=obs then the ENSO obs analysis begin year and end year should be set to 1979 and 2006:
+export ref_begin_yr_climateIndex_ts=1979
+export ref_end_yr_climateIndex_ts=2006
 export ref_compute_climo=1
 export ref_remap_climo=1
 export ref_condense_field_climo=1
 export ref_condense_field_ts=1
 export ref_remap_ts=1
+export ref_compute_climo_enso_atm=1
+export ref_remap_climo_enso_atm=1
+export ref_condense_field_enso_atm=1
+export ref_remap_ts_enso_atm=1
 
 # Select sets of diagnostics to generate (False = 0, True = 1)
 export generate_atm_diags=1
+export generate_atm_enso_diags=1
 export generate_ocnice_diags=1
 
 # The following ocn/ice diagnostic switches are ignored if generate_ocnice_diags is set to 0
@@ -242,29 +252,33 @@ export generate_html=1
 #     here is 10. The user can decide to reduce mpas_analysis_tasks accordingly, if asking to compute
 #     a reduced set of ocn/ice diagnostics. Finally, the user can set the walltime (default is 1hr
 #     for atm and 1hr for ocn/ice diags, which is fine to compute ~20 year climatology at low-resolution).
+#   Finally, choose whether to run ncclimo in parallel mode. In that case, set ncclimoParallelMode to
+#   "bck", and nclimo will launch 12 parallel tasks on a single node to compute 12 monthly
+#   climatologies. Otherwise, leave ncclimoParallelMode="serial".
 export run_batch_script=false
 export mpas_analysis_tasks=10
 export batch_walltime="01:00:00" # HH:MM:SS
+export ncclimoParallelMode="bck"
 ###############################################################################################
-
+echo "entering section II"
 ########################################################################
 # PART II
 # OTHER VARIABLES (NOT REQUIRED TO BE CHANGED BY THE USER - DEFAULTS SHOULD
 # WORK, USER PREFERENCE BASED CHANGES)
 
+# Set paths to scratch, plots and logs directories
+export test_scratch_dir=$output_base_dir/coupled_diagnostics/$test_casename.scratch
+export ref_scratch_dir=$output_base_dir/coupled_diagnostics/$ref_case.scratch
+export plots_base_dir=$output_base_dir/coupled_diagnostics/${test_casename}_vs_${ref_case}
 if [ $ref_case == "obs" ]; then
-  export plots_dir_name=coupled_diagnostics_${test_casename}_years${test_begin_yr_climo}-${test_end_yr_climo}_vs_${ref_case}
+  export plots_dir_name=${test_casename}_years${test_begin_yr_climo}-${test_end_yr_climo}_vs_${ref_case}
 else
-  export plots_dir_name=coupled_diagnostics_${test_casename}_years${test_begin_yr_climo}-${test_end_yr_climo}_vs_${ref_case}_years${ref_begin_yr_climo}-${ref_end_yr_climo}
+  export plots_dir_name=${test_casename}_years${test_begin_yr_climo}-${test_end_yr_climo}_vs_${ref_case}_years${ref_begin_yr_climo}-${ref_end_yr_climo}
 fi
-# User can set a custom name for the $plot_dir_name here, if the default (above) is not ideal 
-#export plots_dir_name=XXYYY
-
-# Set paths to scratch, logs and plots directories
-export test_scratch_dir=$output_base_dir/$plots_dir_name.scratch
-export ref_scratch_dir=$output_base_dir/$plots_dir_name.scratch
-export log_dir=$output_base_dir/$plots_dir_name.logs
-export plots_dir=$output_base_dir/$plots_dir_name
+# User can set a custom name for the $plots_dir_name here, if the default (above) is not ideal 
+#export plots_dir_name=XXXX
+export plots_dir=$plots_base_dir/$plots_dir_name
+export log_dir=$plots_dir.logs
 
 # Set atm specific paths to mapping and data files locations
 export remap_files_dir=$projdir/mapping/maps
@@ -309,18 +323,17 @@ export obs_iceareaSH=$obs_seaicedir/IceArea_timeseries/iceAreaSH_climo.nc
 export obs_icevolNH=$obs_seaicedir/PIOMAS/PIOMASvolume_monthly_climo.nc
 export obs_icevolSH=none
 ##############################################################################
-
+echo "entering section III"
 ########################################################################
 # PART III
 # USER SHOULD NOT NEED TO CHANGE ANYTHING HERE ONWARDS
 
-export coupled_diags_home=%%coupled_diags_home%%
+export coupled_diags_home=$PWD
 # unique ID to be used to name unique MPAS-Analysis confg files
 # and batch scripts
 export uniqueID=`date +%Y-%m-%d_%H%M%S`
 
 # Check on www_dir, permissions included
-chmod -R ga+rX $www_dir
 # Create www_dir if it does not exist, purge it if it does
 if [ ! -d $www_dir/$plots_dir_name ]; then
   mkdir $www_dir/$plots_dir_name
@@ -342,8 +355,9 @@ elif [ $machname == "olcf" ]; then
   module load python/anaconda-2.7-acme
   export NCO_PATH_OVERRIDE=No
 elif [ $machname == "acme1" ]; then
-  export PATH=/usr/local/anaconda2/bin:$PATH
-  source activate ACME_UNIFIED
+  # export PATH=/usr/local/anaconda2/bin:$PATH
+  echo "not sourcing shit"
+  # source activate ACME_UNIFIED
   export NCO_PATH_OVERRIDE=No
 elif [ $machname == "aims4" ]; then
   export PATH=/usr/local/anaconda2/bin:$PATH
@@ -359,7 +373,7 @@ fi
 if [ $machname == "aims4" ] || [ $machname == "acme1" ] || [ ${HOSTNAME:0:4} == "rhea" ]; then
   export mpasAutocloseFileLimitFraction=0.02
 else
-  export mpasAutocloseFileLimitFraction=0.5 # default value
+  export mpasAutocloseFileLimitFraction=0.2 # default value
 fi
 
 # PUT THE PROVIDED CASE INFORMATION IN CSH ARRAYS TO FACILITATE READING BY OTHER SCRIPTS
@@ -368,7 +382,9 @@ fi
 # RUN DIAGNOSTICS
 if [ $generate_atm_diags -eq 1 ]; then
   if ! $run_batch_script; then
+    echo "starting atm diags"
     ./bash_scripts/aprime_atm_diags.bash
+    echo "atm diags complete"
     atm_status=$?
     if [ $atm_status -eq 0 ]; then
       # Update www/plots directory with newly generated plots
@@ -419,7 +435,9 @@ fi
 
 if [ $generate_ocnice_diags -eq 1 ]; then
   if ! $run_batch_script; then
+    echo "starting ocnice diags"
     ./bash_scripts/aprime_ocnice_diags.bash
+    echo "ocnice diags complete"
     ocnice_status=$?
     if [ $ocnice_status -eq 0 ]; then
       # Update www/plots directory with newly generated plots
@@ -494,11 +512,13 @@ if [ $atm_status -eq 0 ]    || [ $atm_status -eq -2 ]   ||
 							$www_dir
      fi
   done
+  chmod ga+rX $www_dir
+  chmod -R ga+rX $www_dir/$plots_dir_name
 else
   echo
   echo "Neither atmospheric nor ocn/ice diagnostics were successful. HTML page not generated!"
   echo
 fi
 
-# COPY THIS RUN SCRIPT TO THE $plots_dir FOR PROVENANCE
+# COPY THIS RUN SCRIPT TO THE $log_dir FOR PROVENANCE
 cp $0 $log_dir/run_aprime_$uniqueID.bash

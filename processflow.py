@@ -36,7 +36,7 @@ from lib.util import *
 
 # check for NCL
 if not os.environ.get('NCARG_ROOT'):
-    ncar_path = '/usr/local/src/NCL-6.3.0/'
+    ncar_path = '/usr/local/src/NCL-6.3.0'
     if os.path.exists(ncar_path):
         os.environ['NCARG_ROOT'] = ncar_path
     else:
