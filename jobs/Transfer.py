@@ -200,12 +200,16 @@ class Transfer(object):
             dst=self.config.get('source_email'),
             display_event=self.config.get('display_event'))
         client = get_client()
+        task_label = "{start} to {end}".format(
+            start=self.file_list[0]['name'],
+            end=self.file_list[-1]['name'])
         try:
             transfer_task = TransferData(
                 client,
                 srcendpoint,
                 dstendpoint,
-                sync_level='checksum')
+                sync_level='checksum',
+                label=task_label)
         except Exception as e:
             logging.error('Error creating transfer task')
             logging.error(format_debug(e))
