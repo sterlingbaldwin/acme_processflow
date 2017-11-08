@@ -189,7 +189,6 @@ requirements:
     - wcwidth
     - webencodings
     - wheel
-    - widgetsnbextension
     - windspharm
     - wrapt
     - x264

@@ -387,6 +387,7 @@ def write_human_state(event_list, job_sets, mutex, state_path='run_state.txt', p
                 DataFile.datatype).distinct()]
             try:
                 for _type in types:
+                    fp.write('===================================\n')
                     fp.write(_type + ':\n')
                     datafiles = DataFile.select().where(DataFile.datatype == _type)
                     for datafile in datafiles:
