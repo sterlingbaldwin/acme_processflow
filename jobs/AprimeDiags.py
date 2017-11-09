@@ -16,7 +16,7 @@ from lib.slurm import Slurm
 from JobStatus import JobStatus, StatusMap
 
 
-class AprimeDiags(object):
+class APrimeDiags(object):
     def __init__(self, config, event_list):
         """
         Setup class attributes
@@ -49,7 +49,7 @@ class AprimeDiags(object):
         self.config = {}
         self.status = JobStatus.INVALID
         self._type = 'aprime_diags'
-        self.year_set = config.get('yearset', 0)
+        self.year_set = config['yearset']
         self.start_year = config['start_year']
         self.end_year = config['end_year']
         self.job_id = 0
