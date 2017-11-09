@@ -1,8 +1,4 @@
-<<<<<<< HEAD
-export VERSION="0.4.26"
-=======
 export VERSION="0.4.33"
->>>>>>> origin/master
 export BUILD_NAME="devel"
 export CONDA_BLD_PATH=~/conda-bld
 USER="acme"
