@@ -15,6 +15,7 @@ from shutil import copyfile
 from lib.filemanager import FileManager
 from lib.runmanager import RunManager
 from lib.mailer import Mailer
+from jobs.JobStatus import JobStatus
 from util import (setup_globus,
                   check_globus,
                   print_message,
@@ -351,33 +352,69 @@ def finishup(config, job_sets, state_path, event_list, status, display_event, th
             if status == 1:
                 msg = 'Post processing for {exp} has completed successfully\n'.format(
                     exp=config['global']['experiment'])
-                for job_set in job_sets:
-                    msg += '\nYearSet {start}-{end}: {status}\n'.format(
-                        start=job_set.set_start_year,
-                        end=job_set.set_end_year,
-                        status=job_set.status)
-                    for job in job_set.jobs:
-                        if job.type == 'amwg':
-                            msg += '    > {job} hosted at {url}/index.html\n'.format(
-                                job=job.type,
-                                url=job.config['host_url'])
-                        elif job.type == 'e3sm_diags':
-                            msg += '    > {job} hosted at {url}/viewer/index.html\n'.format(
-                                job=job.type,
-                                url=job.config['host_url'])
-                        elif job.type == 'aprime_diags':
-                            msg += '    > {job} hosted at {url}/index.html\n'.format(
-                                job=job.type,
+            else:
+                msg = 'One or more job(s) for {exp} failed\n\n'.format(
+                    exp=config['global']['experiment'])
+
+            for job_set in job_sets:
+                msg += '\nYearSet {start}-{end}: {status}\n'.format(
+                    start=job_set.set_start_year,
+                    end=job_set.set_end_year,
+                    status=job_set.status)
+                for job in job_set.jobs:
+                    if job.type == 'amwg':
+                        if job.status == JobStatus.COMPLETED:
+                            msg += '    > AMWG hosted at {url}/index.html\n'.format(
                                 url=job.config['host_url'])
                         else:
-                            msg += '    > {job} output located {output}\n'.format(
-                                job=job.type,
+                            output_path = os.path.join(
+                                job.config['run_scripts_path'],
+                                'amwg_{start:04d}-{end:04d}.out'.format(
+                                    start=job.start_year,
+                                    end=job.end_year))
+                            msg += '    > AMWG FAILED. Check its jobs output at {output}'.format(
+                                output=output_path)
+                    elif job.type == 'e3sm_diags':
+                        if job.status == JobStatus.COMPLETED:
+                            msg += '    > e3sm_diags hosted at {url}/viewer/index.html\n'.format(
+                                url=job.config['host_url'])
+                        else:
+                            output_path = os.path.join(
+                                job.config['run_scripts_path'],
+                                'e3sm_diag_{start:04d}-{end:04d}.out'.format(
+                                    start=job.start_year,
+                                    end=job.end_year))
+                            msg += '    > e3sm_diag FAILED. Check its jobs output at {output}'.format(
+                                output=output_path)
+                    elif job.type == 'aprime_diags':
+                        if job.status == JobStatus.COMPLETED:
+                            msg += '    > aprime_diags hosted at {url}/index.html\n'.format(
+                                url=job.config['host_url'])
+                        else:
+                            output_path = os.path.join(
+                                job.config['run_scripts_path'],
+                                'aprime_{start:04d}-{end:04d}.out'.format(
+                                    start=job.start_year,
+                                    end=job.end_year))
+                            msg += '    > AMWG FAILED. Check its jobs output at {output}'.format(
+                                output=output_path)
+                    elif job.type == 'ncclimo':
+                        if job.status == JobStatus.COMPLETED:
+                            msg += '    > ncclimo output located {output}\n'.format(
                                 output=job.output_path)
-            else:
-                msg = 'One or more job failed\n\n'
-                with open(state_path, 'r') as state_file:
-                    for line in state_file.readlines():
-                        msg += line
+                        else:
+                            output_path = os.path.join(
+                                job.config['run_scripts_path'],
+                                'ncclimo_set_{set}_{start:04d}-{end:04d}.out'.format(
+                                    set=job.year_set,
+                                    start=job.start_year,
+                                    end=job.end_year))
+                            msg += '    > AMWG FAILED. Check its jobs output at {output}'.format(
+                                output=output_path)
+                    else:
+                        msg += '    > {job} output located {output}\n'.format(
+                            job=job.type,
+                            output=job.output_path)
 
             m = Mailer(src='processflowbot@llnl.gov', dst=emailaddr)
             m.send(
