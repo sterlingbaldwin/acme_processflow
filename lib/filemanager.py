@@ -56,8 +56,7 @@ class FileManager(object):
         self.active_transfers = 0
         self.db_path = database
         self.mutex.acquire()
-        self.db = SqliteDatabase(database, threadlocals=True)
-        self.db.connect()
+        DataFile._meta.database.init(database)
         if DataFile.table_exists():
             DataFile.drop_table()
         DataFile.create_table()
@@ -149,7 +148,7 @@ class FileManager(object):
         if not self.start_year:
             self.start_year = simstart
         newfiles = []
-        with self.db.atomic():
+        with DataFile._meta.database.atomic():
             for _type in self.types:
                 if _type not in file_type_map:
                     continue
