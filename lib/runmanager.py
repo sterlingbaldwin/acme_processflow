@@ -804,7 +804,7 @@ class RunManager(object):
         except Exception as e:
             from lib.util import print_debug
             print_debug(e)
-            msg = 'Error copying {} to host directory'.format(job.type)
+            msg = 'Error copying {0} to host directory {1}'.format(job.type, host_dir)
             self.event_list.push(
                 message=msg,
                 data=job)

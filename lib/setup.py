@@ -292,7 +292,9 @@ Please add a space and run again.'''.format(num=line_index)
         config=config,
         filemanager=filemanager)
 
-    config['global']['ui'] = False if args.no_ui else True
+    # Turning off the GUI for the time being
+    # config['global']['ui'] = False if args.no_ui else True
+    config['global']['ui'] = False
     config['global']['no_cleanup'] = True if args.no_cleanup else False
     config['global']['no_monitor'] = True if args.no_monitor else False
     config['global']['print_file_list'] = True if args.file_list else False
