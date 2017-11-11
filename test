@@ -19,7 +19,7 @@ do
     let "TOTAL+=1"
     tname=$(python -c "name='${test}';tname=name.split('/')[-1].split('.')[0];print tname")
     echo "--- testing ${tname} ---"
-    if COVERAGE_FILE=.coverage_$tname coverage run --source=.,lib,jobs --omit="lib/test*","*__init__.py","setup.py" $test; then
+    if COVERAGE_FILE=.coverage_$tname coverage run --source=.,lib,jobs --omit="lib/test*","test*","jobs/test*","*__init__.py","setup.py" $test; then
         echo "--- ${tname} passed ---"
         let "PASSED+=1"
     else
