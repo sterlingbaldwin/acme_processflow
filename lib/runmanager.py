@@ -682,7 +682,7 @@ class RunManager(object):
                     job.end_time = datetime.now()
                     self.handle_completed_job(job)
                     self.running_jobs.remove(job)
-                elif status == JobStatus.FAILED:
+                elif status in [JobStatus.FAILED, JobStatus.CANCELLED]:
                     job.end_time = datetime.now()
                     for job_set in self.job_sets:
                         if job_set.set_number == job.year_set:
