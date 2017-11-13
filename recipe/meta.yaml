@@ -146,7 +146,6 @@ requirements:
     - pyepsg
     - pyflakes
     - pygments
-    - pylint
     - pyopenssl
     - pyparsing
     - pyproj
@@ -172,8 +171,6 @@ requirements:
     - six
     - snowballstemmer
     - sortedcontainers
-    - sphinx
-    - sphinxcontrib-websupport
     - spyder
     - sqlite
     - ssl_match_hostname
