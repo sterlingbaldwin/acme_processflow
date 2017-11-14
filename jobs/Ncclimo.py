@@ -121,10 +121,10 @@ class Climo(object):
         slurm_command = ' '.join(cmd)
 
         # Submitting the job to SLURM
-        expected_name = 'ncclimo_set_{year_set}_{start}_{end}'.format(
-            year_set=self.config.get('year_set'),
-            start='{:04d}'.format(self.config.get('start_year')),
-            end='{:04d}'.format(self.config.get('end_year')))
+        expected_name = '{type}_{start:04d}_{end:04d}'.format(
+            start=self.config.get('start_year'),
+            end=self.config.get('end_year'),
+            type=self.type)
         run_script = os.path.join(self.config.get(
             'run_scripts_path'), expected_name)
         if os.path.exists(run_script):

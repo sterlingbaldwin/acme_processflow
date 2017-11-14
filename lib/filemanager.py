@@ -56,8 +56,7 @@ class FileManager(object):
         self.active_transfers = 0
         self.db_path = database
         self.mutex.acquire()
-        self.db = SqliteDatabase(database, threadlocals=True)
-        self.db.connect()
+        DataFile._meta.database.init(database)
         if DataFile.table_exists():
             DataFile.drop_table()
         DataFile.create_table()
@@ -92,6 +91,45 @@ class FileManager(object):
             'db_path': self.db_path
         })
 
+    def populate_handle_rest(self, simstart, newfiles):
+        name = file_type_map['rest'].replace(
+            'YEAR', '{:04d}'.format(simstart + 1))
+        local_path = os.path.join(
+            self.local_path,
+            'rest',
+            name)
+        if self.sta:
+            remote_path = os.path.join(
+                self.remote_path,
+                'archive',
+                'rest',
+                '{year:04d}-01-01-00000'.format(year=simstart + 1),
+                name)
+        else:
+            remote_path = os.path.join(self.remote_path, name)
+        newfiles = self._add_file(
+            newfiles=newfiles,
+            name=name,
+            local_path=local_path,
+            remote_path=remote_path,
+            _type='rest')
+
+    def populate_handle_mpas(self, _type, newfiles):
+        local_path = os.path.join(
+            self.local_path,
+            'mpas',
+            _type)
+        if self.sta:
+            remote_path = os.path.join(self.remote_path, 'run', _type)
+        else:
+            remote_path = os.path.join(self.remote_path, _type)
+        newfiles = self._add_file(
+            newfiles=newfiles,
+            name=_type,
+            local_path=local_path,
+            remote_path=remote_path,
+            _type=_type)
+
     def populate_file_list(self, simstart, simend, experiment):
         """
         Populate the database with the required DataFile entries
@@ -110,48 +148,14 @@ class FileManager(object):
         if not self.start_year:
             self.start_year = simstart
         newfiles = []
-        with self.db.atomic():
+        with DataFile._meta.database.atomic():
             for _type in self.types:
                 if _type not in file_type_map:
                     continue
                 if _type == 'rest':
-                    name = file_type_map[_type].replace(
-                        'YEAR', '{:04d}'.format(simstart + 1))
-                    local_path = os.path.join(
-                        self.local_path,
-                        'rest',
-                        name)
-                    if self.sta:
-                        remote_path = os.path.join(
-                            self.remote_path,
-                            'archive',
-                            'rest',
-                            '{year:04d}-01-01-00000'.format(year=simstart + 1),
-                            name)
-                    else:
-                        remote_path = os.path.join(self.remote_path, name)
-                    newfiles = self._add_file(
-                        newfiles=newfiles,
-                        name=name,
-                        local_path=local_path,
-                        remote_path=remote_path,
-                        _type=_type)
-                elif _type == 'streams.ocean' or _type == 'streams.cice':
-                    name = _type
-                    local_path = local_path = os.path.join(
-                        self.local_path,
-                        _type,
-                        name)
-                    if self.sta:
-                        remote_path = os.path.join(self.remote_path, 'run', name)
-                    else:
-                        remote_path = os.path.join(self.remote_path, name)
-                    newfiles = self._add_file(
-                        newfiles=newfiles,
-                        name=name,
-                        local_path=local_path,
-                        remote_path=remote_path,
-                        _type=_type)
+                    self.populate_handle_rest(simstart, newfiles)
+                elif _type in ['streams.ocean', 'streams.cice', 'mpas-o_in', 'mpas-cice_in']:
+                    self.populate_handle_mpas(_type, newfiles)
                 else:
                     for year in xrange(simstart, simend + 1):
                         for month in xrange(1, 13):
@@ -259,7 +263,7 @@ class FileManager(object):
                             self.mutex.release()
                         self.updated_rest = True
                     continue
-                elif 'streams' in _type:
+                elif _type in ['streams.ocean', 'streams.cice', 'mpas-o_in', 'mpas-cice_in']:
                     remote_path = os.path.join(self.remote_path, 'run')
                 else:
                     remote_path = os.path.join(
@@ -541,7 +545,7 @@ class FileManager(object):
         names = [x['name'] for x in transfer.file_list]
         for datafile in DataFile.select().where(DataFile.name << names):
             if os.path.exists(datafile.local_path) \
-            and os.path.getsize(datafile.local_path) == datafile.remote_size:
+                    and os.path.getsize(datafile.local_path) == datafile.remote_size:
                 datafile.local_status = filestatus['EXISTS']
                 datafile.local_size = os.path.getsize(datafile.local_path)
             else:

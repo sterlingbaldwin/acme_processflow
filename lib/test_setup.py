@@ -73,7 +73,7 @@ class TestSetup(unittest.TestCase):
                 'run_scripts_path': os.path.join(project_path, 'output', 'run_scripts'),
                 'tmp_path': os.path.join(project_path, 'output', 'tmp'),
                 'error_path': os.path.join(project_path, 'output', 'workflow.error'),
-                'ui': True,
+                'ui': False,
                 'no_cleanup': False,
                 'no_monitor': False,
                 'print_file_list': True,
@@ -106,8 +106,6 @@ class TestSetup(unittest.TestCase):
 
         for key, value in config.items():
             for k2, v2 in value.items():
-                if expected_config[key][k2] != config[key][k2]:
-                    print expected_config[key][k2], config[key][k2]
                 self.assertEqual(expected_config[key][k2], config[key][k2])
 
     def test_expected_config_no_ui(self):

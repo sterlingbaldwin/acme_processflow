@@ -682,7 +682,7 @@ class RunManager(object):
                     job.end_time = datetime.now()
                     self.handle_completed_job(job)
                     self.running_jobs.remove(job)
-                elif status == JobStatus.FAILED:
+                elif status in [JobStatus.FAILED, JobStatus.CANCELLED]:
                     job.end_time = datetime.now()
                     for job_set in self.job_sets:
                         if job_set.set_number == job.year_set:
@@ -804,7 +804,8 @@ class RunManager(object):
         except Exception as e:
             from lib.util import print_debug
             print_debug(e)
-            msg = 'Error copying {} to host directory'.format(job.type)
+            msg = 'Error copying {0} to host directory {1}'.format(
+                job.type, host_dir)
             self.event_list.push(
                 message=msg,
                 data=job)

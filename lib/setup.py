@@ -15,6 +15,7 @@ from shutil import copyfile
 from lib.filemanager import FileManager
 from lib.runmanager import RunManager
 from lib.mailer import Mailer
+from jobs.JobStatus import JobStatus
 from util import (setup_globus,
                   check_globus,
                   print_message,
@@ -292,7 +293,9 @@ Please add a space and run again.'''.format(num=line_index)
         config=config,
         filemanager=filemanager)
 
-    config['global']['ui'] = False if args.no_ui else True
+    # Turning off the GUI for the time being
+    # config['global']['ui'] = False if args.no_ui else True
+    config['global']['ui'] = False
     config['global']['no_cleanup'] = True if args.no_cleanup else False
     config['global']['no_monitor'] = True if args.no_monitor else False
     config['global']['print_file_list'] = True if args.file_list else False
@@ -349,33 +352,41 @@ def finishup(config, job_sets, state_path, event_list, status, display_event, th
             if status == 1:
                 msg = 'Post processing for {exp} has completed successfully\n'.format(
                     exp=config['global']['experiment'])
-                for job_set in job_sets:
-                    msg += '\nYearSet {start}-{end}: {status}\n'.format(
-                        start=job_set.set_start_year,
-                        end=job_set.set_end_year,
-                        status=job_set.status)
-                    for job in job_set.jobs:
-                        if job.type == 'amwg':
-                            msg += '    > {job} hosted at {url}/index.html\n'.format(
-                                job=job.type,
-                                url=job.config['host_url'])
-                        elif job.type == 'e3sm_diags':
-                            msg += '    > {job} hosted at {url}/viewer/index.html\n'.format(
-                                job=job.type,
-                                url=job.config['host_url'])
-                        elif job.type == 'aprime_diags':
-                            msg += '    > {job} hosted at {url}/index.html\n'.format(
-                                job=job.type,
-                                url=job.config['host_url'])
-                        else:
-                            msg += '    > {job} output located {output}\n'.format(
-                                job=job.type,
-                                output=job.output_path)
             else:
-                msg = 'One or more job failed\n\n'
-                with open(state_path, 'r') as state_file:
-                    for line in state_file.readlines():
-                        msg += line
+                msg = 'One or more job(s) for {exp} failed\n\n'.format(
+                    exp=config['global']['experiment'])
+
+            for job_set in job_sets:
+                msg += '\nYearSet {start}-{end}: {status}\n'.format(
+                    start=job_set.set_start_year,
+                    end=job_set.set_end_year,
+                    status=job_set.status)
+                for job in job_set.jobs:
+                    if job.status == JobStatus.COMPLETED:
+                        if job.config.get('host_url'):
+                            msg += '    > {job} - COMPLETED  :: output hosted :: {url}\n'.format(
+                                url=job.config['host_url'],
+                                job=job.type)
+                        else:
+                            msg += '    > {job} - COMPLETED  :: output located :: {output}\n'.format(
+                                output=job.output_path,
+                                job=job.type)
+                    elif job.status in [JobStatus.FAILED, JobStatus.CANCELLED]:
+                        output_path = os.path.join(
+                            job.config['run_scripts_path'],
+                            '{job}_{start:04d}_{end:04d}.out'.format(
+                                job=job.type,
+                                start=job.start_year,
+                                end=job.end_year))
+                        msg += '    > {job} - {status} :: console output :: {output}\n'.format(
+                            output=output_path,
+                            job=job.type,
+                            status=job.status)
+                    else:
+                        msg += '    > {job} - {state}\n'.format(
+                            job=job.type,
+                            state=job.status)
+                msg += '\n\n'
 
             m = Mailer(src='processflowbot@llnl.gov', dst=emailaddr)
             m.send(
