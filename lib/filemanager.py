@@ -263,7 +263,7 @@ class FileManager(object):
                             self.mutex.release()
                         self.updated_rest = True
                     continue
-                elif 'streams' in _type:
+                elif _type in ['streams.ocean', 'streams.cice', 'mpas-o_in', 'mpas-cice_in']:
                     remote_path = os.path.join(self.remote_path, 'run')
                 else:
                     remote_path = os.path.join(
