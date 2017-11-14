@@ -135,9 +135,10 @@ class E3SMDiags(object):
             input_path=self.config.get('template_path'),
             output_path=template_out)
 
-        run_name = 'e3sm_diag_{start:04d}_{end:04d}'.format(
+        run_name = '{type}_{start:04d}_{end:04d}'.format(
             start=self.config.get('start_year'),
-            end=self.config.get('end_year'))
+            end=self.config.get('end_year'),
+            type=self.type)
         template_copy = os.path.join(
             self.config.get('run_scripts_path'),
             run_name)
@@ -156,8 +157,6 @@ class E3SMDiags(object):
             dst=self.config['regrided_climo_path'])
 
         # setup sbatch script
-        expected_name = 'e3sm_diag_{name}'.format(
-            name=run_name)
         run_script = os.path.join(
             self.config.get('run_scripts_path'),
             run_name)

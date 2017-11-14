@@ -186,19 +186,21 @@ did you add ncclimo to this year_set?""".format(start=self.start_year,
             variables=self.config,
             input_path=self.config.get('template_path'),
             output_path=template_out)
+        
+        expected_name = '{type}_{start:04d}-{end:04d}'.format(
+            start=self.config.get('start_year'),
+            end=self.config.get('end_year'),
+            type=self.type)
         # Copy the rendered run script into the scripts directory
         run_script_template_out = os.path.join(
-            self.config.get('run_scripts_path'), 'amwg_{0}-{1}.csh'.format(
-                self.config.get('start_year'),
-                self.config.get('end_year')))
+            self.config.get('run_scripts_path'),
+            expected_name)
         copyfile(
             src=template_out,
             dst=run_script_template_out)
 
         # setup sbatch script
-        expected_name = 'amwg_{start:04d}-{end:04d}'.format(
-            start=self.config.get('start_year'),
-            end=self.config.get('end_year'))
+        
         run_script = os.path.join(
             self.config.get('run_scripts_path'),
             expected_name)

@@ -29,6 +29,9 @@ requirements:
     - globus-sdk
     - globus-cli
     - jmespath
+    - six
+    - libcf
+    - hdf5
 
 about:
     home: https://github.com/ACME-Climate/acme_workflow

@@ -111,12 +111,13 @@ class Timeseries(object):
         ])
 
         # Submitting the job to SLURM
-        expected_name = 'timeseries_{start}_{end}'.format(
-            year_set=self.year_set,
-            start='{:04d}'.format(self.config.get('start_year')),
-            end='{:04d}'.format(self.config.get('end_year')))
-        run_script = os.path.join(self.config.get(
-            'run_scripts_path'), expected_name)
+        expected_name = '{type}_{start:04d}_{end:04d}'.format(
+            start=self.config.get('start_year'),
+            end=self.config.get('end_year'),
+            type=self.type)
+        run_script = os.path.join(
+            self.config.get('run_scripts_path'),
+            expected_name)
         if os.path.exists(run_script):
             os.remove(run_script)
 

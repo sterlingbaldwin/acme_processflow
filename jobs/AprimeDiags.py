@@ -192,13 +192,14 @@ class AprimeDiags(object):
         cmd = 'csh {run_AIMS}'.format(
             run_AIMS=self.config.get('rendered_output_path'))
 
-        expected_name = 'coupled_diag_set_{set}_{start}_{end}'.format(
-            set=self.config.get('year_set'),
-            start='{:04d}'.format(self.config.get('test_begin_yr_climo')),
-            end='{:04d}'.format(self.config.get('test_end_yr_climo')))
+        expected_name = '{type}_{start:04d}_{end:04d}'.format(
+            start=self.config.get('test_begin_yr_climo'),
+            end=self.config.get('test_end_yr_climo'),
+            type=self.type)
 
-        run_script = os.path.join(self.config.get(
-            'run_scripts_path'), expected_name)
+        run_script = os.path.join(
+            self.config.get('run_scripts_path'),
+            expected_name)
         if os.path.exists(run_script):
             os.remove(run_script)
 
