@@ -14,7 +14,7 @@ from lib.YearSet import YearSet, SetStatus
 from jobs.Ncclimo import Climo
 from jobs.Timeseries import Timeseries
 from jobs.AMWGDiagnostic import AMWGDiagnostic
-from jobs.AprimeDiags import AprimeDiags
+from jobs.APrimeDiags import APrimeDiags
 from jobs.E3SMDiags import E3SMDiags
 from jobs.JobStatus import JobStatus, StatusMap
 
@@ -147,7 +147,7 @@ class RunManager(object):
                 output_path=output_base_path,
                 file_list=file_list)
 
-        if required_jobs.get('aprime_diags'):
+        if required_jobs.get('aprime'):
             # Add the aprime job
             web_directory = os.path.join(
                 config['global']['host_directory'],
@@ -168,11 +168,12 @@ class RunManager(object):
                 start_year=year_set.set_start_year,
                 end_year=year_set.set_end_year,
                 year_set=year_set,
-                input_base_path=config['global']['input_path'],
+                input_base_path=config['global']['output_path'],
                 resource_path=config['global']['resource_dir'],
                 test_atm_res=config['aprime_diags']['test_atm_res'],
                 test_mpas_mesh_name=config['aprime_diags']['test_mpas_mesh_name'],
-                aprime_code_path=config['aprime_diags']['aprime_code_path'])
+                aprime_code_path=config['aprime_diags']['aprime_code_path'],
+                filemanager=filemanager)
 
         if required_jobs.get('amwg'):
             # Add AMWG
@@ -354,6 +355,7 @@ class RunManager(object):
         test_atm_res = kwargs['test_atm_res']
         test_mpas_mesh_name = kwargs['test_mpas_mesh_name']
         aprime_code_path = kwargs['aprime_code_path']
+        filemanager = kwargs['filemanager']
 
         if not self._precheck(year_set, 'aprime_diags'):
             return
@@ -401,9 +403,10 @@ class RunManager(object):
             'template_path': template_path,
             'test_atm_res': test_atm_res,
             'test_mpas_mesh_name': test_mpas_mesh_name,
-            'aprime_code_path': aprime_code_path
+            'aprime_code_path': aprime_code_path,
+            'filemanager': filemanager
         }
-        aprime = AprimeDiags(
+        aprime = APrimeDiags(
             config=config,
             event_list=self.event_list)
         msg = 'Creating aprime diagnostic: {}'.format(str(aprime))

@@ -600,8 +600,8 @@ class FileManager(object):
     def get_file_paths_by_year(self, start_year, end_year, _type):
         self.mutex.acquire()
         try:
-            if _type in ['rest', 'streams.ocean', 'streams.cice']:
-                datafiles = Datafile.select().where(DataFile.datatype == _type)
+            if _type in ['rest', 'streams.ocean', 'streams.cice', 'mpas-cice_in', 'mpas-o_in']:
+                datafiles = DataFile.select().where(DataFile.datatype == _type)
             else:
                 datafiles = DataFile.select().where(
                     (DataFile.datatype == _type) &
@@ -610,6 +610,7 @@ class FileManager(object):
             files = [x.local_path for x in datafiles]
         except Exception as e:
             print_debug(e)
+            files = []
         finally:
             if self.mutex.locked():
                 self.mutex.release()

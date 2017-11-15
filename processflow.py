@@ -199,14 +199,14 @@ def main(test=False, **kwargs):
                 if config.get('global').get('no_monitor', False):
                     loop_count += 1
                     continue
-                if not all_data_remote:
+                if not all_data:
+                    all_data = filemanager.all_data_local()
+                if not all_data_remote and not all_data:
                     all_data_remote = filemanager.all_data_remote()
-                if not all_data_remote:
+                if not all_data_remote and not all_data:
                     print 'Updating remote status'
                     filemanager.update_remote_status(client)
                 if not all_data:
-                    all_data = filemanager.all_data_local()
-                if not all_data or not all_data_remote:
                     print 'Updating local status'
                     filemanager.update_local_status()
             # check the local status every 10 seconds

@@ -355,12 +355,12 @@ elif [ $machname == "olcf" ]; then
   module load python/anaconda-2.7-acme
   export NCO_PATH_OVERRIDE=No
 elif [ $machname == "acme1" ]; then
-  # export PATH=/usr/local/anaconda2/bin:$PATH
-  # source activate ACME_UNIFIED
+  export PATH=/usr/local/anaconda2/bin:$PATH
+  source activate ACME_UNIFIED
   export NCO_PATH_OVERRIDE=No
 elif [ $machname == "aims4" ]; then
-  # export PATH=/usr/local/anaconda2/bin:$PATH
-  # source activate ACME-UNIFIED
+  export PATH=/usr/local/anaconda2/bin:$PATH
+  source activate ACME-UNIFIED
   export NCO_PATH_OVERRIDE=No
 elif [ $machname == "lanl" ]; then
   module unload python
