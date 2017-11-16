@@ -164,12 +164,6 @@ Please add a space and run again.'''.format(num=line_index)
     # setup config for file type directories
     if not isinstance(config['global']['file_types'], list):
         config['global']['file_types'] = [config['global']['file_types']]
-    for filetype in config['global']['file_types']:
-        new_dir = os.path.join(
-            config['global']['input_path'],
-            filetype)
-        if not os.path.exists(new_dir):
-            os.makedirs(new_dir)
 
     # setup run_scipts_path
     run_script_path = os.path.join(
@@ -339,6 +333,7 @@ def finishup(config, job_sets, state_path, event_list, status, display_event, th
     event_list.push(message=message)
     if not config.get('global').get('no_cleanup', False):
         print 'Not cleaning up temp directories'
+    else:
         tmp = os.path.join(config['global']['output_path'], 'tmp')
         if os.path.exists(tmp):
             rmtree(tmp)
