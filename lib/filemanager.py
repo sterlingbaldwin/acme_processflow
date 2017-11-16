@@ -28,7 +28,8 @@ file_type_map = {
     'streams.ocean': 'streams.ocean',
     'streams.cice': 'streams.cice',
     'mpas-cice_in': 'mpas-cice_in',
-    'mpas-o_in': 'mpas-o_in'
+    'mpas-o_in': 'mpas-o_in',
+    'meridionalHeatTransport': 'mpaso.hist.am.meridionalHeatTransport.YEAR-MONTH-01.nc'
 }
 
 
@@ -98,6 +99,9 @@ class FileManager(object):
             self.local_path,
             'rest',
             name)
+        head, tail = os.path.split(local_path)
+        if not os.path.exists(head):
+            os.makedirs(head)
         if self.sta:
             remote_path = os.path.join(
                 self.remote_path,
@@ -119,6 +123,9 @@ class FileManager(object):
             self.local_path,
             'mpas',
             _type)
+        head, tail = os.path.split(local_path)
+        if not os.path.exists(head):
+            os.makedirs(head)
         if self.sta:
             remote_path = os.path.join(self.remote_path, 'run', _type)
         else:
@@ -129,6 +136,34 @@ class FileManager(object):
             local_path=local_path,
             remote_path=remote_path,
             _type=_type)
+
+    def populate_heat_transport(self, newfiles):
+        name = 'mpaso.hist.am.meridionalHeatTransport.{year:04d}-02-01.nc'.format(
+            year=self.start_year)
+        local_path = os.path.join(
+            self.local_path,
+            'mpas',
+            name)
+        head, tail = os.path.split(local_path)
+        if not os.path.exists(head):
+            os.makedirs(head)
+        if self.sta:
+            remote_path = os.path.join(
+                self.remote_path,
+                'archive',
+                'ocn',
+                'hist',
+                name)
+        else:
+            remote_path = os.path.join(
+                self.remote_path,
+                name)
+        newfiles = self._add_file(
+            newfiles=newfiles,
+            name=name,
+            local_path=local_path,
+            remote_path=remote_path,
+            _type='meridionalHeatTransport')
 
     def populate_file_list(self, simstart, simend, experiment):
         """
@@ -156,7 +191,13 @@ class FileManager(object):
                     self.populate_handle_rest(simstart, newfiles)
                 elif _type in ['streams.ocean', 'streams.cice', 'mpas-o_in', 'mpas-cice_in']:
                     self.populate_handle_mpas(_type, newfiles)
+                elif _type == 'meridionalHeatTransport':
+                    self.populate_heat_transport(newfiles)
                 else:
+                    local_base = os.path.join(
+                        self.local_path, _type)
+                    if not os.path.exists(local_base):
+                        os.makedirs(local_base)
                     for year in xrange(simstart, simend + 1):
                         for month in xrange(1, 13):
                             if _type == 'atm':
@@ -169,7 +210,7 @@ class FileManager(object):
                             name = name.replace('YEAR', yearstr)
                             name = name.replace('MONTH', monthstr)
                             local_path = os.path.join(
-                                self.local_path, _type, name)
+                                local_base, name)
                             if self.sta:
                                 remote_path = os.path.join(
                                     self.remote_path,
@@ -265,6 +306,9 @@ class FileManager(object):
                     continue
                 elif _type in ['streams.ocean', 'streams.cice', 'mpas-o_in', 'mpas-cice_in']:
                     remote_path = os.path.join(self.remote_path, 'run')
+                elif _type == 'meridionalHeatTransport':
+                    remote_path = os.path.join(
+                        self.remote_path, 'archive', 'ocn', 'hist')
                 else:
                     remote_path = os.path.join(
                         self.remote_path, 'archive', _type, 'hist')
@@ -537,6 +581,7 @@ class FileManager(object):
 
         if transfer.status == JobStatus.FAILED:
             message = "Transfer has failed"
+            print message
             logging.error(message)
             event_list.push(message='Tranfer failed')
             return
@@ -549,6 +594,7 @@ class FileManager(object):
                 datafile.local_status = filestatus['EXISTS']
                 datafile.local_size = os.path.getsize(datafile.local_path)
             else:
+                print 'file transfer error on {}'.format(datafile.name)
                 datafile.local_status = filestatus['NOT_EXIST']
                 datafile.local_size = 0
             datafile.save()
@@ -600,8 +646,8 @@ class FileManager(object):
     def get_file_paths_by_year(self, start_year, end_year, _type):
         self.mutex.acquire()
         try:
-            if _type in ['rest', 'streams.ocean', 'streams.cice']:
-                datafiles = Datafile.select().where(DataFile.datatype == _type)
+            if _type in ['rest', 'streams.ocean', 'streams.cice', 'mpas-cice_in', 'mpas-o_in', 'meridionalHeatTransport']:
+                datafiles = DataFile.select().where(DataFile.datatype == _type)
             else:
                 datafiles = DataFile.select().where(
                     (DataFile.datatype == _type) &
@@ -610,6 +656,7 @@ class FileManager(object):
             files = [x.local_path for x in datafiles]
         except Exception as e:
             print_debug(e)
+            files = []
         finally:
             if self.mutex.locked():
                 self.mutex.release()

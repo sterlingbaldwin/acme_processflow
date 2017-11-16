@@ -16,7 +16,7 @@ class Slurm(object):
             raise Exception(
                 'Unable to find slurm, is it installed on this sytem?')
 
-    def batch(self, cmd, sargs):
+    def batch(self, cmd, sargs=None):
         """
         Submit to the batch queue in non-interactive mode
 
@@ -53,18 +53,21 @@ class Slurm(object):
     #     else:
     #         return True, out
 
-    def _submit(self, subtype, cmd, sargs=False):
+    def _submit(self, subtype, cmd, sargs=None):
 
         cmd = [subtype, cmd, sargs] if sargs else [subtype, cmd]
         tries = 0
         while tries != 10:
-            proc = Popen(cmd, shell=False, stderr=PIPE, stdout=PIPE)
-            out, err = proc.communicate()
-            if 'Transport endpoint is not connected' in err:
-                tries += 1
-                sleep(tries)
-            else:
-                break
+            try:
+                proc = Popen(cmd, shell=False, stderr=PIPE, stdout=PIPE)
+                out, err = proc.communicate()
+                if 'Transport endpoint is not connected' in err:
+                    tries += 1
+                    sleep(tries)
+                else:
+                    break
+            except:
+                sleep(1)
         if tries == 10:
             raise Exception('SLURM ERROR: Transport endpoint is not connected')
         if 'Invalid job id specified' in err:
@@ -85,13 +88,18 @@ class Slurm(object):
             jobid = str(jobid)
         success = False
         while not success:
-            proc = Popen(['scontrol', 'show', 'job', jobid],
-                         shell=False, stderr=PIPE, stdout=PIPE)
-            out, err = proc.communicate()
-            if 'Transport endpoint is not connected' in err:
+            try:
+                proc = Popen(['scontrol', 'show', 'job', jobid],
+                            shell=False, stderr=PIPE, stdout=PIPE)
+                out, err = proc.communicate()
+                if 'Transport endpoint is not connected' in err:
+                    sleep(1)
+                else:
+                    success = True
+            except:
+                success = False
                 sleep(1)
-            else:
-                success = True
+
         if 'Invalid job id specified' in err:
             raise Exception('SLURM ERROR: ' + err)
         jobinfo = {}
@@ -114,14 +122,17 @@ class Slurm(object):
         """
         tries = 0
         while tries != 10:
-            proc = Popen(['scontrol', 'show', 'node', nodeid],
-                         shell=False, stderr=PIPE, stdout=PIPE)
-            out, err = proc.communicate()
-            if 'Transport endpoint is not connected' in err:
-                tries += 1
-                sleep(tries)
-            else:
-                break
+            try:
+                proc = Popen(['scontrol', 'show', 'node', nodeid],
+                            shell=False, stderr=PIPE, stdout=PIPE)
+                out, err = proc.communicate()
+                if 'Transport endpoint is not connected' in err:
+                    tries += 1
+                    sleep(tries)
+                else:
+                    break
+            except:
+                sleep(1)
         if tries == 10:
             raise Exception('SLURM ERROR: Transport endpoint is not connected')
         if 'Invalid job id specified' in err:
@@ -143,13 +154,16 @@ class Slurm(object):
         """
         tries = 0
         while tries != 10:
-            proc = Popen(['squeue'], shell=False, stderr=PIPE, stdout=PIPE)
-            out, err = proc.communicate()
-            if 'Transport endpoint is not connected' in err:
-                tries += 1
-                sleep(tries)
-            else:
-                break
+            try:
+                proc = Popen(['squeue'], shell=False, stderr=PIPE, stdout=PIPE)
+                out, err = proc.communicate()
+                if 'Transport endpoint is not connected' in err:
+                    tries += 1
+                    sleep(tries)
+                else:
+                    break
+            except:
+                sleep(1)
         if tries == 10:
             raise Exception('SLURM ERROR: Transport endpoint is not connected')
 
@@ -183,14 +197,17 @@ class Slurm(object):
             jobid = str(jobid)
         tries = 0
         while tries != 10:
-            proc = Popen(['scancel', jobid], shell=False,
-                         stderr=PIPE, stdout=PIPE)
-            out, err = proc.communicate()
-            if 'Transport endpoint is not connected' in err:
-                tries += 1
-                sleep(tries)
-            else:
-                break
+            try:
+                proc = Popen(['scancel', jobid], shell=False,
+                            stderr=PIPE, stdout=PIPE)
+                out, err = proc.communicate()
+                if 'Transport endpoint is not connected' in err:
+                    tries += 1
+                    sleep(tries)
+                else:
+                    break
+            except:
+                sleep(1)
         if tries == 10:
             raise Exception('SLURM ERROR: Transport endpoint is not connected')
 
