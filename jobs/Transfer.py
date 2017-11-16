@@ -200,9 +200,12 @@ class Transfer(object):
             dst=self.config.get('source_email'),
             display_event=self.config.get('display_event'))
         client = get_client()
-        task_label = "{start} to {end}".format(
-            start=self.file_list[0]['name'],
-            end=self.file_list[-1]['name'])
+        # task_label = "{start} to {end}".format(
+        #     start=self.file_list[0]['name'],
+        #     end=self.file_list[-1]['name'])
+        task_label = 'Autotransfer of {number} files at {time}'.format(
+            number=len(self.file_list),
+            time=time.strftime("%I-%M"))
         try:
             transfer_task = TransferData(
                 client,
