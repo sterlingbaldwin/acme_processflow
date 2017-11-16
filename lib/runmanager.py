@@ -5,6 +5,7 @@ import re
 from datetime import datetime
 from threading import Thread
 from shutil import copytree
+from subprocess import Popen
 
 from lib.slurm import Slurm
 from lib.util import get_climo_output_files
@@ -796,9 +797,14 @@ class RunManager(object):
                 src=img_src, dst=host_dir)
             logging.info(msg)
             copytree(src=img_src, dst=host_dir)
-            # recursive_file_permissions(host_dir)
-            from subprocess import Popen
-            p = Popen(['chmod', '-R', '0755', host_dir])
+            
+            while True:
+                try:
+                    p = Popen(['chmod', '-R', '0755', host_dir])
+                except:
+                    sleep(1)
+                else:
+                    break
             out, err = p.communicate()
             head, _ = os.path.split(host_dir)
             os.chmod(head, 0755)
