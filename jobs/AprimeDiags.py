@@ -39,10 +39,9 @@ class APrimeDiags(object):
             'filemanager': ''
         }
         self.slurm_args = {
-            'num_cores': '-n 16',  # 16 cores
-            'run_time': '-t 0-02:00',  # 1 hour run time
-            'num_machines': '-N 1',  # run on one machine
-            'oversubscribe': '--oversubscribe'
+            'num_cores': '-n 32',  # 32 cores
+            'run_time': '-t 0-02:00',  # 2 hours run time
+            'num_machines': '-N 1',  # run on one node
         }
         self.start_time = None
         self.end_time = None
@@ -84,9 +83,6 @@ class APrimeDiags(object):
         """
         Create input and output directories
         """
-        print '---------------------'
-        print config
-        print '---------------------'
         self.config = config
         self.status = JobStatus.VALID
         if not os.path.exists(self.config.get('run_scripts_path')):
@@ -130,8 +126,19 @@ class APrimeDiags(object):
         #     return False
 
     def setup_input_directory(self):
+        """
+        Creates a directory full of symlinks to the input data
+        
+        Parameters:
+            None
+        Returns:
+            True if successful
+            False if missing input data
+            2 if error
+        """
         types = ['atm', 'ocn', 'ice', 'streams.ocean',
-                 'streams.cice', 'rest', 'mpas-o_in', 'mpas-cice_in']
+                 'streams.cice', 'rest', 'mpas-o_in',
+                 'mpas-cice_in', 'meridionalHeatTransport']
         test_archive_path = os.path.join(
             self.config['input_path'],
             self.config['experiment'],
@@ -232,6 +239,7 @@ class APrimeDiags(object):
         with open(run_script, 'w') as batchfile:
             batchfile.write('#!/bin/bash\n')
             batchfile.write(slurm_prefix)
+            batchfile.write('export OMP_NUM_THREADS=2\n')
             batchfile.write(cmd)
 
         slurm = Slurm()
