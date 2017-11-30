@@ -524,8 +524,8 @@ class FileManager(object):
                 self.mutex.release()
 
         logging.info('Transfering required files')
-        print 'total transfer size {size} for {nfiles} files'.format(
-            size=total_size,
+        print 'total transfer size {size} gigabytes for {nfiles} files'.format(
+            size=(total_size/1e9),
             nfiles=len(target_files))
         transfer_config = {
             'file_list': target_files,
