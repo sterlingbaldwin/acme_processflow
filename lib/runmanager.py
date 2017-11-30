@@ -148,7 +148,7 @@ class RunManager(object):
                 output_path=output_base_path,
                 file_list=file_list)
 
-        if required_jobs.get('aprime'):
+        if required_jobs.get('aprime') or required_jobs.get('aprime_diags'):
             # Add the aprime job
             web_directory = os.path.join(
                 config['global']['host_directory'],
@@ -176,7 +176,7 @@ class RunManager(object):
                 aprime_code_path=config['aprime_diags']['aprime_code_path'],
                 filemanager=filemanager)
 
-        if required_jobs.get('amwg'):
+        if required_jobs.get('amwg') or required_jobs.get('AMWG') or required_jobs.get('amwg_diags'):
             # Add AMWG
             web_directory = os.path.join(
                 config.get('global').get('host_directory'),
@@ -202,7 +202,7 @@ class RunManager(object):
                 regrid_path=regrid_output_dir,
                 diag_home=config['amwg']['diag_home'])
 
-        if required_jobs.get('e3sm_diags'):
+        if required_jobs.get('e3sm_diags') or required_jobs.get('acme_diags'):
             # Add the e3sm diags
             web_directory = os.path.join(
                 config['global']['host_directory'],
