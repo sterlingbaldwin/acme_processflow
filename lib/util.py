@@ -64,9 +64,10 @@ def transfer_directory(**kwargs):
     except:
         return False
 
-    directory_name = src_path.split(os.sep)[-1]
+    head, directory_name = os.path.split(src_path)
     msg = '{dir} transfer starting'.format(dir=directory_name)
     event_list.push(message=msg)
+    retcode = 0
     while True:
         if event and event.is_set():
             client.cancel_task(task_id)
@@ -74,14 +75,16 @@ def transfer_directory(**kwargs):
         status = client.get_task(task_id).get('status')
         if status == 'SUCCEEDED':
             msg = '{dir} transfer complete'.format(dir=directory_name)
-            return True
+            retcode = True
+            break
         elif status == 'FAILED':
             msg = '{dir} transfer FAILED'.format(dir=directory_name)
-            return False
+            retcode = False
+            break
         else:
-            event_list.push(message=msg)
             sleep(5)
-
+    event_list.push(message=msg)
+    return retcode
 
 def check_globus(**kwargs):
     """
