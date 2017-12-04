@@ -15,7 +15,7 @@ diagnostics on model data.
         -h, --help            show this help message and exit
         -c CONFIG, --config CONFIG
                                 Path to configuration file.
-        -n, --no-ui           Turn off the GUI.
+        -u, --ui              Turn on the GUI.
         -l LOG, --log LOG     Path to logging output file.
         -u, --no-cleanup      Don't perform pre or post run cleanup. This will leave
                                 all run scripts in place.

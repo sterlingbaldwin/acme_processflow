@@ -195,7 +195,7 @@ class Transfer(object):
         setup_globus(
             endpoints=endpoints,
             event_list=self.event_list,
-            no_ui=not self.config.get('ui', True),
+            ui=self.config.get('ui', False),
             src=self.config.get('source_email'),
             dst=self.config.get('source_email'),
             display_event=self.config.get('display_event'))

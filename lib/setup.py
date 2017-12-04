@@ -26,7 +26,7 @@ def parse_args(argv=None, print_help=None):
     parser = argparse.ArgumentParser()
     parser.add_argument('-c', '--config', help='Path to configuration file.')
     parser.add_argument(
-        '-n', '--no-ui', help='Turn off the GUI.', action='store_true')
+        '-u', '--ui', help='Turn on the GUI.', action='store_true')
     parser.add_argument('-l', '--log', help='Path to logging output file.')
     parser.add_argument(
         '-u', '--no-cleanup', help='Don\'t perform pre or post run cleanup. This will leave all run scripts in place.', action='store_true')
@@ -229,15 +229,15 @@ Please add a space and run again.'''.format(num=line_index)
         print "skipping globus setup"
     else:
         endpoints = [endpoint for endpoint in config['transfer'].values()]
-        if args.no_ui:
-            print 'Running in no-ui mode'
+        if not args.ui:
+            print 'Running in text only mode'
             addr = config.get('global').get('email')
             if not addr:
-                print 'When running in no-ui mode, you must enter an email address.'
+                print 'When running in text mode, you must enter an email address.'
                 return False, False, False
             setup_success = setup_globus(
                 endpoints=endpoints,
-                no_ui=True,
+                ui=False,
                 src=config.get('global').get('email'),
                 dst=config.get('global').get('email'),
                 event_list=event_list)
@@ -255,7 +255,7 @@ Please add a space and run again.'''.format(num=line_index)
             setup_success = setup_globus(
                 endpoints=endpoints,
                 display_event=display_event,
-                no_ui=False)
+                ui=True)
         if not setup_success:
             print "Globus setup error"
             return False, False, False
@@ -287,9 +287,7 @@ Please add a space and run again.'''.format(num=line_index)
         config=config,
         filemanager=filemanager)
 
-    # Turning off the GUI for the time being
-    # config['global']['ui'] = False if args.no_ui else True
-    config['global']['ui'] = False
+    config['global']['ui'] = True if args.ui else False
     config['global']['no_cleanup'] = True if args.no_cleanup else False
     config['global']['no_monitor'] = True if args.no_monitor else False
     config['global']['print_file_list'] = True if args.file_list else False
