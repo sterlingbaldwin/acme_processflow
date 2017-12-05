@@ -282,14 +282,16 @@ def main(test=False, **kwargs):
                 ui=config['global']['ui'],
                 line=msg,
                 event_list=event_list,
-                current_state=True)
+                current_state=True,
+                ignore_text=True)
             filemanager.check_year_sets(runmanager.job_sets)
             msg = "Starting ready jobs"
             print_line(
                 ui=config['global']['ui'],
                 line=msg,
                 event_list=event_list,
-                current_state=True)
+                current_state=True,
+                ignore_text=True)
             sleep(0.5)
             runmanager.start_ready_job_sets()
             msg = "Checking running job status"
@@ -297,7 +299,8 @@ def main(test=False, **kwargs):
                 ui=config['global']['ui'],
                 line=msg,
                 event_list=event_list,
-                current_state=True)
+                current_state=True,
+                ignore_text=True)
             sleep(0.5)
             runmanager.monitor_running_jobs()
             write_human_state(
@@ -355,7 +358,8 @@ def main(test=False, **kwargs):
                 ui=config['global']['ui'],
                 line='sleeping',
                 event_list=event_list,
-                current_state=True)
+                current_state=True,
+                ignore_text=True)
             sleep(5)
             loop_count += 1
     except KeyboardInterrupt as e:
