@@ -1,7 +1,7 @@
-from enum import Enum
+from enum import IntEnum
 
 
-class JobStatus(Enum):
+class JobStatus(IntEnum):
     VALID = 0
     INVALID = 1
     RUNNING = 2
@@ -24,4 +24,16 @@ StatusMap = {
     'WAITING_ON_INPUT': JobStatus.WAITING_ON_INPUT,
     'CANCELLED': JobStatus.CANCELLED,
     'COMPLETING': JobStatus.COMPLETED
+}
+
+ReverseMap = {
+    JobStatus.VALID: "valid",
+    JobStatus.INVALID: "invalid",
+    JobStatus.RUNNING: "running",
+    JobStatus.COMPLETED: "completed",
+    JobStatus.FAILED: "failed",
+    JobStatus.SUBMITTED: "submitted",
+    JobStatus.PENDING: "pending",
+    JobStatus.WAITING_ON_INPUT: "waiting on additional input",
+    JobStatus.CANCELLED: "canceled"
 }

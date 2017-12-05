@@ -194,15 +194,15 @@ def display(stdscr, event, job_sets, filemanager, event_list):
                     if 'Transfer' not in line.message:
                         continue
                     index = line.message.find('%')
-                    if not index:
+                    if index == -1:
                         continue
                     s_index = line.message.rfind(' ', 0, index)
                     percent = float(line.message[s_index: index])
+                    msg = line.message
                     if percent >= 100:
                         continue
                     try:
-                        pad.addstr(y, x, line.message,
-                                   curses.color_pair(4))
+                        pad.addstr(y, x, msg, curses.color_pair(4))
                         y += 1
                     except:
                         pass

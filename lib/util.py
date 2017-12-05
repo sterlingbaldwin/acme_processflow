@@ -24,21 +24,22 @@ from globus_sdk import TransferData
 
 from YearSet import SetStatus
 from YearSet import YearSet
-from jobs.JobStatus import JobStatus, StatusMap
+from jobs.JobStatus import JobStatus, StatusMap, ReverseMap
 from mailer import Mailer
 from string import Formatter
 from slurm import Slurm
 from models import DataFile
 
 
-def print_line(ui, line, event_list, current_state=False):
+def print_line(ui, line, event_list, current_state=False, ignore_text=False):
     if ui:
         if current_state:
             event_list.replace(0, line)
         else:
             event_list.push(line)
     else:
-        print line
+        if not ignore_text:
+            print line
 
 
 def transfer_directory(**kwargs):
@@ -364,7 +365,7 @@ def write_human_state(event_list, job_sets, mutex, state_path='run_state.txt', p
                     line = '  >   {type} -- {id}: {status}\n'.format(
                         type=job.type,
                         id=job.job_id,
-                        status=job.status)
+                        status=ReverseMap[job.status])
                     out_str += line
 
                 out_str += '\n'

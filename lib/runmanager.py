@@ -12,7 +12,7 @@ from lib.util import (get_climo_output_files,
                       create_symlink_dir,
                       print_line)
 
-from lib.YearSet import YearSet, SetStatus
+from lib.YearSet import YearSet, SetStatus, ReverseMap
 from jobs.Ncclimo import Climo
 from jobs.Timeseries import Timeseries
 from jobs.AMWGDiagnostic import AMWGDiagnostic
@@ -163,12 +163,15 @@ class RunManager(object):
                 config['global']['experiment'],
                 config['aprime_diags']['host_directory'],
                 set_string)
+
+            host_directory = "{experiment}_years{start}-{end}_vs_obs".format(
+                experiment=config['global']['experiment'],
+                start=year_set.set_start_year,
+                end=year_set.set_end_year)
             host_url = '/'.join([
                 config['global']['img_host_server'],
                 os.environ['USER'],
-                config['global']['experiment'],
-                config['aprime_diags']['host_directory'],
-                set_string])
+                host_directory])
 
             self.add_aprime(
                 web_directory=web_directory,
@@ -693,8 +696,8 @@ class RunManager(object):
                     job=job.type,
                     start=job.start_year,
                     end=job.end_year,
-                    s1=job.status,
-                    s2=status,
+                    s1=ReverseMap[job.status],
+                    s2=ReverseMap[status],
                     id=job.job_id)
                 print_line(
                     ui=self.ui,
@@ -768,18 +771,8 @@ class RunManager(object):
 
         # Finally host the files
         if job.type == 'aprime_diags':
-            # TODO: Get aprime working
+            # aprime handles its own hosting
             pass
-            # img_dir = 'coupled_diagnostics_{casename}-obs'.format(
-            #     casename=job.config.get('test_casename'))
-            # img_src = os.path.join(
-            #     job.config.get('coupled_project_dir'),
-            #     img_dir)
-            # setup_local_hosting(job, event_list, img_src)
-            # msg = '{job} hosted at {url}/index.html'.format(
-            #     url=url,
-            #     job=job.type)
-            # logging.info(msg)
         elif job.type == 'amwg':
             img_dir = '{start:04d}-{end:04d}{casename}-obs'.format(
                 start=job.config.get('start_year'),
