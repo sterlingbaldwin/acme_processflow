@@ -1,4 +1,5 @@
 import os
+import json
 import logging
 
 from subprocess import Popen, PIPE
@@ -56,16 +57,18 @@ class E3SMDiags(object):
         self.end_year = config['end_year']
         self.job_id = 0
         self.depends_on = ['ncclimo']
+        self.messages = []
         self.prevalidate(config)
 
     def __str__(self):
-        return pformat({
+        return json.dumps({
             'type': self.type,
             'config': self.config,
             'status': self.status,
             'depends_on': self.depends_on,
             'job_id': self.job_id,
-        })
+            'messages': self.messages
+        }, sort_keys=True, indent=4)
 
     def prevalidate(self, config):
         for key, val in config.items():
@@ -79,8 +82,10 @@ class E3SMDiags(object):
 
         valid = True
         for key, val in self.config.items():
-            if not val or val == '':
+            if val == '':
                 valid = False
+                msg = '{0}: {1} is missing or empty'.format(key, val)
+                self.messages.append(msg)
                 break
 
         if not os.path.exists(self.config.get('run_scripts_path')):
@@ -88,6 +93,7 @@ class E3SMDiags(object):
         if isinstance(self.config['seasons'], str):
             self.config['seasons'] = [self.config['seasons']]
         if self.year_set == 0:
+            self.messages.append('invalid year_set')
             self.status = JobStatus.INVALID
         if valid:
             self.status = JobStatus.VALID

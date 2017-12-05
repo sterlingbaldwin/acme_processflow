@@ -78,14 +78,14 @@ class Timeseries(object):
         self.status = JobStatus.VALID
 
     def __str__(self):
-        return pformat({
+        return json.dumps({
             'type': self.type,
             'config': self.config,
             'status': self.status,
             'depends_on': self.depends_on,
             'job_id': self.job_id,
             'year_set': self.year_set
-        })
+        }, sort_keys=True, indent=4)
 
     def execute(self, dryrun=False):
         """

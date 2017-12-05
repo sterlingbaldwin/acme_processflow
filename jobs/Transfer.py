@@ -128,19 +128,22 @@ class Transfer(object):
         Updates the event_list with a nicely formated percent completion
         """
 
-        spacer = ' ' if num_completed < 10 else ''
-        message = 'Transfer in progress {spacer}({completed}/{total}) ['.format(
-            completed=num_completed,
-            spacer=spacer,
-            total=num_total)
+        if percent_complete >= 100:
+            message = 'Transfer complete'
+        else:
+            spacer = ' ' if num_completed < 10 else ''
+            message = 'Transfer in progress {spacer}({completed}/{total}) ['.format(
+                completed=num_completed,
+                spacer=spacer,
+                total=num_total)
 
-        # now get the percent completion and elapsed time
-        for i in range(1, 100, 5):
-            if i < percent_complete:
-                message += '*'
-            else:
-                message += '_'
-        message += '] {percent:.2f}%'.format(percent=percent_complete)
+            # now get the percent completion and elapsed time
+            for i in range(1, 100, 5):
+                if i < percent_complete:
+                    message += '*'
+                else:
+                    message += '_'
+            message += '] {percent:.2f}%'.format(percent=percent_complete)
 
         # check if the event has already been pushed into the event_list
         replaced = False
@@ -148,7 +151,7 @@ class Transfer(object):
             for index, event in enumerate(self.event_list.list):
                 if task_id == event.data:
                     msg = '{time} {msg}'.format(
-                        time=time.strftime("%I:%M"),
+                        time=time.strftime('%I:%M:%S'),
                         msg=message)
                     self.event_list.replace(
                         index=index,
@@ -157,7 +160,7 @@ class Transfer(object):
                     break
             if not replaced:
                 msg = '{time} {msg}'.format(
-                    time=time.strftime("%I:%M"),
+                    time=time.strftime('%I:%M:%S'),
                     msg=message)
                 self.event_list.push(
                     message=msg,

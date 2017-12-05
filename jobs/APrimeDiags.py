@@ -3,6 +3,7 @@ import sys
 import logging
 import time
 import re
+import json
 
 from pprint import pformat
 from time import sleep
@@ -60,14 +61,15 @@ class APrimeDiags(object):
         self.prevalidate(config)
 
     def __str__(self):
-        return pformat({
+        sanitized = {k: v for k, v in self.config.items() if k != 'filemanager'}
+        return json.dumps({
             'type': self.type,
-            'config': self.config,
+            'config': sanitized,
             'status': self.status,
             'depends_on': self.depends_on,
             'job_id': self.job_id,
             'year_set': self.year_set
-        })
+        }, sort_keys=True, indent=4)
 
     @property
     def type(self):

@@ -197,13 +197,13 @@ class Climo(object):
         return True
 
     def __str__(self):
-        return pformat({
+        return json.dumps({
             'type': self.type,
             'config': self.config,
             'status': self.status,
             'depends_on': self.depends_on,
             'job_id': self.job_id,
-        })
+        }, sort_keys=True, indent=4)
 
     @property
     def type(self):
