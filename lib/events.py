@@ -54,7 +54,7 @@ class Event_list(object):
     def __init__(self):
         self._list = []
 
-    def push(self, **kwargs):
+    def push(self, message, **kwargs):
         """
         Push an event into the event_list
 
@@ -62,7 +62,6 @@ class Event_list(object):
             message (str): The string the event will holding
             data (job: optional): The job that spawned the event
         """
-        message = kwargs.get('message')
         data = kwargs.get('data')
         event = Event(
             time=datetime.now(),

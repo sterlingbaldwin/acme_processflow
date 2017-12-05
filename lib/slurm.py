@@ -90,7 +90,7 @@ class Slurm(object):
         while not success:
             try:
                 proc = Popen(['scontrol', 'show', 'job', jobid],
-                            shell=False, stderr=PIPE, stdout=PIPE)
+                             shell=False, stderr=PIPE, stdout=PIPE)
                 out, err = proc.communicate()
                 if 'Transport endpoint is not connected' in err:
                     sleep(1)
@@ -124,7 +124,7 @@ class Slurm(object):
         while tries != 10:
             try:
                 proc = Popen(['scontrol', 'show', 'node', nodeid],
-                            shell=False, stderr=PIPE, stdout=PIPE)
+                             shell=False, stderr=PIPE, stdout=PIPE)
                 out, err = proc.communicate()
                 if 'Transport endpoint is not connected' in err:
                     tries += 1
@@ -199,7 +199,7 @@ class Slurm(object):
         while tries != 10:
             try:
                 proc = Popen(['scancel', jobid], shell=False,
-                            stderr=PIPE, stdout=PIPE)
+                             stderr=PIPE, stdout=PIPE)
                 out, err = proc.communicate()
                 if 'Transport endpoint is not connected' in err:
                     tries += 1

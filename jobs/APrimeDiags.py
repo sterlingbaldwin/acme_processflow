@@ -9,11 +9,12 @@ from time import sleep
 from datetime import datetime
 from shutil import copyfile
 
-from lib.util import render
-from lib.util import print_debug
 from lib.events import Event_list
 from lib.slurm import Slurm
 from JobStatus import JobStatus, StatusMap
+from lib.util import (render,
+                      print_debug,
+                      print_line)
 
 
 class APrimeDiags(object):
@@ -23,6 +24,7 @@ class APrimeDiags(object):
         """
         self.event_list = event_list
         self.inputs = {
+            'ui': '',
             'web_dir': '',
             'host_url': '',
             'experiment': '',
@@ -88,7 +90,12 @@ class APrimeDiags(object):
         if not os.path.exists(self.config.get('run_scripts_path')):
             os.makedirs(self.config.get('run_scripts_path'))
         if not os.path.exists(self.config['input_path']):
-            print 'making input dir at {}'.format(self.config['input_path'])
+            msg = 'Creating input directory at {}'.format(self.config['input_path'])
+            print_line(
+                ui=self.config.get('ui', False),
+                line=msg,
+                event_list=self.event_list,
+                current_state=True)
             os.makedirs(self.config['input_path'])
 
         if self.year_set == 0:
@@ -148,7 +155,8 @@ class APrimeDiags(object):
                     dst = os.path.join(test_archive_path, tail)
                     if not os.path.exists(dst):
                         os.symlink(file, dst)
-        except:
+        except Exception as e:
+            print_debug(e)
             return 2
         return True
 
@@ -165,9 +173,9 @@ class APrimeDiags(object):
 
         # create symlinks to the input data
         setup_status = self.setup_input_directory()
-        if not setup_status:
+        if setup_status == 0: # Some data is missing
             return -1
-        elif setup_status == 2:
+        elif setup_status == 2: # an exception took place
             return False
 
         set_string = '{start:04d}_{end:04d}'.format(
@@ -233,17 +241,17 @@ class APrimeDiags(object):
             batchfile.write(cmd)
 
         slurm = Slurm()
-        print 'submitting to queue {type}: {start:04d}-{end:04d}'.format(
+        msg = 'Submitting to queue {type}: {start:04d}-{end:04d}'.format(
             type=self.type,
             start=self.start_year,
             end=self.end_year)
+        print_line(
+            ui=self.config.get('ui', False),
+            line=msg,
+            event_list=self.event_list,
+            current_state=True)
         self.job_id = slurm.batch(run_script)
         status = slurm.showjob(self.job_id)
         self.status = StatusMap[status.get('JobState')]
-        message = "## {job} id: {id} changed status to {status}".format(
-            job=self.type,
-            id=self.job_id,
-            status=self.status)
-        logging.info(message)
 
         return self.job_id

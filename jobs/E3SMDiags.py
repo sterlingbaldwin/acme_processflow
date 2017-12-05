@@ -6,18 +6,20 @@ from pprint import pformat
 from datetime import datetime
 from shutil import copyfile
 
-from lib.util import render
-from lib.util import get_climo_output_files
-from lib.util import create_symlink_dir
 from lib.events import Event_list
 from lib.slurm import Slurm
 from JobStatus import JobStatus, StatusMap
+from lib.util import (render,
+                      get_climo_output_files,
+                      create_symlink_dir,
+                      print_line)
 
 
 class E3SMDiags(object):
     def __init__(self, config, event_list):
         self.event_list = event_list
         self.inputs = {
+            'ui': '',
             'regrid_base_path': '',
             'regrided_climo_path': '',
             'reference_data_path': '',
@@ -112,9 +114,13 @@ class E3SMDiags(object):
         # Check if the output already exists
         if self.postvalidate():
             self.status = JobStatus.COMPLETED
-            message = 'ACME diags already computed, skipping'
-            self.event_list.push(message=message)
-            logging.info(message)
+            msg = 'ACME diags already computed, skipping'
+            print_line(
+                ui=self.config.get('ui', False),
+                line=msg,
+                event_list=self.event_list,
+                current_state=True)
+            logging.info(msg)
             return 0
         # render the parameters file
         self.output_path = self.config['output_path']
@@ -178,19 +184,18 @@ class E3SMDiags(object):
             batchfile.write(cmd)
 
         slurm = Slurm()
-        print 'submitting to queue {type}: {start:04d}-{end:04d}'.format(
+        msg = 'Submitting to queue {type}: {start:04d}-{end:04d}'.format(
             type=self.type,
             start=self.start_year,
             end=self.end_year)
+        print_line(
+            ui=self.config.get('ui', False),
+            line=msg,
+            event_list=self.event_list,
+            current_state=True)
         self.job_id = slurm.batch(run_script, '--oversubscribe')
         status = slurm.showjob(self.job_id)
         self.status = StatusMap[status.get('JobState')]
-        message = '{type} id: {id} changed state to {state}'.format(
-            type=self.type,
-            id=self.job_id,
-            state=self.status)
-        logging.info(message)
-        self.event_list.push(message=message)
 
         return self.job_id
 

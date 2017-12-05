@@ -29,7 +29,7 @@ def parse_args(argv=None, print_help=None):
         '-u', '--ui', help='Turn on the GUI.', action='store_true')
     parser.add_argument('-l', '--log', help='Path to logging output file.')
     parser.add_argument(
-        '-u', '--no-cleanup', help='Don\'t perform pre or post run cleanup. This will leave all run scripts in place.', action='store_true')
+        '-n', '--no-cleanup', help='Don\'t perform pre or post run cleanup. This will leave all run scripts in place.', action='store_true')
     parser.add_argument(
         '-m', '--no-monitor', help='Don\'t run the remote monitor or move any files over globus.', action='store_true')
     parser.add_argument(
@@ -42,15 +42,14 @@ def parse_args(argv=None, print_help=None):
     return parser.parse_args(argv)
 
 
-def setup(argv, display_event, **kwargs):
+def setup(argv, **kwargs):
     """
     Parse the commandline arguments, and setup the master config dict
 
     Parameters:
         parser (argparse.ArgumentParser): The parser object
-        display_event (Threadding_event): The event to turn the display on and off
     """
-    print "entering setup"
+    print "Entering setup"
     # Setup the parser
     args = parse_args(argv=argv)
     if not args.config:
@@ -60,6 +59,7 @@ def setup(argv, display_event, **kwargs):
     event_list = kwargs['event_list']
     thread_list = kwargs['thread_list']
     mutex = kwargs['mutex']
+
 
     # check if globus config is valid, else remove it
     globus_config = os.path.join(os.path.expanduser('~'), '.globus.cfg')
@@ -101,6 +101,12 @@ Please add a space and run again.'''.format(num=line_index)
                 'resources')
     else:
         return False, False, False
+
+    # Setup boolean config flags
+    config['global']['ui'] = True if args.ui else False
+    config['global']['no_cleanup'] = True if args.no_cleanup else False
+    config['global']['no_monitor'] = True if args.no_monitor else False
+    config['global']['print_file_list'] = True if args.file_list else False
 
     template_path = os.path.join(
         config['global']['resource_dir'],
@@ -200,6 +206,8 @@ Please add a space and run again.'''.format(num=line_index)
         config['global']['source_path'] = head
 
     filemanager = FileManager(
+        event_list=event_list,
+        ui=config['global']['ui'],
         database=os.path.join(
             config['global']['project_path'], 'input', 'workflow.db'),
         types=config['global']['file_types'],
@@ -229,38 +237,23 @@ Please add a space and run again.'''.format(num=line_index)
         print "skipping globus setup"
     else:
         endpoints = [endpoint for endpoint in config['transfer'].values()]
-        if not args.ui:
-            print 'Running in text only mode'
-            addr = config.get('global').get('email')
-            if not addr:
-                print 'When running in text mode, you must enter an email address.'
-                return False, False, False
-            setup_success = setup_globus(
-                endpoints=endpoints,
-                ui=False,
-                src=config.get('global').get('email'),
-                dst=config.get('global').get('email'),
-                event_list=event_list)
-        else:
-            output_path = config.get('global').get('output_path')
-            error_output = os.path.join(
-                output_path,
-                'workflow.error')
-            config['global']['error_path'] = error_output
-            if not os.path.exists(output_path):
-                os.makedirs(output_path)
-            sys.stderr = open(error_output, 'w')
-            msg = 'Activating endpoints {}'.format(' '.join(endpoints))
-            logging.info(msg)
-            setup_success = setup_globus(
-                endpoints=endpoints,
-                display_event=display_event,
-                ui=True)
+        addr = config.get('global').get('email')
+        if not addr:
+            print 'When running in text mode, you must enter an email address.'
+            return False, False, False
+        setup_success = setup_globus(
+            endpoints=endpoints,
+            ui=False,
+            src=config.get('global').get('email'),
+            dst=config.get('global').get('email'),
+            event_list=event_list)
+
         if not setup_success:
             print "Globus setup error"
             return False, False, False
         else:
             print 'Globus authentication complete'
+
         print 'Checking file access on globus transfer nodes'
         setup_success, endpoint = check_globus(
             source_endpoint=config['transfer']['source_endpoint'],
@@ -274,6 +267,7 @@ Please add a space and run again.'''.format(num=line_index)
 
     # setup the runmanager
     runmanager = RunManager(
+        ui=config['global']['ui'],
         event_list=event_list,
         output_path=config['global']['output_path'],
         caseID=config['global']['experiment'],
@@ -286,11 +280,6 @@ Please add a space and run again.'''.format(num=line_index)
         sim_end_year=sim_end_year,
         config=config,
         filemanager=filemanager)
-
-    config['global']['ui'] = True if args.ui else False
-    config['global']['no_cleanup'] = True if args.no_cleanup else False
-    config['global']['no_monitor'] = True if args.no_monitor else False
-    config['global']['print_file_list'] = True if args.file_list else False
 
     logging.info('Starting run with config')
     logging.info(pformat(config))

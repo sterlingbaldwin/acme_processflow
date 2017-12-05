@@ -14,13 +14,14 @@ from globus_cli.commands.login import do_link_login_flow, check_logged_in
 from globus_cli.services.transfer import get_client, autoactivate
 from globus_sdk import TransferData
 
-from lib.util import print_debug
-from lib.util import print_message
-from lib.util import format_debug
-from lib.util import setup_globus
-from lib.util import strfdelta
 from lib.events import Event_list
 from jobs.JobStatus import JobStatus
+from lib.util import (print_debug,
+                      print_message,
+                      format_debug,
+                      setup_globus,
+                      strfdelta,
+                      print_line)
 
 
 class Transfer(object):
@@ -36,6 +37,7 @@ class Transfer(object):
         self.start_time = None
         self.end_time = None
         self.inputs = {
+            'ui': '',
             'file_list': '',
             'recursive': '',
             'source_endpoint': '',
@@ -92,7 +94,7 @@ class Transfer(object):
                 if i == 'recursive':
                     self.config[i] = False
                 else:
-                    print_message('Missing transfer argument {}'.format(i))
+                    logging.error('Missing transfer argument {}'.format(i))
                     self.status = JobStatus.INVALID
                     return -1
         self.status = JobStatus.VALID
@@ -142,7 +144,6 @@ class Transfer(object):
 
         # check if the event has already been pushed into the event_list
         replaced = False
-        from lib.util import print_debug
         try:
             for index, event in enumerate(self.event_list.list):
                 if task_id == event.data:

@@ -31,6 +31,16 @@ from slurm import Slurm
 from models import DataFile
 
 
+def print_line(ui, line, event_list, current_state=False):
+    if ui:
+        if current_state:
+            event_list.replace(0, line)
+        else:
+            event_list.push(line)
+    else:
+        print line
+
+
 def transfer_directory(**kwargs):
     """
     Transfer all the contents from source_endpoint:src_path to destination_endpoint:dst_path
@@ -85,6 +95,7 @@ def transfer_directory(**kwargs):
             sleep(5)
     event_list.push(message=msg)
     return retcode
+
 
 def check_globus(**kwargs):
     """
@@ -167,7 +178,7 @@ def setup_globus(endpoints, ui=False, **kwargs):
 
     # First go through the globus login process
     while not check_logged_in():
-        # if in no_ui mode, send an email to the user with a link to log in
+        # if not in ui mode, send an email to the user with a link to log in
         if not ui:
             if kwargs.get('event_list'):
                 line = 'Waiting on user to log into globus, email sent to {addr}'.format(
@@ -198,6 +209,7 @@ def setup_globus(endpoints, ui=False, **kwargs):
         endpoints = [endpoints]
 
     message_sent = False
+    message_printed = False
     activated = False
     email_msg = ''
     client = get_client()
@@ -225,12 +237,17 @@ Please open the following URL in a browser to activate the endpoint:
 https://www.globus.org/app/endpoints/{endpoint}/activate
 
 """.format(endpoint=endpoint, server=server['hostname'])
-                print message
+
+                if not message_printed:
+                    print message
+                    message_printed = True
+
                 if not ui:
                     email_msg += message
                 else:
                     raw_input("Press ENTER after activating the endpoint")
-                    r = client.endpoint_autoactivate(endpoint, if_expires_in=3600)
+                    r = client.endpoint_autoactivate(
+                        endpoint, if_expires_in=3600)
                     if not r["code"] == "AutoActivationFailed":
                         activated = True
 
@@ -244,7 +261,7 @@ https://www.globus.org/app/endpoints/{endpoint}/activate
                     print "Error sending notification email"
                     logging.error("Unable to send notification email")
                     return False
-            sleep(30)
+            sleep(10)
     if ui:
         display_event.clear()
     return True
