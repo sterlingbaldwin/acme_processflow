@@ -12,13 +12,13 @@ from lib.util import (get_climo_output_files,
                       create_symlink_dir,
                       print_line)
 
-from lib.YearSet import YearSet, SetStatus, ReverseMap
+from lib.YearSet import YearSet, SetStatus
 from jobs.Ncclimo import Climo
 from jobs.Timeseries import Timeseries
 from jobs.AMWGDiagnostic import AMWGDiagnostic
 from jobs.APrimeDiags import APrimeDiags
 from jobs.E3SMDiags import E3SMDiags
-from jobs.JobStatus import JobStatus, StatusMap
+from jobs.JobStatus import JobStatus, StatusMap, ReverseMap
 
 
 class RunManager(object):
