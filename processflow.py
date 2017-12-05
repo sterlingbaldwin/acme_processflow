@@ -74,8 +74,7 @@ def main(test=False, **kwargs):
     # Read in parameters from config
     args = kwargs['testargs'] if test else sys.argv[1:]
     config, filemanager, runmanager = setup(
-        args,
-        display_event,
+        argv=args,
         event_list=event_list,
         thread_list=thread_list,
         kill_event=thread_kill_event,
@@ -99,31 +98,50 @@ def main(test=False, **kwargs):
     if config['global'].get('ui'):
         try:
             sys.stdout.write('Turning on the display')
-            for i in range(8):
+            for i in range(10):
                 sys.stdout.write('.')
                 sys.stdout.flush()
                 sleep(0.1)
             print '\n'
-            args = (display_event, runmanager.job_sets)
+            args = (display_event,
+                    runmanager.job_sets,
+                    filemanager,
+                    event_list)
             diaplay_thread = threading.Thread(
                 target=start_display,
                 args=args)
             diaplay_thread.start()
 
         except KeyboardInterrupt as e:
-            print 'keyboard exit'
+            print 'keyboard interrupt'
             display_event.set()
             return -1
 
     state_path = os.path.join(
         config.get('global').get('output_path'),
         'run_state.txt')
+    msg = "Updating local file status"
+    print_line(
+        ui=config['global']['ui'],
+        line=msg,
+        event_list=event_list)
     filemanager.update_local_status()
     all_data = filemanager.all_data_local()
     if not all_data:
-        print "Updating remote file status"
+        print_line(
+            config['global']['ui'],
+            "Updating remote file status",
+            event_list,
+            current_state=False)
         filemanager.update_remote_status(client)
         all_data_remote = filemanager.all_data_remote()
+    msg = "Writing human readable state to file"
+    print_line(
+        ui=config['global']['ui'],
+        line=msg,
+        event_list=event_list,
+        current_state=True)
+    sleep(0.5)
     write_human_state(
         event_list=event_list,
         job_sets=runmanager.job_sets,
@@ -134,7 +152,12 @@ def main(test=False, **kwargs):
     dryrun = config['global'].get('dry_run')
     if dryrun:
         runmanager.dryrun(True)
-        event_list.push(message='Running in dry-run mode')
+        msg = 'Running in dry-run mode'
+        print_line(
+            ui=config['global']['ui'],
+            line=msg,
+            event_list=event_list,
+            current_state=True)
         write_human_state(
             event_list=event_list,
             job_sets=job_sets,
@@ -158,8 +181,10 @@ def main(test=False, **kwargs):
     if not os.path.exists(case_scripts_dir) \
        and not config['global']['no_monitor']:
         msg = 'case_scripts not local, transfering remote copy'
-        print msg
-        event_list.push(message=msg)
+        print_line(
+            ui=config['global']['ui'],
+            line=msg,
+            event_list=event_list)
         logging.info(msg)
         src_path = os.path.join(
             config['global']['source_path'], 'case_scripts')
@@ -190,8 +215,11 @@ def main(test=False, **kwargs):
     printed = False
     try:
         loop_count = remote_check_delay
-        print "--- Entering main loop ---"
-        print "Current status can be found at {}".format(state_path)
+        if not config['global']['ui']:
+            print "--------------------------"
+            print " Entering Main Loop "
+            print " Status file: {}".format(state_path)
+            print "--------------------------"
         while True:
             # Check the remote status once every 5 minutes
             if loop_count == remote_check_delay:
@@ -204,10 +232,20 @@ def main(test=False, **kwargs):
                 if not all_data_remote and not all_data:
                     all_data_remote = filemanager.all_data_remote()
                 if not all_data_remote and not all_data:
-                    print 'Updating remote status'
+                    msg = 'Updating remote status'
+                    print_line(
+                        ui=config['global']['ui'],
+                        line=msg,
+                        event_list=event_list,
+                        current_state=True)
                     filemanager.update_remote_status(client)
                 if not all_data:
-                    print 'Updating local status'
+                    msg = 'Updating local status'
+                    print_line(
+                        ui=config['global']['ui'],
+                        line=msg,
+                        event_list=event_list,
+                        current_state=True)
                     filemanager.update_local_status()
             # check the local status every 10 seconds
             if loop_count == local_check_delay:
@@ -215,7 +253,11 @@ def main(test=False, **kwargs):
                     all_data = filemanager.all_data_local()
                 else:
                     if not printed:
-                        print 'All data local, turning off remote checks'
+                        msg = 'All data local, turning off remote checks'
+                        print_line(
+                            ui=config['global']['ui'],
+                            line=msg,
+                            event_list=event_list)
                         printed = True
                 if not all_data \
                         and not config['global']['no_monitor']:
@@ -228,10 +270,38 @@ def main(test=False, **kwargs):
                         emailaddr=config['global']['email'],
                         thread_list=thread_list)
                     if transfer_started:
-                        print 'starting file transfer'
+                        msg = 'Starting file transfer'
+                        print_line(
+                            ui=config['global']['ui'],
+                            line=msg,
+                            event_list=event_list,
+                            current_state=True)
 
+            msg = "Checking for ready job sets"
+            print_line(
+                ui=config['global']['ui'],
+                line=msg,
+                event_list=event_list,
+                current_state=True,
+                ignore_text=True)
             filemanager.check_year_sets(runmanager.job_sets)
+            msg = "Starting ready jobs"
+            print_line(
+                ui=config['global']['ui'],
+                line=msg,
+                event_list=event_list,
+                current_state=True,
+                ignore_text=True)
+            sleep(0.5)
             runmanager.start_ready_job_sets()
+            msg = "Checking running job status"
+            print_line(
+                ui=config['global']['ui'],
+                line=msg,
+                event_list=event_list,
+                current_state=True,
+                ignore_text=True)
+            sleep(0.5)
             runmanager.monitor_running_jobs()
             write_human_state(
                 event_list=event_list,
@@ -244,7 +314,12 @@ def main(test=False, **kwargs):
                 first_print = True
                 while not filemanager.all_data_local():
                     if first_print:
-                        print "All jobs complete, moving additional files"
+                        msg = "All jobs complete, moving additional files"
+                        print_line(
+                            ui=config['global']['ui'],
+                            line=msg,
+                            event_list=event_list,
+                            current_state=True)
                         first_print = False
                     started = filemanager.transfer_needed(
                         event_list=event_list,
@@ -257,7 +332,17 @@ def main(test=False, **kwargs):
                     if not started:
                         sleep(5)
                     else:
-                        print "Transfer started"
+                        msg = "Transfer started"
+                        print_line(
+                            ui=config['global']['ui'],
+                            line=msg,
+                            event_list=event_list)
+                msg = "Finishing up run"
+                print_line(
+                    ui=config['global']['ui'],
+                    line=msg,
+                    event_list=event_list,
+                    current_state=True)
                 finishup(
                     config=config,
                     job_sets=runmanager.job_sets,
@@ -269,6 +354,12 @@ def main(test=False, **kwargs):
                     kill_event=thread_kill_event)
                 # SUCCESS EXIT
                 return 0
+            print_line(
+                ui=config['global']['ui'],
+                line='sleeping',
+                event_list=event_list,
+                current_state=True,
+                ignore_text=True)
             sleep(5)
             loop_count += 1
     except KeyboardInterrupt as e:
@@ -286,12 +377,13 @@ def main(test=False, **kwargs):
         for thread in thread_list:
             thread.join(timeout=1.0)
     except Exception as e:
-        print_message('----- UNEXPECTED EXCEPTION OCCURED -----')
-        print_debug(e)
         display_event.set()
         thread_kill_event.set()
         for thread in thread_list:
             thread.join(timeout=1.0)
+        sleep(1)
+        print_message('----- UNEXPECTED EXCEPTION OCCURED -----')
+        print_debug(e)
 
 
 if __name__ == "__main__":

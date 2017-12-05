@@ -2,27 +2,46 @@ import curses
 from datetime import datetime
 from time import sleep
 from lib.YearSet import SetStatus
+from jobs.JobStatus import JobStatus
+from lib.util import strfdelta
 
 
-def xy_check(x, y, hmax, wmax):
-    if y >= hmax or x >= wmax:
-        return -1
-    else:
-        return 0
+def handle_resize(pad, height, width):
+    """
+    Checks for and handles a window resize event
+
+    Parameters:
+        pad (curses pad): the pad to check
+        height (int): The height of the stdscr
+        width (int): the width of the stdscr
+    Returns:
+        pad: either the new pad if the window was resized, or the original pad
+    """
+    resize = curses.is_term_resized(height, width)
+    if resize is True:
+        height, width = stdscr.getmaxyx()
+        hmax = height - 3
+        wmax = width - 5
+        stdscr.clear()
+        curses.resizeterm(height, width)
+        stdscr.refresh()
+        pad = curses.newpad(hmax, wmax)
+        pad.refresh(0, 0, 3, 5, hmax, wmax)
+
+    return pad
 
 
-def write_line(pad, line, x=None, y=None, color=None):
-    if not color:
-        color = curses.color_pair(4)
-    try:
-        pad.addstr(y, x, line, color)
-    except:
-        pass
-
-
-def display(stdscr, event, job_sets):
+def display(stdscr, event, job_sets, filemanager, event_list):
     """
     Display current execution status via curses
+
+    Parameters:
+        stdscr (curses screen): the main screen object
+        event (thread.event): an event to turn the GUI on and off
+        job_sets (list): the list of jobsets from the RunManager
+        filemanager (FileManager): The main threads FileManager
+        event_list (EventList): the main threads EventList
+
     """
 
     # setup variables
@@ -50,23 +69,10 @@ def display(stdscr, event, job_sets):
         pad = curses.newpad(hmax, wmax)
         last_y = 0
         while True:
+            if event and event.is_set():
+                return
             # Check if screen was re-sized (True or False)
-            resize = curses.is_term_resized(height, width)
-
-            # Action in loop if resize is True:
-            if resize is True:
-                height, width = stdscr.getmaxyx()
-                hmax = height - 3
-                wmax = width - 5
-                stdscr.clear()
-                curses.resizeterm(height, width)
-                stdscr.refresh()
-                pad = curses.newpad(hmax, wmax)
-                try:
-                    pad.refresh(0, 0, 3, 5, hmax, wmax)
-                except:
-                    sleep(0.5)
-                    continue
+            pad = handle_resize(pad, height, width)
             now = datetime.now()
             # sleep until there are jobs
             if len(job_sets) == 0:
@@ -120,7 +126,7 @@ def display(stdscr, event, job_sets):
                     continue
                 for job in year_set.jobs:
                     line = '  >   {type} -- {id} '.format(
-                        type=job.get_type(),
+                        type=job.type,
                         id=job.job_id)
                     try:
                         pad.addstr(y, x, line, curses.color_pair(4))
@@ -162,100 +168,94 @@ def display(stdscr, event, job_sets):
                         pad.refresh(0, 0, 3, 5, hmax, wmax)
                     y += 1
 
-            x = 0
-            if last_y:
-                y = last_y
+            # print current state
+            events = event_list.list
+            color_pair = curses.color_pair(4)
+            line = ">>> {}".format(events[0].message)
+            try:
+                y += 1
+                pad.addstr(y, x, line, color_pair)
+                y += 1
+            except:
+                continue
             pad.clrtobot()
             y += 1
-            events = event_list.list
-            for line in events[-10:]:
+
+            # Transfer status
+            if filemanager.active_transfers:
+                msg = 'Active transfers: {}'.format(filemanager.active_transfers)
+                try:
+                    pad.addstr(y, x, msg, curses.color_pair(4))
+                    pad.clrtoeol()
+                except:
+                    pass
+
+                for line in events:
+                    if 'Transfer' not in line.message:
+                        continue
+                    index = line.message.find('%')
+                    if index == -1:
+                        continue
+                    s_index = line.message.rfind(' ', 0, index)
+                    percent = float(line.message[s_index: index])
+                    msg = line.message
+                    if percent >= 100:
+                        continue
+                    try:
+                        pad.addstr(y, x, msg, curses.color_pair(4))
+                        y += 1
+                    except:
+                        pass
+                    pad.clrtoeol()
+
+            # Event log
+            event_length = len(events) - 1
+            for index in range(10):
+                i = event_length - index
+                if i == 0:
+                    break
+                line = events[i]
                 if 'Transfer' in line.message:
                     continue
                 if 'hosted' in line.message:
                     continue
                 if 'failed' in line.message or 'FAILED' in line.message:
                     prefix = '[-]  '
-                    try:
-                        pad.addstr(y, x, prefix, curses.color_pair(4))
-                    except:
-                        continue
+                    color_pair = curses.color_pair(4)
                 else:
                     prefix = '[+]  '
-                    try:
-                        pad.addstr(y, x, prefix, curses.color_pair(5))
-                    except:
-                        continue
+                    color_pair = curses.color_pair(5)
                 try:
-                    pad.addstr(y, x, line.message, curses.color_pair(4))
+                    pad.addstr(y, x, prefix, curses.color_pair(4))
+                except:
+                    continue
+                try:
+                    msg = '{time}: {msg}'.format(
+                        time=line.time.strftime('%I:%M:%S'),
+                        msg=line.message)
+                    pad.addstr(y, x, msg, curses.color_pair(4))
+                    y += 1
                 except:
                     continue
                 pad.clrtoeol()
                 if initializing:
                     sleep(0.01)
                     pad.refresh(0, 0, 3, 5, hmax, wmax)
-                y += 1
-                if xy_check(x, y, hmax, wmax) == -1:
-                    sleep(1)
-                    break
-            pad.clrtobot()
-            y += 1
-            if xy_check(x, y, hmax, wmax) == -1:
-                sleep(1)
-                continue
 
-            file_start_y = y
-            file_end_y = y
-            file_display_list = []
-            current_year = 1
-            year_ready = True
-            partial_data = False
-
-            y = file_end_y + 1
-            x = 0
-            msg = 'Active transfers: {}'.format(active_transfers)
-            try:
-                pad.addstr(y, x, msg, curses.color_pair(4))
-            except:
-                pass
-            pad.clrtoeol()
-            if active_transfers:
-                for line in events:
-                    if 'Transfer' in line.message:
-                        index = line.message.find('%')
-                        if index:
-                            s_index = line.message.rfind(' ', 0, index)
-                            percent = float(line.message[s_index: index])
-                            if percent < 100:
-                                y += 1
-                                try:
-                                    pad.addstr(y, x, line.message,
-                                               curses.color_pair(4))
-                                except:
-                                    pass
-                                pad.clrtoeol()
-            for line in events:
-                if 'hosted' in line.message:
-                    y += 1
-                    try:
-                        pad.addstr(y, x, line.message, curses.color_pair(4))
-                    except:
-                        pass
+            # fidget spinner
             spin_line = spinner[spin_index]
             spin_index += 1
             if spin_index == spin_len:
                 spin_index = 0
-            y += 1
             try:
                 pad.addstr(y, x, spin_line, curses.color_pair(4))
             except:
                 pass
-            pad.clrtoeol()
-            pad.clrtobot()
-            y += 1
-            if event and event.is_set():
-                # enablePrint()
-                return
+
+            # print cycle clean up
             try:
+                pad.clrtoeol()
+                pad.clrtobot()
                 pad.refresh(0, 0, 3, 5, hmax, wmax)
             except:
                 pass
@@ -263,16 +263,11 @@ def display(stdscr, event, job_sets):
             sleep(1)
 
     except KeyboardInterrupt as e:
-        raise
+        return
 
 
-def sigwinch_handler(n, frame):
-    curses.endwin()
-    curses.initscr()
-
-
-def start_display(event, job_sets):
+def start_display(event, job_sets, filemanager, event_list):
     try:
-        curses.wrapper(display, event, job_sets)
+        curses.wrapper(display, event, job_sets, filemanager, event_list)
     except KeyboardInterrupt as e:
         return

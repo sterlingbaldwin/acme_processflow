@@ -12,7 +12,8 @@ from models import DataFile
 from jobs.Transfer import Transfer
 from jobs.JobStatus import JobStatus
 from lib.YearSet import SetStatus
-from lib.util import print_debug
+from lib.util import (print_debug,
+                      print_line)
 
 filestatus = {
     'EXISTS': 0,
@@ -38,7 +39,7 @@ class FileManager(object):
     Manage all files required by jobs
     """
 
-    def __init__(self, database, types, sta=False, **kwargs):
+    def __init__(self, database, types, sta=False, ui=False, **kwargs):
         """
         Parameters:
             mutex (theading.Lock) the mutext for accessing the database
@@ -51,6 +52,8 @@ class FileManager(object):
             local_path (str): the local project path
         """
         self.mutex = kwargs['mutex']
+        self.event_list = kwargs['event_list']
+        self.ui = ui
         self.sta = sta
         self.updated_rest = False
         self.types = types if isinstance(types, list) else [types]
@@ -177,9 +180,13 @@ class FileManager(object):
         """
         print 'Creating file table'
         if self.sta:
-            print 'Using short term archive'
+            msg = 'Using short term archive'
         else:
-            print 'Short term archive turned off'
+            msg = 'Short term archive turned off'
+        print_line(
+            ui=self.ui,
+            line=msg,
+            event_list=self.event_list)
         if not self.start_year:
             self.start_year = simstart
         newfiles = []
@@ -230,7 +237,11 @@ class FileManager(object):
                                 _type=_type,
                                 year=year,
                                 month=month)
-            print 'Inserting file data into the table'
+            msg = 'Inserting file data into the table'
+            print_line(
+                ui=self.ui,
+                line=msg,
+                event_list=self.event_list)
             self.mutex.acquire()
             try:
                 step = 50
@@ -241,7 +252,11 @@ class FileManager(object):
             finally:
                 if self.mutex.locked():
                     self.mutex.release()
-            print 'Database update complete'
+            msg = 'Database update complete'
+            print_line(
+                ui=self.ui,
+                line=msg,
+                event_list=self.event_list)
 
     def _add_file(self, newfiles, **kwargs):
         local_status = filestatus['EXISTS'] \
@@ -312,7 +327,12 @@ class FileManager(object):
                 else:
                     remote_path = os.path.join(
                         self.remote_path, 'archive', _type, 'hist')
-                print 'Querying globus for {}'.format(_type)
+                msg = 'Querying globus for {}'.format(_type)
+                print_line(
+                    ui=self.ui,
+                    line=msg,
+                    event_list=self.event_list,
+                    current_state=True)
                 res = self._get_ls(
                     client=client,
                     path=remote_path)
@@ -363,7 +383,6 @@ class FileManager(object):
                         (DataFile.name << to_update_name) &
                         (DataFile.datatype == _type))
                     n = q.execute()
-                    print 'updated {} records'.format(n)
             except Exception as e:
                 print_debug(e)
             finally:
@@ -500,6 +519,7 @@ class FileManager(object):
             if len(required_files) == 0:
                 return False
             target_files = []
+            transfer_names = []
             target_size = 1e11  # 100 GB
             total_size = 0
             for file in required_files:
@@ -513,6 +533,7 @@ class FileManager(object):
                         'remote_path': file.remote_path,
                         'remote_status': file.remote_status
                     })
+                    transfer_names.append(file.name)
                     total_size += file.remote_size
                 else:
                     break
@@ -524,9 +545,13 @@ class FileManager(object):
                 self.mutex.release()
 
         logging.info('Transfering required files')
-        print 'total transfer size {size} gigabytes for {nfiles} files'.format(
-            size=(total_size/1e9),
+        msg = 'total transfer size {size} gigabytes for {nfiles} files'.format(
+            size=(total_size / 1e9),
             nfiles=len(target_files))
+        print_line(
+            ui=self.ui,
+            line=msg,
+            event_list=self.event_list)
         transfer_config = {
             'file_list': target_files,
             'source_endpoint': self.remote_endpoint,
@@ -540,11 +565,6 @@ class FileManager(object):
         transfer = Transfer(
             config=transfer_config,
             event_list=event_list)
-        print 'starting transfer for:'
-        transfer_names = [x['name'] for x in transfer.file_list]
-        for file in transfer.file_list:
-            print '   ' + file['name']
-            logging.info(file['name'])
         self.mutex.acquire()
         try:
             DataFile.update(
@@ -552,10 +572,6 @@ class FileManager(object):
             ).where(
                 DataFile.name << transfer_names
             ).execute()
-            print 'following files are in transit'
-            for df in DataFile.select():
-                if df.local_status == filestatus['IN_TRANSIT']:
-                    print '   ' + df.name
         except Exception as e:
             print_debug(e)
             return False
@@ -574,16 +590,26 @@ class FileManager(object):
 
     def _handle_transfer(self, transfer, event, event_list):
         self.active_transfers += 1
-        event_list.push(message='Starting file transfer')
+        msg = 'Starting file transfer'
+        print_line(
+            ui=self.ui,
+            line=msg,
+            event_list=self.event_list)
         transfer.execute(event)
-        print 'Transfer complete'
+        msg = 'Transfer complete'
+        print_line(
+            ui=self.ui,
+            line=msg,
+            event_list=self.event_list)
         self.active_transfers -= 1
 
         if transfer.status == JobStatus.FAILED:
-            message = "Transfer has failed"
-            print message
-            logging.error(message)
-            event_list.push(message='Tranfer failed')
+            msg = "Transfer has failed"
+            print_line(
+                ui=self.ui,
+                line=msg,
+                event_list=self.event_list)
+            logging.error(msg)
             return
 
         self.mutex.acquire()
@@ -594,7 +620,11 @@ class FileManager(object):
                 datafile.local_status = filestatus['EXISTS']
                 datafile.local_size = os.path.getsize(datafile.local_path)
             else:
-                print 'file transfer error on {}'.format(datafile.name)
+                msg = 'file transfer error on {}'.format(datafile.name)
+                print_line(
+                    ui=self.ui,
+                    line=msg,
+                    event_list=self.event_list)
                 datafile.local_status = filestatus['NOT_EXIST']
                 datafile.local_size = 0
             datafile.save()
@@ -680,18 +710,30 @@ class FileManager(object):
             if data_ready == 1:
                 if job_set.status != SetStatus.DATA_READY:
                     job_set.status = SetStatus.DATA_READY
-                    print "{start:04d}-{end:04d} is ready".format(
+                    msg = "{start:04d}-{end:04d} is ready".format(
                         start=job_set.set_start_year,
                         end=job_set.set_end_year)
+                    print_line(
+                        ui=self.ui,
+                        line=msg,
+                        event_list=self.event_list)
             elif data_ready == 0:
                 if job_set.status != SetStatus.PARTIAL_DATA:
                     job_set.status = SetStatus.PARTIAL_DATA
-                    print "{start:04d}-{end:04d} has partial data".format(
+                    msg = "{start:04d}-{end:04d} has partial data".format(
                         start=job_set.set_start_year,
                         end=job_set.set_end_year)
+                    print_line(
+                        ui=self.ui,
+                        line=msg,
+                        event_list=self.event_list)
             elif data_ready == -1:
                 if job_set.status != SetStatus.NO_DATA:
                     job_set.status = SetStatus.NO_DATA
-                    print "{start:04d}-{end:04d} has no data".format(
+                    msg = "{start:04d}-{end:04d} has no data".format(
                         start=job_set.set_start_year,
                         end=job_set.set_end_year)
+                    print_line(
+                        ui=self.ui,
+                        line=msg,
+                        event_list=self.event_list)

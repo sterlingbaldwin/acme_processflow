@@ -8,8 +8,9 @@ from shutil import copytree
 from subprocess import Popen
 
 from lib.slurm import Slurm
-from lib.util import get_climo_output_files
-from lib.util import create_symlink_dir
+from lib.util import (get_climo_output_files,
+                      create_symlink_dir,
+                      print_line)
 
 from lib.YearSet import YearSet, SetStatus
 from jobs.Ncclimo import Climo
@@ -17,11 +18,12 @@ from jobs.Timeseries import Timeseries
 from jobs.AMWGDiagnostic import AMWGDiagnostic
 from jobs.APrimeDiags import APrimeDiags
 from jobs.E3SMDiags import E3SMDiags
-from jobs.JobStatus import JobStatus, StatusMap
+from jobs.JobStatus import JobStatus, StatusMap, ReverseMap
 
 
 class RunManager(object):
-    def __init__(self, event_list, output_path, caseID, scripts_path, thread_list, event):
+    def __init__(self, event_list, output_path, caseID, scripts_path, thread_list, event, ui):
+        self.ui = ui
         self.output_path = output_path
         self.slurm = Slurm()
         self.event_list = event_list
@@ -45,7 +47,12 @@ class RunManager(object):
             for i in range(1, number_of_sets_at_freq + 1):
                 start_year = sim_start_year + ((i - 1) * freq)
                 end_year = start_year + freq - 1
-                print 'Creating job_set for {}-{}'.format(start_year, end_year)
+                msg = 'Creating job_set for {}-{}'.format(start_year, end_year)
+                print_line(
+                    ui=self.ui,
+                    line=msg,
+                    event_list=self.event_list,
+                    current_state=True)
                 new_set = YearSet(
                     set_number=len(self.job_sets) + 1,
                     start_year=start_year,
@@ -156,12 +163,15 @@ class RunManager(object):
                 config['global']['experiment'],
                 config['aprime_diags']['host_directory'],
                 set_string)
+
+            host_directory = "{experiment}_years{start}-{end}_vs_obs".format(
+                experiment=config['global']['experiment'],
+                start=year_set.set_start_year,
+                end=year_set.set_end_year)
             host_url = '/'.join([
                 config['global']['img_host_server'],
                 os.environ['USER'],
-                config['global']['experiment'],
-                config['aprime_diags']['host_directory'],
-                set_string])
+                host_directory])
 
             self.add_aprime(
                 web_directory=web_directory,
@@ -261,6 +271,7 @@ class RunManager(object):
             os.makedirs(climo_output_dir)
 
         config = {
+            'ui': self.ui,
             'run_scripts_path': self.scripts_path,
             'start_year': start_year,
             'end_year': end_year,
@@ -311,6 +322,7 @@ class RunManager(object):
             os.makedirs(timeseries_output_dir)
 
         config = {
+            'ui': self.ui,
             'file_list': file_list,
             'run_scripts_path': self.scripts_path,
             'annual_mode': 'sdd',
@@ -387,11 +399,15 @@ class RunManager(object):
         if not os.path.exists(template_path):
             msg = 'Unable to find amwg template at {path}'.format(
                 path=template_path)
-            print msg
+            print_line(
+                ui=self.ui,
+                line=msg,
+                event_list=self.event_list)
             logging.error(msg)
             return
 
         config = {
+            'ui': self.ui,
             'web_dir': web_directory,
             'host_url': host_url,
             'experiment': self.caseID,
@@ -476,6 +492,7 @@ class RunManager(object):
             return
 
         config = {
+            'ui': self.ui,
             'web_dir': web_directory,
             'host_url': host_url,
             'experiment': self.caseID,
@@ -527,7 +544,11 @@ class RunManager(object):
         resource_path = kwargs['resource_path']
 
         if not self._precheck(year_set, 'e3sm_diags'):
-            print 'rejecting e3sm_diags'
+            msg = 'rejecting e3sm_diags'
+            print_line(
+                ui=self.ui,
+                line=msg,
+                event_list=self.event_list)
             return
 
         set_string = '{start:04d}-{end:04d}'.format(
@@ -565,6 +586,7 @@ class RunManager(object):
             'climo_regrid')
 
         config = {
+            'ui': self.ui,
             'regrid_base_path': regrid_path,
             'web_dir': web_directory,
             'host_url': host_url,
@@ -646,7 +668,9 @@ class RunManager(object):
                         continue
                     # If the job is valid, start it
                     if job.status == JobStatus.VALID:
-                        job.execute(dryrun=self._dryrun)
+                        status = job.execute(dryrun=self._dryrun)
+                        if status == -1:
+                            continue
                         self.running_jobs.append(job)
                         self.monitor_running_jobs()
 
@@ -660,7 +684,11 @@ class RunManager(object):
             job_info = slurm.showjob(job.job_id)
             status = job_info.get('JobState')
             if not status:
-                print 'No status yet for {}'.format(job.type)
+                msg = 'No status yet for {}'.format(job.type)
+                print_line(
+                    ui=self.ui,
+                    line=msg,
+                    event_list=self.event_list)
                 continue
             status = StatusMap[status]
             if status != job.status:
@@ -668,11 +696,14 @@ class RunManager(object):
                     job=job.type,
                     start=job.start_year,
                     end=job.end_year,
-                    s1=job.status,
-                    s2=status,
+                    s1=ReverseMap[job.status],
+                    s2=ReverseMap[status],
                     id=job.job_id)
-                print msg
-                self.event_list.push(message=msg)
+                print_line(
+                    ui=self.ui,
+                    line=msg,
+                    event_list=self.event_list,
+                    current_state=True)
                 job.status = status
 
                 if status == JobStatus.RUNNING:
@@ -698,10 +729,15 @@ class RunManager(object):
         """
         Perform post execution tasks
         """
-        print 'handling completion for {job}: {start:04d}-{end:04d}'.format(
+        msg = 'Handling completion for {job}: {start:04d}-{end:04d}'.format(
             job=job.type,
             start=job.start_year,
             end=job.end_year)
+        print_line(
+            ui=self.ui,
+            line=msg,
+            event_list=self.event_list,
+            current_state=True)
         job_set = None
         for s in self.job_sets:
             if s.set_number == job.year_set:
@@ -710,15 +746,15 @@ class RunManager(object):
 
         # First check that we have the expected output
         if not job.postvalidate():
-            message = 'ERROR: {job}-{start:04d}-{end:04d} does not have expected output'.format(
+            msg = 'ERROR: {job}-{start:04d}-{end:04d} does not have expected output'.format(
                 job=job.type,
                 start=job.start_year,
                 end=job.end_year)
-            self.event_list.push(
-                message=message,
-                data=job)
-            print message
-            logging.error(message)
+            print_line(
+                ui=self.ui,
+                line=msg,
+                event_list=self.event_list)
+            logging.error(msg)
             job.status = JobStatus.FAILED
             job_set.status = SetStatus.FAILED
             return
@@ -735,18 +771,8 @@ class RunManager(object):
 
         # Finally host the files
         if job.type == 'aprime_diags':
-            # TODO: Get aprime working
+            # aprime handles its own hosting
             pass
-            # img_dir = 'coupled_diagnostics_{casename}-obs'.format(
-            #     casename=job.config.get('test_casename'))
-            # img_src = os.path.join(
-            #     job.config.get('coupled_project_dir'),
-            #     img_dir)
-            # setup_local_hosting(job, event_list, img_src)
-            # msg = '{job} hosted at {url}/index.html'.format(
-            #     url=url,
-            #     job=job.type)
-            # logging.info(msg)
         elif job.type == 'amwg':
             img_dir = '{start:04d}-{end:04d}{casename}-obs'.format(
                 start=job.config.get('start_year'),
@@ -758,7 +784,10 @@ class RunManager(object):
             msg = '{job} hosted at {url}/index.html'.format(
                 url=job.config.get('host_url'),
                 job=job.type)
-            print msg
+            print_line(
+                ui=self.ui,
+                line=msg,
+                event_list=self.event_list)
             logging.info(msg)
         elif job.type == 'e3sm_diags':
             img_src = job.config.get('results_dir')
@@ -766,7 +795,10 @@ class RunManager(object):
             msg = '{job} hosted at {url}/viewer/index.html'.format(
                 url=job.config.get('host_url'),
                 job=job.type)
-            print msg
+            print_line(
+                ui=self.ui,
+                line=msg,
+                event_list=self.event_list)
             logging.info(msg)
 
     def setup_local_hosting(self, job, img_src):
@@ -774,9 +806,11 @@ class RunManager(object):
         Sets up the local directory for hosting diagnostic output
         """
         msg = 'Setting up local hosting for {}'.format(job.type)
-        self.event_list.push(
-            message=msg,
-            data=job)
+        print_line(
+            ui=self.ui,
+            line=msg,
+            event_list=self.event_list,
+            current_state=True)
         logging.info(msg)
 
         host_dir = job.config.get('web_dir')
@@ -797,7 +831,7 @@ class RunManager(object):
                 src=img_src, dst=host_dir)
             logging.info(msg)
             copytree(src=img_src, dst=host_dir)
-            
+
             while True:
                 try:
                     p = Popen(['chmod', '-R', '0755', host_dir])

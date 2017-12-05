@@ -35,4 +35,4 @@ requirements:
 
 about:
     home: https://github.com/ACME-Climate/acme_workflow
-    summary: Automated post processing for ACME model data
+    summary: Automated post processing for E3SM model data

@@ -12,13 +12,14 @@ from subprocess import Popen, PIPE
 from time import sleep
 from datetime import datetime
 
-from lib.util import print_debug
-from lib.util import print_message
 from lib.events import Event_list
-from lib.util import cmd_exists
-from lib.util import get_climo_output_files
 from lib.slurm import Slurm
 from JobStatus import JobStatus
+from lib.util import (print_debug,
+                      print_message,
+                      cmd_exists,
+                      get_climo_output_files,
+                      print_line)
 
 
 class Climo(object):
@@ -40,6 +41,7 @@ class Climo(object):
         self.end_time = None
         self.output_path = None
         self.inputs = {
+            'ui': '',
             'start_year': '',
             'end_year': '',
             'caseId': '',
@@ -73,10 +75,12 @@ class Climo(object):
         for i in self.inputs:
             if i not in self.config:
                 all_inputs = False
-                message = 'Argument {} missing for Ncclimo, prevalidation failed'.format(
+                msg = 'Argument {} missing for Ncclimo, prevalidation failed'.format(
                     i)
-                self.event_list.push(message=message)
-                print message
+                print_line(
+                    ui=self.config.get('ui', False),
+                    line=msg,
+                    event_list=self.event_list)
                 break
         if all_inputs:
             self.status = JobStatus.VALID
@@ -100,8 +104,12 @@ class Climo(object):
         # check if the output already exists and the job actually needs to run
         if self.postvalidate():
             self.status = JobStatus.COMPLETED
-            message = 'Ncclimo job already computed, skipping'
-            self.event_list.push(message=message)
+            msg = 'Ncclimo job already computed, skipping'
+            print_line(
+                ui=self.config.get('ui', False),
+                line=msg,
+                event_list=self.event_list,
+                current_state=True)
             return 0
 
         self.output_path = self.config['regrid_output_directory']
@@ -145,19 +153,16 @@ class Climo(object):
             return 0
 
         slurm = Slurm()
-        print 'submitting to queue {type}: {start:04d}-{end:04d}'.format(
+        msg = 'Submitting to queue {type}: {start:04d}-{end:04d}'.format(
             type=self.type,
             start=self.start_year,
             end=self.end_year)
+        print_line(
+            ui=self.config.get('ui', False),
+            line=msg,
+            event_list=self.event_list,
+            current_state=True)
         self.job_id = slurm.batch(run_script, '--oversubscribe')
-
-        self.status = JobStatus.SUBMITTED
-        message = '{type} id: {id} changed state to {state}'.format(
-            type=self.type,
-            id=self.job_id,
-            state=self.status)
-        logging.info(message)
-        self.event_list.push(message=message)
 
         return self.job_id
 
@@ -192,13 +197,13 @@ class Climo(object):
         return True
 
     def __str__(self):
-        return pformat({
+        return json.dumps({
             'type': self.type,
             'config': self.config,
             'status': self.status,
             'depends_on': self.depends_on,
             'job_id': self.job_id,
-        })
+        }, sort_keys=True, indent=4)
 
     @property
     def type(self):

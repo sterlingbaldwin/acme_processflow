@@ -24,11 +24,22 @@ from globus_sdk import TransferData
 
 from YearSet import SetStatus
 from YearSet import YearSet
-from jobs.JobStatus import JobStatus, StatusMap
+from jobs.JobStatus import JobStatus, StatusMap, ReverseMap
 from mailer import Mailer
 from string import Formatter
 from slurm import Slurm
 from models import DataFile
+
+
+def print_line(ui, line, event_list, current_state=False, ignore_text=False):
+    if ui:
+        if current_state:
+            event_list.replace(0, line)
+        else:
+            event_list.push(line)
+    else:
+        if not ignore_text:
+            print line
 
 
 def transfer_directory(**kwargs):
@@ -86,6 +97,7 @@ def transfer_directory(**kwargs):
     event_list.push(message=msg)
     return retcode
 
+
 def check_globus(**kwargs):
     """
     Check that the globus endpoints are not only active but will return information
@@ -136,19 +148,19 @@ def strfdelta(tdelta, fmt):
     return f.format(fmt, **d)
 
 
-def setup_globus(endpoints, no_ui=False, **kwargs):
+def setup_globus(endpoints, ui=False, **kwargs):
     """
     Check globus login status and login as nessisary, then
     iterate over a list of endpoints and activate them all
 
     Parameters:
        endpoints: list of strings containing globus endpoint UUIDs
-       no_ui: a boolean flag, true if running without the UI
+       ui: a boolean flag, true if running with the UI
 
        kwargs:
         event_list: the display event list to push user notifications
         display_event: the thread event for the ui to turn off the ui for grabbing input for globus
-        src: an email address to send notifications to if running in no_ui mode
+        src: an email address to send notifications to if running in ui=False mode
         dst: a destination email address
     return:
        True if successful, False otherwise
@@ -156,7 +168,7 @@ def setup_globus(endpoints, no_ui=False, **kwargs):
     message_sent = False
     display_event = kwargs.get('display_event')
 
-    if no_ui:
+    if not ui:
         if kwargs.get('src') is None or kwargs.get('dst') is None:
             logging.error('No source or destination given to setup_globus')
             print "No email address found"
@@ -167,8 +179,8 @@ def setup_globus(endpoints, no_ui=False, **kwargs):
 
     # First go through the globus login process
     while not check_logged_in():
-        # if in no_ui mode, send an email to the user with a link to log in
-        if no_ui:
+        # if not in ui mode, send an email to the user with a link to log in
+        if not ui:
             if kwargs.get('event_list'):
                 line = 'Waiting on user to log into globus, email sent to {addr}'.format(
                     addr=kwargs['src'])
@@ -185,19 +197,20 @@ def setup_globus(endpoints, no_ui=False, **kwargs):
             sleep(30)
         # if in ui mode, set the display_event and ask for user input
         else:
-            if not no_ui:
+            if ui:
                 display_event.set()
             print '================================================'
             do_link_login_flow()
 
     if not endpoints:
-        if not no_ui:
+        if ui:
             display_event.clear()
         return True
     if isinstance(endpoints, str):
         endpoints = [endpoints]
 
     message_sent = False
+    message_printed = False
     activated = False
     email_msg = ''
     client = get_client()
@@ -225,12 +238,17 @@ Please open the following URL in a browser to activate the endpoint:
 https://www.globus.org/app/endpoints/{endpoint}/activate
 
 """.format(endpoint=endpoint, server=server['hostname'])
-                print message
-                if no_ui:
+
+                if not message_printed:
+                    print message
+                    message_printed = True
+
+                if not ui:
                     email_msg += message
                 else:
                     raw_input("Press ENTER after activating the endpoint")
-                    r = client.endpoint_autoactivate(endpoint, if_expires_in=3600)
+                    r = client.endpoint_autoactivate(
+                        endpoint, if_expires_in=3600)
                     if not r["code"] == "AutoActivationFailed":
                         activated = True
 
@@ -244,8 +262,8 @@ https://www.globus.org/app/endpoints/{endpoint}/activate
                     print "Error sending notification email"
                     logging.error("Unable to send notification email")
                     return False
-            sleep(30)
-    if not no_ui:
+            sleep(10)
+    if ui:
         display_event.clear()
     return True
 
@@ -347,7 +365,7 @@ def write_human_state(event_list, job_sets, mutex, state_path='run_state.txt', p
                     line = '  >   {type} -- {id}: {status}\n'.format(
                         type=job.type,
                         id=job.job_id,
-                        status=job.status)
+                        status=ReverseMap[job.status])
                     out_str += line
 
                 out_str += '\n'

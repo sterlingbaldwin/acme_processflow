@@ -12,12 +12,13 @@ from subprocess import Popen, PIPE
 from time import sleep
 from datetime import datetime
 
-from lib.util import print_debug
-from lib.util import print_message
 from lib.events import Event_list
-from lib.util import cmd_exists
 from lib.slurm import Slurm
 from JobStatus import JobStatus
+from lib.util import (print_debug,
+                      print_message,
+                      cmd_exists,
+                      print_line)
 
 
 class Timeseries(object):
@@ -39,6 +40,7 @@ class Timeseries(object):
         self.end_time = None
         self.output_path = None
         self.inputs = {
+            'ui': '',
             'year_set': '',
             'annual_mode': '',
             'start_year': '',
@@ -76,14 +78,14 @@ class Timeseries(object):
         self.status = JobStatus.VALID
 
     def __str__(self):
-        return pformat({
+        return json.dumps({
             'type': self.type,
             'config': self.config,
             'status': self.status,
             'depends_on': self.depends_on,
             'job_id': self.job_id,
             'year_set': self.year_set
-        })
+        }, sort_keys=True, indent=4)
 
     def execute(self, dryrun=False):
         """
@@ -91,8 +93,12 @@ class Timeseries(object):
         """
         if self.postvalidate():
             self.status = JobStatus.COMPLETED
-            message = 'Timeseries already computed, skipping'
-            self.event_list.push(message=message)
+            msg = 'Timeseries already computed, skipping'
+            print_line(
+                ui=self.config.get('ui', False),
+                line=msg,
+                event_list=self.event_list,
+                current_state=True)
             return 0
 
         file_list = self.config['file_list']
@@ -132,18 +138,16 @@ class Timeseries(object):
             batchfile.write(slurm_command)
 
         slurm = Slurm()
-        print 'submitting to queue {type}: {start:04d}-{end:04d}'.format(
+        msg = 'Submitting to queue {type}: {start:04d}-{end:04d}'.format(
             type=self.type,
             start=self.start_year,
             end=self.end_year)
+        print_line(
+            ui=self.config.get('ui', False),
+            line=msg,
+            event_list=self.event_list,
+            current_state=True)
         self.job_id = slurm.batch(run_script, '--oversubscribe')
-        self.status = JobStatus.SUBMITTED
-        message = '{type} id: {id} changed state to {state}'.format(
-            type=self.type,
-            id=self.job_id,
-            state=self.status)
-        logging.info(message)
-        self.event_list.push(message=message)
 
         return self.job_id
 
