@@ -7,7 +7,7 @@ from lib.mailer import Mailer
 from lib.util import print_message
 
 
-def finishup(config, job_sets, state_path, event_list, status, display_event, thread_list, kill_event):
+def finalize(config, job_sets, state_path, event_list, status, display_event, thread_list, kill_event):
     message = 'Performing post run cleanup'
     event_list.push(message=message)
     if not config.get('global').get('no_cleanup', False):

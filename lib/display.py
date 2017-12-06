@@ -2,7 +2,7 @@ import curses
 from datetime import datetime
 from time import sleep
 from lib.YearSet import SetStatus
-from jobs.JobStatus import JobStatus
+from jobs.JobStatus import JobStatus, ReverseMap
 from lib.util import strfdelta
 
 
@@ -146,7 +146,7 @@ def display(stdscr, event, job_sets, filemanager, event_list):
                         delta = now - job.start_time
                         deltastr = strfdelta(delta, "{H}:{M}:{S}")
                         line = '{status} elapsed time: {time}'.format(
-                            status=job.status,
+                            status=ReverseMap[job.status],
                             time=deltastr)
                     # if job has ended, print total time
                     elif job.status in [JobStatus.COMPLETED, JobStatus.FAILED] \
@@ -154,10 +154,10 @@ def display(stdscr, event, job_sets, filemanager, event_list):
                             and job.start_time:
                         delta = job.end_time - job.start_time
                         line = '{status} elapsed time: {time}'.format(
-                            status=job.status,
+                            status=ReverseMap[job.status],
                             time=strfdelta(delta, "{H}:{M}:{S}"))
                     else:
-                        line = '{status}'.format(status=job.status)
+                        line = '{status}'.format(status=ReverseMap[job.status])
                     try:
                         pad.addstr(line, color_pair)
                     except:
@@ -210,24 +210,12 @@ def display(stdscr, event, job_sets, filemanager, event_list):
 
             # Event log
             event_length = len(events) - 1
-            for index in range(10):
-                i = event_length - index
-                if i == 0:
+            for index, line in enumerate(events[-10:]):
+                if index == 0:
                     break
-                line = events[i]
                 if 'Transfer' in line.message:
                     continue
                 if 'hosted' in line.message:
-                    continue
-                if 'failed' in line.message or 'FAILED' in line.message:
-                    prefix = '[-]  '
-                    color_pair = curses.color_pair(4)
-                else:
-                    prefix = '[+]  '
-                    color_pair = curses.color_pair(5)
-                try:
-                    pad.addstr(y, x, prefix, curses.color_pair(4))
-                except:
                     continue
                 try:
                     msg = '{time}: {msg}'.format(
