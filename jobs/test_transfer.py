@@ -5,7 +5,7 @@ import threading
 import logging
 
 from lib.util import transfer_directory
-from lib.events import Event_list
+from lib.events import EventList
 
 from Transfer import Transfer
 from JobStatus import JobStatus
@@ -26,7 +26,7 @@ class TestTransfer(unittest.TestCase):
             destination_endpoint='a871c6de-2acd-11e7-bc7c-22000b9a448b',
             src_path='/global/homes/s/sbaldwin/test_directory',
             dst_path=project_path,
-            event_list=Event_list(),
+            event_list=EventList(),
             event=threading.Event())
 
         self.assertTrue(os.path.exists(project_path))
@@ -50,7 +50,7 @@ class TestTransfer(unittest.TestCase):
             'source_email': 'baldwin32@llnl.gov',
             'display_event': threading.Event(),
             'ui': False
-        }, event_list=Event_list())
+        }, event_list=EventList())
         transfer.execute(event=threading.Event())
         self.assertTrue(transfer.postvalidate())
         self.assertEqual(transfer.status.name, 'COMPLETED')

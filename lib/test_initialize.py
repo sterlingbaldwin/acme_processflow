@@ -1,8 +1,8 @@
 import os
 import unittest
 import threading
-from setup import setup
-from events import Event_list
+from initialize import initialize
+from events import EventList
 from peewee import *
 from models import DataFile
 from YearSet import YearSet
@@ -12,7 +12,7 @@ from filemanager import FileManager
 from runmanager import RunManager
 
 
-class TestSetup(unittest.TestCase):
+class TestInitialize(unittest.TestCase):
     """
     A test class for validating the project setup
 
@@ -28,9 +28,9 @@ class TestSetup(unittest.TestCase):
         display_event = threading.Event()
         thread_kill_event = threading.Event()
         mutex = threading.Lock()
-        event_list = Event_list()
+        event_list = EventList()
         thread_list = []
-        config, filemanager, runmanager = setup(
+        config, filemanager, runmanager = initialize(
             args,
             display_event,
             event_list=event_list,
@@ -116,9 +116,9 @@ class TestSetup(unittest.TestCase):
         display_event = threading.Event()
         thread_kill_event = threading.Event()
         mutex = threading.Lock()
-        event_list = Event_list()
+        event_list = EventList()
         thread_list = []
-        config, filemanager, runmanager = setup(
+        config, filemanager, runmanager = initialize(
             args,
             display_event,
             event_list=event_list,
@@ -207,9 +207,9 @@ class TestSetup(unittest.TestCase):
         display_event = threading.Event()
         thread_kill_event = threading.Event()
         mutex = threading.Lock()
-        event_list = Event_list()
+        event_list = EventList()
         thread_list = []
-        config, filemanager, runmanager = setup(
+        config, filemanager, runmanager = initialize(
             args,
             display_event,
             event_list=event_list,
@@ -229,9 +229,9 @@ class TestSetup(unittest.TestCase):
         display_event = threading.Event()
         thread_kill_event = threading.Event()
         mutex = threading.Lock()
-        event_list = Event_list()
+        event_list = EventList()
         thread_list = []
-        config, filemanager, runmanager = setup(
+        config, filemanager, runmanager = initialize(
             args,
             display_event,
             event_list=event_list,
@@ -252,9 +252,9 @@ class TestSetup(unittest.TestCase):
         display_event = threading.Event()
         thread_kill_event = threading.Event()
         mutex = threading.Lock()
-        event_list = Event_list()
+        event_list = EventList()
         thread_list = []
-        config, filemanager, runmanager = setup(
+        config, filemanager, runmanager = initialize(
             args,
             display_event,
             event_list=event_list,
@@ -274,9 +274,9 @@ class TestSetup(unittest.TestCase):
         display_event = threading.Event()
         thread_kill_event = threading.Event()
         mutex = threading.Lock()
-        event_list = Event_list()
+        event_list = EventList()
         thread_list = []
-        config, filemanager, runmanager = setup(
+        config, filemanager, runmanager = initialize(
             args,
             display_event,
             event_list=event_list,
@@ -296,9 +296,9 @@ class TestSetup(unittest.TestCase):
         display_event = threading.Event()
         thread_kill_event = threading.Event()
         mutex = threading.Lock()
-        event_list = Event_list()
+        event_list = EventList()
         thread_list = []
-        config, filemanager, runmanager = setup(
+        config, filemanager, runmanager = initialize(
             args,
             display_event,
             event_list=event_list,
@@ -318,9 +318,9 @@ class TestSetup(unittest.TestCase):
         display_event = threading.Event()
         thread_kill_event = threading.Event()
         mutex = threading.Lock()
-        event_list = Event_list()
+        event_list = EventList()
         thread_list = []
-        config, filemanager, runmanager = setup(
+        config, filemanager, runmanager = initialize(
             args,
             display_event,
             event_list=event_list,
@@ -339,9 +339,9 @@ class TestSetup(unittest.TestCase):
         display_event = threading.Event()
         thread_kill_event = threading.Event()
         mutex = threading.Lock()
-        event_list = Event_list()
+        event_list = EventList()
         thread_list = []
-        config, filemanager, runmanager = setup(
+        config, filemanager, runmanager = initialize(
             args,
             display_event,
             event_list=event_list,
@@ -361,9 +361,9 @@ class TestSetup(unittest.TestCase):
         display_event = threading.Event()
         thread_kill_event = threading.Event()
         mutex = threading.Lock()
-        event_list = Event_list()
+        event_list = EventList()
         thread_list = []
-        config, filemanager, runmanager = setup(
+        config, filemanager, runmanager = initialize(
             args,
             display_event,
             event_list=event_list,
@@ -383,9 +383,9 @@ class TestSetup(unittest.TestCase):
         display_event = threading.Event()
         thread_kill_event = threading.Event()
         mutex = threading.Lock()
-        event_list = Event_list()
+        event_list = EventList()
         thread_list = []
-        config, filemanager, runmanager = setup(
+        config, filemanager, runmanager = initialize(
             args,
             display_event,
             event_list=event_list,

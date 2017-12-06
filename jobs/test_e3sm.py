@@ -4,7 +4,7 @@ import os
 from configobj import ConfigObj
 
 from E3SMDiags import E3SMDiags
-from lib.events import Event_list
+from lib.events import EventList
 
 
 class TestE3SM(unittest.TestCase):
@@ -14,7 +14,7 @@ class TestE3SM(unittest.TestCase):
         config_path = os.path.join(os.getcwd(), 'tests', 'test_run_no_sta.cfg')
         self.config = ConfigObj(config_path)
         self.caseID = self.config['global']['experiment']
-        self.event_list = Event_list()
+        self.event_list = EventList()
 
     def test_prevalidate_seasons_as_str(self):
         start_year = 51

@@ -4,6 +4,7 @@ import unittest
 import shutil
 from filemanager import FileManager
 from models import DataFile
+from events import EventList
 from globus_cli.services.transfer import get_client
 
 
@@ -25,9 +26,9 @@ class TestFileManager(unittest.TestCase):
         remote_endpoint = '9d6d994a-6d04-11e5-ba46-22000b92c6ec'
         remote_path = '/global/homes/r/renata/ACME_simulations/20171011.beta2_FCT2-icedeep_branch.A_WCYCL1850S.ne30_oECv3_ICG.edison/'
         local_endpoint = 'a871c6de-2acd-11e7-bc7c-22000b9a448b'
-
         filemanager = FileManager(
             mutex=self.mutex,
+            event_list=EventList(),
             sta=sta,
             types=types,
             database=database,
@@ -45,9 +46,9 @@ class TestFileManager(unittest.TestCase):
         sta = True
         types = ['atm', 'ice', 'ocn', 'rest', 'streams.cice', 'streams.ocean']
         database = 'test.db'
-
         filemanager = FileManager(
             mutex=self.mutex,
+            event_list=EventList(),
             sta=sta,
             types=types,
             database=database,
@@ -69,6 +70,7 @@ class TestFileManager(unittest.TestCase):
         simend = 60
         experiment = '20171011.beta2_FCT2-icedeep_branch.A_WCYCL1850S.ne30_oECv3_ICG.edison'
         filemanager = FileManager(
+            event_list=EventList(),
             mutex=self.mutex,
             sta=sta,
             types=types,
@@ -103,6 +105,7 @@ class TestFileManager(unittest.TestCase):
         simend = 60
         experiment = '20171011.beta2_FCT2-icedeep_branch.A_WCYCL1850S.ne30_oECv3_ICG.edison'
         filemanager = FileManager(
+            event_list=EventList(),
             mutex=self.mutex,
             sta=sta,
             types=types,
@@ -139,6 +142,7 @@ class TestFileManager(unittest.TestCase):
         simend = 60
         experiment = '20171011.beta2_FCT2-icedeep_branch.A_WCYCL1850S.ne30_oECv3_ICG.edison'
         filemanager = FileManager(
+            event_list=EventList(),
             mutex=self.mutex,
             sta=sta,
             types=types,
@@ -169,6 +173,7 @@ class TestFileManager(unittest.TestCase):
         simend = 60
         experiment = '20170915.beta2.A_WCYCL1850S.ne30_oECv3_ICG.edison'
         filemanager = FileManager(
+            event_list=EventList(),
             mutex=self.mutex,
             sta=sta,
             types=types,
@@ -198,10 +203,12 @@ class TestFileManager(unittest.TestCase):
         database = 'test.db'
         simstart = 51
         simend = 60
+        event_list = EventList()
         experiment = '20171011.beta2_FCT2-icedeep_branch.A_WCYCL1850S.ne30_oECv3_ICG.edison'
         if os.path.exists(self.local_path):
             shutil.rmtree(self.local_path)
         filemanager = FileManager(
+            event_list=EventList(),
             mutex=self.mutex,
             sta=sta,
             types=types,

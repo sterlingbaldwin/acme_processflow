@@ -10,7 +10,7 @@ from time import sleep
 from datetime import datetime
 from shutil import copyfile
 
-from lib.events import Event_list
+from lib.events import EventList
 from lib.slurm import Slurm
 from JobStatus import JobStatus, StatusMap
 from lib.util import (render,

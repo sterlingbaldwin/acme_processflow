@@ -13,7 +13,7 @@ from shutil import copyfile
 from JobStatus import JobStatus, StatusMap
 
 from lib.slurm import Slurm
-from lib.events import Event_list
+from lib.events import EventList
 from lib.util import (print_debug,
                       print_message,
                       create_symlink_dir,

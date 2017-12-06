@@ -14,7 +14,7 @@ from globus_cli.commands.login import do_link_login_flow, check_logged_in
 from globus_cli.services.transfer import get_client, autoactivate
 from globus_sdk import TransferData
 
-from lib.events import Event_list
+from lib.events import EventList
 from jobs.JobStatus import JobStatus
 from lib.util import (print_debug,
                       print_message,

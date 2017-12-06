@@ -12,7 +12,7 @@ from subprocess import Popen, PIPE
 from time import sleep
 from datetime import datetime
 
-from lib.events import Event_list
+from lib.events import EventList
 from lib.slurm import Slurm
 from JobStatus import JobStatus
 from lib.util import (print_debug,

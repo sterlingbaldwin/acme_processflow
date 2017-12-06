@@ -6,7 +6,7 @@ from util import transfer_directory
 from util import path_exists
 from util import cmd_exists
 from util import render
-from events import Event_list
+from events import EventList
 
 
 class TestFileManager(unittest.TestCase):
@@ -19,7 +19,7 @@ class TestFileManager(unittest.TestCase):
             destination_endpoint='a871c6de-2acd-11e7-bc7c-22000b9a448b',
             src_path='/global/homes/s/sbaldwin/test_directory',
             dst_path=project_path,
-            event_list=Event_list(),
+            event_list=EventList(),
             event=threading.Event())
 
         self.assertTrue(os.path.exists(project_path))

@@ -5,7 +5,7 @@ from Timeseries import Timeseries
 from configobj import ConfigObj
 from JobStatus import JobStatus
 
-from lib.events import Event_list
+from lib.events import EventList
 
 
 class TestTimeseries(unittest.TestCase):
@@ -28,7 +28,7 @@ class TestTimeseries(unittest.TestCase):
             'run_scripts_path': os.path.join(self.project_path, 'output', 'run_scripts'),
             'regrid_map_path': self.config['ncclimo']['regrid_map_path'],
             'file_list': [],
-        }, Event_list())
+        }, EventList())
         self.assertEqual(timeseries.status, JobStatus.VALID)
 
 
