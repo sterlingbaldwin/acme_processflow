@@ -70,6 +70,7 @@ class AMWGDiagnostic(object):
         self.end_year = config['end_year']
         self.job_id = 0
         self.depends_on = ['ncclimo']
+        self.host_suffix = '/index.html'
         self.slurm_args = {
             'num_cores': '-n 16',  # 16 cores
             'run_time': '-t 0-02:00',  # 2 hours run time

@@ -834,19 +834,41 @@ class RunManager(object):
         if os.path.exists(job.config.get('web_dir')):
             new_id = time.strftime("%Y-%m-%d-%I-%M")
             host_dir += '_' + new_id
-            url += '_' + new_id
+            url += '_' + new_id + job.host_suffix
             job.config['host_url'] = url
         if not os.path.exists(img_src):
             msg = '{job} hosting failed, no image source at {path}'.format(
                 job=job.type,
                 path=img_src)
+            print_line(
+                ui=self.ui,
+                line=msg,
+                event_list=self.event_list,
+                current_state=True,
+                ignore_text=False)
             logging.error(msg)
             return
         try:
-            msg = 'copying images from {src} to {dst}'.format(
+            msg = 'Copying images from {src} to {dst}'.format(
                 src=img_src, dst=host_dir)
+            print_line(
+                ui=self.ui,
+                line=msg,
+                event_list=self.event_list,
+                current_state=True,
+                ignore_text=False)
             logging.info(msg)
             copytree(src=img_src, dst=host_dir)
+
+            msg = 'Fixing permissions for {dir}'.format(
+                dir=host_dir)
+            print_line(
+                ui=self.ui,
+                line=msg,
+                event_list=self.event_list,
+                current_state=True,
+                ignore_text=False)
+            logging.info(msg)
 
             while True:
                 try:
@@ -865,9 +887,12 @@ class RunManager(object):
             print_debug(e)
             msg = 'Error copying {0} to host directory {1}'.format(
                 job.type, host_dir)
-            self.event_list.push(
-                message=msg,
-                data=job)
+            print_line(
+                ui=self.ui,
+                line=msg,
+                event_list=self.event_list,
+                current_state=True,
+                ignore_text=False)
             return
 
     def is_all_done(self):

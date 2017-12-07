@@ -51,6 +51,7 @@ class E3SMDiags(object):
         self.output_path = None
         self.config = {}
         self._status = JobStatus.INVALID
+        self.host_suffix = '/viewer/index.html'
         self._type = "e3sm_diags"
         self.year_set = config.get('year_set', 0)
         self.start_year = config['start_year']

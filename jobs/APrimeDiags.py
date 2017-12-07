@@ -51,6 +51,7 @@ class APrimeDiags(object):
         self.output_path = config['output_path']
         self.filemanager = config['filemanager']
         self.config = {}
+        self.host_suffix = '/index.html'
         self.status = JobStatus.INVALID
         self._type = 'aprime_diags'
         self.year_set = config['year_set']
