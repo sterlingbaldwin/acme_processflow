@@ -157,13 +157,6 @@ class RunManager(object):
 
         if required_jobs.get('aprime') or required_jobs.get('aprime_diags'):
             # Add the aprime job
-            web_directory = os.path.join(
-                config['global']['host_directory'],
-                os.environ['USER'],
-                config['global']['experiment'],
-                config['aprime_diags']['host_directory'],
-                set_string)
-
             host_directory = "{experiment}_years{start}-{end}_vs_obs".format(
                 experiment=config['global']['experiment'],
                 start=year_set.set_start_year,
@@ -172,6 +165,10 @@ class RunManager(object):
                 config['global']['img_host_server'],
                 os.environ['USER'],
                 host_directory])
+            web_directory = os.path.join(
+                config['global']['host_directory'],
+                os.environ['USER'],
+                host_directory)
 
             self.add_aprime(
                 web_directory=web_directory,
@@ -772,7 +769,26 @@ class RunManager(object):
         # Finally host the files
         if job.type == 'aprime_diags':
             # aprime handles its own hosting
-            pass
+            host_dir = job.config['web_dir']
+            while True:
+                try:
+                    p = Popen(['chmod', '-R', '0755', host_dir])
+                    out, err = p.communicate()
+                except:
+                    sleep(1)
+                else:
+                    break
+            head, _ = os.path.split(host_dir)
+            os.chmod(head, 0755)
+            msg = '{job} hosted at {url}/index.html'.format(
+                url=job.config.get('host_url'),
+                job=job.type)
+            print_line(
+                ui=self.ui,
+                line=msg,
+                event_list=self.event_list)
+            logging.info(msg)
+
         elif job.type == 'amwg':
             img_dir = '{start:04d}-{end:04d}{casename}-obs'.format(
                 start=job.config.get('start_year'),
