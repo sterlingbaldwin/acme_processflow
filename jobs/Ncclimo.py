@@ -71,9 +71,11 @@ class Climo(object):
         for i in config:
             if i in self.inputs:
                 self.config[i] = config.get(i)
+        if config.get('ui') is None:
+            config['ui'] = False
         all_inputs = True
         for i in self.inputs:
-            if i not in self.config:
+            if i not in config:
                 all_inputs = False
                 msg = 'Argument {} missing for Ncclimo, prevalidation failed'.format(
                     i)

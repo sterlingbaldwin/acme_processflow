@@ -26,16 +26,33 @@ def parse_args(argv=None, print_help=None):
     parser = argparse.ArgumentParser()
     parser.add_argument('-c', '--config', help='Path to configuration file.')
     parser.add_argument(
-        '-u', '--ui', help='Turn on the GUI.', action='store_true')
-    parser.add_argument('-l', '--log', help='Path to logging output file.')
+        '-u',
+        '--ui',
+        help='Turn on the GUI.',
+        action='store_true')
     parser.add_argument(
-        '-n', '--no-cleanup', help='Don\'t perform pre or post run cleanup. This will leave all run scripts in place.', action='store_true')
+        '-l',
+        '--log',
+        help='Path to logging output file.')
     parser.add_argument(
-        '-m', '--no-monitor', help='Don\'t run the remote monitor or move any files over globus.', action='store_true')
+        '-n',
+        '--no-cleanup',
+        help='Don\'t perform pre or post run cleanup. This will leave all run scripts in place.',
+        action='store_true')
     parser.add_argument(
-        '-f', '--file-list', help='Turn on debug output of the internal file_list so you can see what the current state of the model files are', action='store_true')
-    parser.add_argument('-r', '--resource-dir',
-                        help='Path to custom resource directory')
+        '-m',
+        '--no-monitor',
+        help='Don\'t run the remote monitor or move any files over globus.',
+        action='store_true')
+    parser.add_argument(
+        '-f',
+        '--file-list',
+        help='Turn on debug output of the internal file_list so you can see what the current state of the model files are',
+        action='store_true')
+    parser.add_argument(
+        '-r',
+        '--resource-dir',
+        help='Path to custom resource directory')
     if print_help:
         parser.print_help()
         return
@@ -48,6 +65,10 @@ def initialize(argv, **kwargs):
 
     Parameters:
         parser (argparse.ArgumentParser): The parser object
+        event_list (EventList): The main list of events
+        thread_list (list): the main list of all running threads
+        mutex (threading.Lock): A mutex to handle db access
+        kill_event (threading.Event): An event used to kill all running threads
     """
     print "Entering setup"
     # Setup the parser
@@ -59,6 +80,7 @@ def initialize(argv, **kwargs):
     event_list = kwargs['event_list']
     thread_list = kwargs['thread_list']
     mutex = kwargs['mutex']
+    event = kwargs['kill_event']
 
 
     # check if globus config is valid, else remove it
@@ -272,8 +294,8 @@ Please add a space and run again.'''.format(num=line_index)
         output_path=config['global']['output_path'],
         caseID=config['global']['experiment'],
         scripts_path=run_script_path,
-        thread_list=kwargs['thread_list'],
-        event=kwargs['kill_event'])
+        thread_list=thread_list,
+        event=event)
     runmanager.setup_job_sets(
         set_frequency=config['global']['set_frequency'],
         sim_start_year=sim_start_year,
