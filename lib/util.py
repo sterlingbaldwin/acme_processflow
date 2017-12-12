@@ -253,10 +253,6 @@ https://www.globus.org/app/endpoints/{endpoint}/activate
 
 """.format(endpoint=endpoint, server=server['hostname'])
 
-                if not message_printed:
-                    print message
-                    message_printed = True
-
                 if not ui:
                     email_msg += message
                 else:
@@ -276,6 +272,9 @@ https://www.globus.org/app/endpoints/{endpoint}/activate
                     print "Error sending notification email"
                     logging.error("Unable to send notification email")
                     return False
+            if not message_printed:
+                print email_msg
+                message_printed = True
             sleep(10)
     if ui:
         display_event.clear()
