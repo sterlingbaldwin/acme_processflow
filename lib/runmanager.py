@@ -35,8 +35,23 @@ class RunManager(object):
         self.kill_event = event
         self._dryrun = False
         self.scripts_path = scripts_path
+        self.max_running_jobs = 6
         if not os.path.exists(self.scripts_path):
             os.makedirs(self.scripts_path)
+    
+    def check_max_running_jobs(self):
+        """
+        Checks if the maximum number of jobs are running
+        
+        Returns True if the max or more are running, false otherwise
+        """
+        job_info = self.slurm.queue()
+        running_jobs = 0
+        for job in job_info:
+            if job['STATE'] in ['R', 'PD']:
+                running_jobs += 1
+        return bool(running_jobs >= self.max_running_jobs)
+
 
     def setup_job_sets(self, set_frequency, sim_start_year, sim_end_year, config, filemanager):
         sim_length = sim_end_year - sim_start_year + 1
@@ -665,11 +680,12 @@ class RunManager(object):
                         continue
                     # If the job is valid, start it
                     if job.status == JobStatus.VALID:
-                        status = job.execute(dryrun=self._dryrun)
-                        if status == -1:
-                            continue
-                        self.running_jobs.append(job)
-                        self.monitor_running_jobs()
+                        if not self.check_max_running_jobs():
+                            status = job.execute(dryrun=self._dryrun)
+                            if status == -1:
+                                continue
+                            self.running_jobs.append(job)
+                            self.monitor_running_jobs()
 
     def monitor_running_jobs(self):
         slurm = Slurm()

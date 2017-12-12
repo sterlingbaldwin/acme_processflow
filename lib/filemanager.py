@@ -3,6 +3,7 @@ import re
 import sys
 import threading
 import logging
+import random
 
 from time import sleep
 from peewee import *
@@ -642,6 +643,7 @@ class FileManager(object):
 
     def _handle_transfer(self, transfer, event, event_list):
         self.active_transfers += 1
+        sleep(random.uniform(0.01, 0.1)) # this is to stop the simultanious print issue
         msg = 'Starting file transfer'
         print_line(
             ui=self.ui,
