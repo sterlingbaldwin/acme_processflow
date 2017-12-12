@@ -198,8 +198,8 @@ class FileManager(object):
             local_path=local_path,
             remote_path=remote_path,
             _type='meridionalHeatTransport')
-    
-    def populate_monthly(self, _type, newfiles, simstart, simend):
+
+    def populate_monthly(self, _type, newfiles, simstart, simend, experiment):
         local_base = os.path.join(
             self.local_path, _type)
         if not os.path.exists(local_base):
@@ -271,7 +271,7 @@ class FileManager(object):
                 elif _type == 'meridionalHeatTransport':
                     self.populate_heat_transport(newfiles)
                 else:
-                    self.populate_monthly(_type, newfiles, simstart, simend)
+                    self.populate_monthly(_type, newfiles, simstart, simend, experiment)
             msg = 'Inserting file data into the table'
             print_line(
                 ui=self.ui,

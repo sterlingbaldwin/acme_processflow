@@ -123,7 +123,7 @@ class APrimeDiags(object):
             return False
         output_total = sum([len(files)
                             for r, d, files in os.walk(self.output_path)])
-        return bool(output_total >= 800)
+        return bool(output_total >= 600)
 
     def setup_input_directory(self):
         """
