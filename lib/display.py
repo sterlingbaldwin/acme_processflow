@@ -6,7 +6,7 @@ from jobs.JobStatus import JobStatus, ReverseMap
 from lib.util import strfdelta
 
 
-def handle_resize(pad, height, width):
+def handle_resize(pad, height, width, stdscr):
     """
     Checks for and handles a window resize event
 
@@ -72,7 +72,7 @@ def display(stdscr, event, job_sets, filemanager, event_list):
             if event and event.is_set():
                 return
             # Check if screen was re-sized (True or False)
-            pad = handle_resize(pad, height, width)
+            pad = handle_resize(pad, height, width, stdscr)
             now = datetime.now()
             # sleep until there are jobs
             if len(job_sets) == 0:
@@ -83,17 +83,15 @@ def display(stdscr, event, job_sets, filemanager, event_list):
             y = 0
             x = 0
             for year_set in job_sets:
-                line = 'Year_set {num}: {start} - {end}'.format(
+                line = 'Year_set {num}: {start} - {end}: '.format(
                     num=year_set.set_number,
                     start=year_set.set_start_year,
                     end=year_set.set_end_year)
                 try:
                     pad.addstr(y, x, line, curses.color_pair(1))
+                    x = len(line)
                 except:
                     continue
-                pad.clrtoeol()
-                y += 1
-
                 color_pair = curses.color_pair(4)
                 if year_set.status == SetStatus.COMPLETED:
                     # set color to green
@@ -104,12 +102,14 @@ def display(stdscr, event, job_sets, filemanager, event_list):
                 elif year_set.status == SetStatus.RUNNING:
                     # set color to purple
                     color_pair = curses.color_pair(6)
-                line = 'status: {status}'.format(
+                line = '{status}'.format(
                     status=year_set.status)
                 try:
                     pad.addstr(y, x, line, color_pair)
                 except:
                     continue
+                pad.clrtoeol()
+
                 if initializing:
                     sleep(0.01)
                     try:
@@ -118,6 +118,7 @@ def display(stdscr, event, job_sets, filemanager, event_list):
                         continue
                 pad.clrtoeol()
                 y += 1
+                x = 0
 
                 # if the job_set is done collapse it
                 if year_set.status == SetStatus.COMPLETED \
