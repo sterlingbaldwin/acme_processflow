@@ -26,11 +26,12 @@ file_type_map = {
     'ice': 'mpascice.hist.am.timeSeriesStatsMonthly.YEAR-MONTH-01.nc',
     'ocn': 'mpaso.hist.am.timeSeriesStatsMonthly.YEAR-MONTH-01.nc',
     'rest': 'mpaso.rst.YEAR-01-01_00000.nc',
+    'mpascice.rst': 'mpascice.rst.YEAR-01-01_00000.nc',
     'streams.ocean': 'streams.ocean',
     'streams.cice': 'streams.cice',
     'mpas-cice_in': 'mpas-cice_in',
     'mpas-o_in': 'mpas-o_in',
-    'meridionalHeatTransport': 'mpaso.hist.am.meridionalHeatTransport.YEAR-MONTH-01.nc'
+    'meridionalHeatTransport': 'mpaso.hist.am.meridionalHeatTransport.YEAR-MONTH-01.nc',
 }
 
 
@@ -96,6 +97,11 @@ class FileManager(object):
         })
 
     def populate_handle_rest(self, simstart, newfiles):
+        """
+        Add the restart files to the newfiles list to be added to the db
+        """
+
+        # First add the mpaso.rst
         name = file_type_map['rest'].replace(
             'YEAR', '{:04d}'.format(simstart + 1))
         local_path = os.path.join(
@@ -105,6 +111,7 @@ class FileManager(object):
         head, tail = os.path.split(local_path)
         if not os.path.exists(head):
             os.makedirs(head)
+
         if self.sta:
             remote_path = os.path.join(
                 self.remote_path,
@@ -120,6 +127,30 @@ class FileManager(object):
             local_path=local_path,
             remote_path=remote_path,
             _type='rest')
+
+        # Second add the mpascice.rst
+        name = file_type_map['mpascice.rst'].replace(
+            'YEAR', '{:04d}'.format(simstart + 1))
+        local_path = os.path.join(
+            self.local_path,
+            'rest',
+            name)
+
+        if self.sta:
+            remote_path = os.path.join(
+                self.remote_path,
+                'archive',
+                'rest',
+                '{year:04d}-01-01-00000'.format(year=simstart + 1),
+                name)
+        else:
+            remote_path = os.path.join(self.remote_path, name)
+        newfiles = self._add_file(
+            newfiles=newfiles,
+            name=name,
+            local_path=local_path,
+            remote_path=remote_path,
+            _type='mpascice.rst')
 
     def populate_handle_mpas(self, _type, newfiles):
         local_path = os.path.join(
@@ -167,6 +198,45 @@ class FileManager(object):
             local_path=local_path,
             remote_path=remote_path,
             _type='meridionalHeatTransport')
+    
+    def populate_monthly(self, _type, newfiles, simstart, simend):
+        local_base = os.path.join(
+            self.local_path, _type)
+        if not os.path.exists(local_base):
+            os.makedirs(local_base)
+
+        for year in xrange(simstart, simend + 1):
+            for month in xrange(1, 13):
+                if _type == 'atm':
+                    name = file_type_map[_type].replace(
+                        'EXPERIMENT', experiment)
+                else:
+                    name = file_type_map[_type]
+                yearstr = '{0:04d}'.format(year)
+                monthstr = '{0:02d}'.format(month)
+                name = name.replace('YEAR', yearstr)
+                name = name.replace('MONTH', monthstr)
+                local_path = os.path.join(
+                    local_base, name)
+                if self.sta:
+                    remote_path = os.path.join(
+                        self.remote_path,
+                        'archive',
+                        _type,
+                        'hist',
+                        name)
+                else:
+                    remote_path = os.path.join(
+                        self.remote_path,
+                        name)
+                newfiles = self._add_file(
+                    newfiles=newfiles,
+                    name=name,
+                    local_path=local_path,
+                    remote_path=remote_path,
+                    _type=_type,
+                    year=year,
+                    month=month)
 
     def populate_file_list(self, simstart, simend, experiment):
         """
@@ -201,42 +271,7 @@ class FileManager(object):
                 elif _type == 'meridionalHeatTransport':
                     self.populate_heat_transport(newfiles)
                 else:
-                    local_base = os.path.join(
-                        self.local_path, _type)
-                    if not os.path.exists(local_base):
-                        os.makedirs(local_base)
-                    for year in xrange(simstart, simend + 1):
-                        for month in xrange(1, 13):
-                            if _type == 'atm':
-                                name = file_type_map[_type].replace(
-                                    'EXPERIMENT', experiment)
-                            else:
-                                name = file_type_map[_type]
-                            yearstr = '{0:04d}'.format(year)
-                            monthstr = '{0:02d}'.format(month)
-                            name = name.replace('YEAR', yearstr)
-                            name = name.replace('MONTH', monthstr)
-                            local_path = os.path.join(
-                                local_base, name)
-                            if self.sta:
-                                remote_path = os.path.join(
-                                    self.remote_path,
-                                    'archive',
-                                    _type,
-                                    'hist',
-                                    name)
-                            else:
-                                remote_path = os.path.join(
-                                    self.remote_path,
-                                    name)
-                            newfiles = self._add_file(
-                                newfiles=newfiles,
-                                name=name,
-                                local_path=local_path,
-                                remote_path=remote_path,
-                                _type=_type,
-                                year=year,
-                                month=month)
+                    self.populate_monthly(_type, newfiles, simstart, simend)
             msg = 'Inserting file data into the table'
             print_line(
                 ui=self.ui,
@@ -315,6 +350,18 @@ class FileManager(object):
                         ).where(
                             DataFile.datatype == 'rest'
                         ).execute()
+
+                        name, path, size = self.update_remote_rest_sta_path(
+                            client, pattern='mpascice.rst')
+                        DataFile.update(
+                            remote_status=filestatus['EXISTS'],
+                            remote_size=size,
+                            remote_path=path,
+                            name=name
+                        ).where(
+                            DataFile.datatype == 'mpascice.rst'
+                        ).execute()
+
                         if self.mutex.locked():
                             self.mutex.release()
                         self.updated_rest = True
@@ -327,40 +374,41 @@ class FileManager(object):
                 else:
                     remote_path = os.path.join(
                         self.remote_path, 'archive', _type, 'hist')
-                msg = 'Querying globus for {}'.format(_type)
-                print_line(
-                    ui=self.ui,
-                    line=msg,
-                    event_list=self.event_list,
-                    current_state=True)
-                res = self._get_ls(
-                    client=client,
-                    path=remote_path)
+                
+                if _type not in ['rest', 'mpascice.rst']:
+                    msg = 'Querying globus for {}'.format(_type)
+                    print_line(
+                        ui=self.ui,
+                        line=msg,
+                        event_list=self.event_list,
+                        current_state=True)
+                    res = self._get_ls(
+                        client=client,
+                        path=remote_path)
 
-                self.mutex.acquire()
-                try:
-                    names = [x.name for x in DataFile.select().where(
-                        DataFile.datatype == _type)]
-                    to_update_name = [x['name']
-                                      for x in res if x['name'] in names]
-                    to_update_size = [x['size']
-                                      for x in res if x['name'] in names]
-                    q = DataFile.update(
-                        remote_status=filestatus['EXISTS'],
-                        remote_size=to_update_size[to_update_name.index(
-                            DataFile.name)]
-                    ).where(
-                        (DataFile.name << to_update_name) &
-                        (DataFile.datatype == _type))
-                    n = q.execute()
-                except Exception as e:
-                    print_debug(e)
-                    print "Do you have the correct start and end dates?"
-                finally:
-                    if self.mutex.locked():
-                        self.mutex.release()
+                    self.mutex.acquire()
+                    try:
+                        names = [x.name for x in DataFile.select().where(
+                            DataFile.datatype == _type)]
+                        to_update_name = [x['name']
+                                        for x in res if x['name'] in names]
+                        to_update_size = [x['size']
+                                        for x in res if x['name'] in names]
+                        q = DataFile.update(
+                            remote_status=filestatus['EXISTS'],
+                            remote_size=to_update_size[to_update_name.index(
+                                DataFile.name)]
+                        ).where(
+                            (DataFile.name << to_update_name) &
+                            (DataFile.datatype == _type))
+                        n = q.execute()
+                    except Exception as e:
+                        print_debug(e)
+                        print "Do you have the correct start and end dates?"
+                    finally:
+                        if self.mutex.locked():
+                            self.mutex.release()
         else:
-
             remote_path = self.remote_path
             res = self._get_ls(
                 client=client,
@@ -374,7 +422,6 @@ class FileManager(object):
                                       for x in res if x['name'] in names]
                     to_update_size = [x['size']
                                       for x in res if x['name'] in names]
-
                     q = DataFile.update(
                         remote_status=filestatus['EXISTS'],
                         remote_size=to_update_size[to_update_name.index(
@@ -405,7 +452,7 @@ class FileManager(object):
             else:
                 return res
 
-    def update_remote_rest_sta_path(self, client):
+    def update_remote_rest_sta_path(self, client, pattern='mpaso.rst'):
         if not self.sta:
             return
         path = os.path.join(
@@ -421,7 +468,6 @@ class FileManager(object):
         contents = self._get_ls(
             client=client,
             path=path)
-        pattern = 'mpaso.rst'
         remote_name = ''
         remote_path = ''
         size = 0
@@ -676,7 +722,7 @@ class FileManager(object):
     def get_file_paths_by_year(self, start_year, end_year, _type):
         self.mutex.acquire()
         try:
-            if _type in ['rest', 'streams.ocean', 'streams.cice', 'mpas-cice_in', 'mpas-o_in', 'meridionalHeatTransport']:
+            if _type in ['rest', 'streams.ocean', 'streams.cice', 'mpas-cice_in', 'mpas-o_in', 'meridionalHeatTransport', 'mpascice.rst']:
                 datafiles = DataFile.select().where(DataFile.datatype == _type)
             else:
                 datafiles = DataFile.select().where(

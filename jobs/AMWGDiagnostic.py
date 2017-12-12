@@ -246,12 +246,6 @@ did you add ncclimo to this year_set?""".format(start=self.start_year,
 
         status = slurm.showjob(self.job_id)
         self.status = StatusMap[status.get('JobState')]
-        message = '{type} id: {id} changed state to {state}'.format(
-            type=self.type,
-            id=self.job_id,
-            state=self.status)
-        logging.info(message)
-        self.event_list.push(message=message)
 
         return self.job_id
 

@@ -138,7 +138,8 @@ class APrimeDiags(object):
         """
         types = ['atm', 'ocn', 'ice', 'streams.ocean',
                  'streams.cice', 'rest', 'mpas-o_in',
-                 'mpas-cice_in', 'meridionalHeatTransport']
+                 'mpas-cice_in', 'meridionalHeatTransport',
+                 'mpascice.rst']
         test_archive_path = os.path.join(
             self.config['input_path'],
             self.config['experiment'],
