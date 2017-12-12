@@ -201,7 +201,7 @@ def main(test=False, **kwargs):
     local_check_delay = 2
     printed = False
     try:
-        loop_count = remote_check_delay
+        loop_count = remote_check_delay - 1
         if not config['global']['ui']:
             print "--------------------------"
             print " Entering Main Loop "
