@@ -390,18 +390,21 @@ class FileManager(object):
                     try:
                         names = [x.name for x in DataFile.select().where(
                             DataFile.datatype == _type)]
-                        to_update_name = [x['name']
-                                        for x in res if x['name'] in names]
-                        to_update_size = [x['size']
-                                        for x in res if x['name'] in names]
-                        q = DataFile.update(
-                            remote_status=filestatus['EXISTS'],
-                            remote_size=to_update_size[to_update_name.index(
-                                DataFile.name)]
-                        ).where(
-                            (DataFile.name << to_update_name) &
-                            (DataFile.datatype == _type))
-                        n = q.execute()
+                        step = 100
+                        for idx in range(0, len(names), step):
+                            batch_names = names[idx: idx + step]
+                            to_update_name = [x['name']
+                                            for x in res if x['name'] in batch_names]
+                            to_update_size = [x['size']
+                                            for x in res if x['name'] in batch_names]
+                            q = DataFile.update(
+                                remote_status=filestatus['EXISTS'],
+                                remote_size=to_update_size[to_update_name.index(
+                                    DataFile.name)]
+                            ).where(
+                                (DataFile.name << to_update_name) &
+                                (DataFile.datatype == _type))
+                            n = q.execute()
                     except Exception as e:
                         print_debug(e)
                         print "Do you have the correct start and end dates?"
@@ -418,18 +421,21 @@ class FileManager(object):
                 for _type in self.types:
                     names = [x.name for x in DataFile.select().where(
                         DataFile.datatype == _type)]
-                    to_update_name = [x['name']
-                                      for x in res if x['name'] in names]
-                    to_update_size = [x['size']
-                                      for x in res if x['name'] in names]
-                    q = DataFile.update(
-                        remote_status=filestatus['EXISTS'],
-                        remote_size=to_update_size[to_update_name.index(
-                            DataFile.name)]
-                    ).where(
-                        (DataFile.name << to_update_name) &
-                        (DataFile.datatype == _type))
-                    n = q.execute()
+                    step = 100
+                    for idx in range(0, len(names), step):
+                        batch_names = names[idx: idx + step]
+                        to_update_name = [x['name']
+                                        for x in res if x['name'] in batch_names]
+                        to_update_size = [x['size']
+                                        for x in res if x['name'] in batch_names]
+                        q = DataFile.update(
+                            remote_status=filestatus['EXISTS'],
+                            remote_size=to_update_size[to_update_name.index(
+                                DataFile.name)]
+                        ).where(
+                            (DataFile.name << to_update_name) &
+                            (DataFile.datatype == _type))
+                        n = q.execute()
             except Exception as e:
                 print_debug(e)
             finally:
