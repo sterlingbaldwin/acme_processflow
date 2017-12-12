@@ -1,4 +1,4 @@
-export VERSION="0.4.47"
+export VERSION="0.4.48"
 export BUILD_NAME="devel"
 export CONDA_BLD_PATH=~/conda-bld
 USER="acme"
