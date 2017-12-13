@@ -694,7 +694,7 @@ class RunManager(object):
                                 msg = '{job} job already computed, skipping'.format(
                                     job=job.type)
                                 print_line(
-                                    ui=self.config.get('ui', False),
+                                    ui=self.ui,
                                     line=msg,
                                     event_list=self.event_list)
                                 logging.info(msg)
