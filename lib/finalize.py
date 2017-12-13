@@ -2,20 +2,37 @@ import os
 import logging
 import time
 
+from shutil import rmtree
 from jobs.JobStatus import JobStatus
 from lib.mailer import Mailer
-from lib.util import print_message
+from lib.util import print_message, print_line
 
 
-def finalize(config, job_sets, state_path, event_list, status, display_event, thread_list, kill_event):
+def finalize(config, job_sets, event_list, status, display_event, thread_list, kill_event):
     message = 'Performing post run cleanup'
-    event_list.push(message=message)
+    print_line(
+        ui=config['global']['ui'],
+        line=message,
+        event_list=event_list,
+        current_state=True,
+        ignore_text=False)
     if not config.get('global').get('no_cleanup', False):
-        print 'Not cleaning up temp directories'
+        msg = 'Not cleaning up temp directories'
+        print_line(
+            ui=config['global']['ui'],
+            line=msg,
+            event_list=event_list,
+            current_state=True,
+            ignore_text=False)
     else:
-        tmp = os.path.join(config['global']['output_path'], 'tmp')
-        if os.path.exists(tmp):
-            rmtree(tmp)
+        msg = 'Cleaning up climo files'
+        print_line(
+            ui=config['global']['ui'],
+            line=msg,
+            event_list=event_list,
+            current_state=True,
+            ignore_text=False)
+        cleanup(output_path=config['global']['output_path'])
 
     message = 'All processing complete' if status == 1 else "One or more job failed"
     emailaddr = config.get('global').get('email')
@@ -73,7 +90,17 @@ def finalize(config, job_sets, state_path, event_list, status, display_event, th
     print_type = 'ok' if status == 1 else 'error'
     print_message(message, print_type)
     logging.info("All processes complete")
+    kill_event.set()
     for t in thread_list:
-        kill_event.set()
         t.join(timeout=1.0)
     time.sleep(2)
+
+def cleanup(output_path):
+    """
+    Remove non-regridded climatologies after run completion
+    """
+    climo_path = os.path.join(
+        output_path,
+        'climo')
+    if os.path.exists(climo_path):
+        rmtree(climo_path)

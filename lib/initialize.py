@@ -37,7 +37,7 @@ def parse_args(argv=None, print_help=None):
     parser.add_argument(
         '-n',
         '--no-cleanup',
-        help='Don\'t perform pre or post run cleanup. This will leave all run scripts in place.',
+        help='Don\'t perform post run cleanup. This will leave all files in place.',
         action='store_true')
     parser.add_argument(
         '-m',
@@ -70,13 +70,12 @@ def initialize(argv, **kwargs):
         mutex (threading.Lock): A mutex to handle db access
         kill_event (threading.Event): An event used to kill all running threads
     """
-    print "Entering setup"
     # Setup the parser
     args = parse_args(argv=argv)
     if not args.config:
         parse_args(print_help=True)
         return False, False, False
-
+    print "Entering setup"
     event_list = kwargs['event_list']
     thread_list = kwargs['thread_list']
     mutex = kwargs['mutex']
