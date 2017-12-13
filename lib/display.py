@@ -210,10 +210,10 @@ def display(stdscr, event, job_sets, filemanager, event_list):
             y += 1
             events = event_list.list
             event_length = len(events) - 1
-            for index, line in enumerate(events[-10:]):
-                if index == 0:
+            for line in events[-10:]:
+                if line == events[0]:
                     continue
-                if 'Transfer' in line.message:
+                if 'Transfer in progress' in line.message:
                     continue
                 if 'hosted' in line.message:
                     continue
