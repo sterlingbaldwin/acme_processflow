@@ -18,7 +18,7 @@ if [ ! -z "$1" ]; then
 else
     export TAG="master"
 fi
-echo "Building version " $VESION
+echo "Building version " $VERSION"-"$BUILD_NAME 
 conda build -c acme -c conda-forge -c uvcdat -c lukasz .
 
 if [ ! -z "$1" ]; then
