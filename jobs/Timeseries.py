@@ -89,7 +89,7 @@ class Timeseries(object):
 
     def execute(self, dryrun=False):
         """
-        Calls ncclimo in a subprocess
+        Submits ncclimo to slurm after checking if it had been previously run
         """
         if self.postvalidate():
             self.status = JobStatus.COMPLETED

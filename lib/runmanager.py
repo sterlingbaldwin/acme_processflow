@@ -691,7 +691,8 @@ class RunManager(object):
                             if status == -1:
                                 continue
                             if job.job_id == 0:
-                                msg = '{job} job already computed, skipping'.format(job.type)
+                                msg = '{job} job already computed, skipping'.format(
+                                    job=job.type)
                                 print_line(
                                     ui=self.config.get('ui', False),
                                     line=msg,

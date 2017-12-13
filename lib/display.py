@@ -62,7 +62,8 @@ def print_job_info(pad, job, y, x, hmax, wmax, now):
     elif job.status == JobStatus.SUBMITTED or job.status == JobStatus.PENDING:
         color_pair = curses.color_pair(7)
     # if the job is running, print elapsed time
-    if job.status == JobStatus.RUNNING:
+    if job.status == JobStatus.RUNNING \
+            and job.start_time is not None:
         delta = now - job.start_time
         deltastr = strfdelta(delta, "{H}:{M}:{S}")
         line = '{status} run time: {time}'.format(
@@ -70,8 +71,8 @@ def print_job_info(pad, job, y, x, hmax, wmax, now):
             time=deltastr)
     # if job has ended, print total time
     elif job.status in [JobStatus.COMPLETED, JobStatus.FAILED] \
-            and job.end_time \
-            and job.start_time:
+            and job.end_time is not None \
+            and job.start_time is not None:
         delta = job.end_time - job.start_time
         line = '{status} elapsed time: {time}'.format(
             status=ReverseMap[job.status],
