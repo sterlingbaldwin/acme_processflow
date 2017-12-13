@@ -134,12 +134,6 @@ class AMWGDiagnostic(object):
         # First check if the job has already been completed
         if self.postvalidate():
             self.status = JobStatus.COMPLETED
-            msg = 'AMWG job already computed, skipping'
-            print_line(
-                ui=self.config.get('ui', False),
-                line=msg,
-                event_list=self.event_list)
-            logging.info(msg)
             return 0
 
         # Create directory of regridded climos

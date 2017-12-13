@@ -171,8 +171,6 @@ class APrimeDiags(object):
         # First check if the job has already been completed
         if self.postvalidate():
             self.status = JobStatus.COMPLETED
-            message = 'Coupled_diag job already computed, skipping'
-            self.event_list.push(message=message)
             return 0
 
         # create symlinks to the input data

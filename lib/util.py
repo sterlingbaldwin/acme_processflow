@@ -15,6 +15,7 @@ from globus_cli.services.transfer import get_client
 from globus_sdk import TransferData
 
 from jobs.JobStatus import ReverseMap
+from YearSet import SetStatusMap
 from mailer import Mailer
 from models import DataFile
 
@@ -342,13 +343,20 @@ def format_debug(e):
     Return a string of an exceptions relavent information
     """
     _, _, tb = sys.exc_info()
-    return '1: {doc} \n2: {exec_info} \n3: {exec_0} \n 4: {exec_1} \n5: {lineno} \n6: {stack}'.format(
-        doc=e.__doc__,
-        exec_info=sys.exc_info(),
-        exec_0=sys.exc_info()[0],
-        exec_1=sys.exc_info()[1],
-        lineno=traceback.tb_lineno(sys.exc_info()[2]),
-        stack=traceback.print_tb(tb))
+    return """
+1: {doc}
+2: {exec_info}
+3: {exec_0}
+4: {exec_1}
+5: {lineno}
+6: {stack}
+""".format(
+    doc=e.__doc__,
+    exec_info=sys.exc_info(),
+    exec_0=sys.exc_info()[0],
+    exec_1=sys.exc_info()[1],
+    lineno=traceback.tb_lineno(sys.exc_info()[2]),
+    stack=traceback.print_tb(tb))
 
 
 def write_human_state(event_list, job_sets, mutex, state_path='run_state.txt', print_file_list=False):
@@ -376,7 +384,7 @@ def write_human_state(event_list, job_sets, mutex, state_path='run_state.txt', p
                 out_str += line
 
                 line = 'status: {status}\n'.format(
-                    status=year_set.status)
+                    status=SetStatusMap[year_set.status])
                 out_str += line
 
                 for job in year_set.jobs:

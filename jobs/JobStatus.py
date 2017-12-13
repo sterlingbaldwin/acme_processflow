@@ -27,13 +27,13 @@ StatusMap = {
 }
 
 ReverseMap = {
-    JobStatus.VALID: "valid",
-    JobStatus.INVALID: "invalid",
-    JobStatus.RUNNING: "running",
-    JobStatus.COMPLETED: "completed",
-    JobStatus.FAILED: "failed",
-    JobStatus.SUBMITTED: "submitted",
-    JobStatus.PENDING: "pending",
-    JobStatus.WAITING_ON_INPUT: "waiting on additional input",
-    JobStatus.CANCELLED: "canceled"
+    JobStatus.VALID: "Valid",
+    JobStatus.INVALID: "Invalid",
+    JobStatus.RUNNING: "Running",
+    JobStatus.COMPLETED: "Completed",
+    JobStatus.FAILED: "Failed",
+    JobStatus.SUBMITTED: "Submitted",
+    JobStatus.PENDING: "Pending",
+    JobStatus.WAITING_ON_INPUT: "Waiting on additional input",
+    JobStatus.CANCELLED: "Canceled"
 }

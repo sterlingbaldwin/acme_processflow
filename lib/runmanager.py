@@ -681,13 +681,46 @@ class RunManager(object):
                     # If the job is valid, start it
                     if job.status == JobStatus.VALID:
                         if not self.check_max_running_jobs():
+                            slurm = Slurm()
+                            msg = "Submitting {job}".format(job=job.type)
+                            print_line(
+                                ui=self.ui,
+                                line=msg,
+                                event_list=self.event_list)
                             status = job.execute(dryrun=self._dryrun)
                             if status == -1:
                                 continue
-                            self.running_jobs.append(job)
-                            self.monitor_running_jobs()
+                            if job.job_id == 0:
+                                msg = '{job} job already computed, skipping'.format(job.type)
+                                print_line(
+                                    ui=self.config.get('ui', False),
+                                    line=msg,
+                                    event_list=self.event_list)
+                                logging.info(msg)
+                                continue
+                            try:
+                                slurm.showjob(job.job_id)
+                            except:
+                                msg = "Error submitting {job} to queue".format(job=job.type)
+                                print_line(
+                                    ui=self.ui,
+                                    line=msg,
+                                    event_list=self.event_list)
+                                job.status = JobStatus.VALID
+                                job.status = JobStatus.VALID
+                                return
+                            else:
+                                self.running_jobs.append(job)
+                                self.monitor_running_jobs()
 
     def monitor_running_jobs(self):
+        msg = 'Updating job list'
+        print_line(
+            ui=self.ui,
+            line=msg,
+            event_list=self.event_list,
+            current_state=True,
+            ignore_text=True)
         slurm = Slurm()
         for job in self.running_jobs:
             if job.job_id == 0:
@@ -716,7 +749,7 @@ class RunManager(object):
                     ui=self.ui,
                     line=msg,
                     event_list=self.event_list,
-                    current_state=True)
+                    current_state=False)
                 job.status = status
 
                 if status == JobStatus.RUNNING:

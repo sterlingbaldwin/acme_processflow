@@ -58,7 +58,6 @@ class Climo(object):
             'run_time': '-t 0-05:00',  # 2 hours run time
             'num_machines': '-N 1',  # run on one machine
             'oversubscribe': '--oversubscribe'
-            # 'oversubscribe': '--oversubscribe'
         }
         self.prevalidate(config)
 
@@ -106,12 +105,6 @@ class Climo(object):
         # check if the output already exists and the job actually needs to run
         if self.postvalidate():
             self.status = JobStatus.COMPLETED
-            msg = 'Ncclimo job already computed, skipping'
-            print_line(
-                ui=self.config.get('ui', False),
-                line=msg,
-                event_list=self.event_list,
-                current_state=True)
             return 0
 
         self.output_path = self.config['regrid_output_directory']
@@ -126,7 +119,7 @@ class Climo(object):
             '-r', self.config['regrid_map_path'],
             '-o', self.config['climo_output_directory'],
             '-O', self.config['regrid_output_directory'],
-            '-l'
+            '--no_amwg_links', 
         ]
         slurm_command = ' '.join(cmd)
 

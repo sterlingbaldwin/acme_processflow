@@ -121,13 +121,6 @@ class E3SMDiags(object):
         # Check if the output already exists
         if self.postvalidate():
             self.status = JobStatus.COMPLETED
-            msg = 'ACME diags already computed, skipping'
-            print_line(
-                ui=self.config.get('ui', False),
-                line=msg,
-                event_list=self.event_list,
-                current_state=True)
-            logging.info(msg)
             return 0
         # render the parameters file
         self.output_path = self.config['output_path']

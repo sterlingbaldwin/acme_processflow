@@ -93,12 +93,6 @@ class Timeseries(object):
         """
         if self.postvalidate():
             self.status = JobStatus.COMPLETED
-            msg = 'Timeseries already computed, skipping'
-            print_line(
-                ui=self.config.get('ui', False),
-                line=msg,
-                event_list=self.event_list,
-                current_state=True)
             return 0
 
         file_list = self.config['file_list']
