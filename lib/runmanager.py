@@ -728,7 +728,21 @@ class RunManager(object):
                 self.handle_completed_job(job)
                 self.running_jobs.remove(job)
                 continue
-            job_info = slurm.showjob(job.job_id)
+            try:
+                job_info = slurm.showjob(job.job_id)
+            except Exception as e:
+                self.running_jobs.remove(job)
+                if job.postvalidate():
+                    job.status = JobStatus.COMPLETED
+                else:
+                    line = "slurm lookup error for {job}: {id}".format(
+                        job=job.type,
+                        id=job.job_id)
+                    print_line(
+                        ui=self.ui,
+                        line=line,
+                        event_list=self.event_list)
+                continue
             status = job_info.get('JobState')
             if not status:
                 msg = 'No status yet for {}'.format(job.type)
