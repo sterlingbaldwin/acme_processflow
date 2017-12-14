@@ -14,18 +14,21 @@ from globus_cli.commands.login import do_link_login_flow, check_logged_in
 from globus_cli.services.transfer import get_client, autoactivate
 from globus_sdk import TransferData
 
-from lib.util import print_debug
-from lib.util import print_message
-from lib.util import format_debug
-from lib.util import setup_globus
-from lib.util import strfdelta
-from lib.events import Event_list
+from lib.events import EventList
 from jobs.JobStatus import JobStatus
+from lib.util import (print_debug,
+                      print_message,
+                      format_debug,
+                      setup_globus,
+                      strfdelta,
+                      print_line)
+
 
 class Transfer(object):
     """
     Uses Globus to transfer files between DTNs
     """
+
     def __init__(self, config=None, event_list=None):
         self.event_list = event_list
         self.config = {}
@@ -34,13 +37,14 @@ class Transfer(object):
         self.start_time = None
         self.end_time = None
         self.inputs = {
+            'ui': '',
             'file_list': '',
             'recursive': '',
             'source_endpoint': '',
             'destination_endpoint': '',
             'source_path': '',
             'destination_path': '',
-            'src_email': '',
+            'source_email': '',
             'display_event': '',
             'ui': '',
         }
@@ -51,7 +55,7 @@ class Transfer(object):
     @property
     def file_list(self):
         return self.config.get('file_list')
-    
+
     @file_list.setter
     def file_list(self, _file_list):
         self.config['file_list'] = _file_list
@@ -86,11 +90,11 @@ class Transfer(object):
                     self.config[i] = config.get(i)
 
         for i in self.inputs:
-            if i not in self.config or self.config[i] == None:
+            if i not in self.config or self.config[i] is None:
                 if i == 'recursive':
                     self.config[i] = False
                 else:
-                    print_message('Missing transfer argument {}'.format(i))
+                    logging.error('Missing transfer argument {}'.format(i))
                     self.status = JobStatus.INVALID
                     return -1
         self.status = JobStatus.VALID
@@ -101,12 +105,11 @@ class Transfer(object):
         TODO: validate that all files were moved correctly
         """
         for datafile in self.config['file_list']:
-           if not os.path.exists(datafile.local_path):
-               self.status = JobStatus.FAILED
-               return False
+            if not os.path.exists(datafile['local_path']):
+                self.status = JobStatus.FAILED
+                return False
         self.status = JobStatus.COMPLETED
         return True
-
 
     def get_destination_path(self, srcpath, dstpath, recursive):
         '''
@@ -125,28 +128,32 @@ class Transfer(object):
         Updates the event_list with a nicely formated percent completion
         """
 
-        spacer = ' ' if num_completed < 10 else ''
-        message = 'Transfer in progress {spacer}({completed}/{total}) ['.format(
-            completed=num_completed,
-            spacer=spacer,
-            total=num_total)
+        if percent_complete >= 100:
+            # message = 'Transfer complete'
+            # message = ''
+            return
+        else:
+            spacer = ' ' if num_completed < 10 else ''
+            message = 'Transfer in progress {spacer}({completed}/{total}) ['.format(
+                completed=num_completed,
+                spacer=spacer,
+                total=num_total)
 
-        # now get the percent completion and elapsed time
-        for i in range(1, 100, 5):
-            if i < percent_complete:
-                message += '*'
-            else:
-                message += '_'
-        message += '] {percent:.2f}%'.format(percent=percent_complete)
+            # now get the percent completion and elapsed time
+            for i in range(1, 100, 5):
+                if i < percent_complete:
+                    message += '*'
+                else:
+                    message += '_'
+            message += '] {percent:.2f}%'.format(percent=percent_complete)
 
         # check if the event has already been pushed into the event_list
         replaced = False
-        from lib.util import print_debug
         try:
             for index, event in enumerate(self.event_list.list):
                 if task_id == event.data:
                     msg = '{time} {msg}'.format(
-                        time=time.strftime("%I:%M"),
+                        time=time.strftime('%I:%M:%S'),
                         msg=message)
                     self.event_list.replace(
                         index=index,
@@ -155,7 +162,7 @@ class Transfer(object):
                     break
             if not replaced:
                 msg = '{time} {msg}'.format(
-                    time=time.strftime("%I:%M"),
+                    time=time.strftime('%I:%M:%S'),
                     msg=message)
                 self.event_list.push(
                     message=msg,
@@ -166,7 +173,7 @@ class Transfer(object):
     def execute(self, event):
         """
         Start the transfer
-        
+
         Parameters:
             event (thread.event): event to trigger job cancel
         """
@@ -194,17 +201,22 @@ class Transfer(object):
         setup_globus(
             endpoints=endpoints,
             event_list=self.event_list,
-            no_ui=not self.config.get('ui', True),
-            src=self.config.get('src'),
-            dst=self.config.get('src'),
+            ui=self.config.get('ui', False),
+            src=self.config.get('source_email'),
+            dst=self.config.get('source_email'),
             display_event=self.config.get('display_event'))
         client = get_client()
+
+        task_label = 'Autotransfer of {number} files at {time}'.format(
+            number=len(self.file_list),
+            time=time.strftime("%I-%M"))
         try:
             transfer_task = TransferData(
                 client,
                 srcendpoint,
                 dstendpoint,
-                sync_level='checksum')
+                sync_level='checksum',
+                label=task_label)
         except Exception as e:
             logging.error('Error creating transfer task')
             logging.error(format_debug(e))
@@ -249,38 +261,42 @@ class Transfer(object):
                     else:
                         break
                 if status['status'] == 'SUCCEEDED':
-                    logging.info('progress %d/%d', status['files_transferred'], status['files'])
+                    logging.info('progress %d/%d',
+                                 status['files_transferred'], status['files'])
                     percent_complete = 100.0
                     self.display_status(
                         percent_complete=percent_complete,
                         task_id=task_id,
-                        num_completed=int(status['files_transferred']) + int(status['files_skipped']) ,
+                        num_completed=int(
+                            status['files_transferred']) + int(status['files_skipped']),
                         num_total=status['files'])
                     message = 'Transfer job completed'
                     self.status = JobStatus.COMPLETED
                     return
                 elif status['status'] == 'FAILED':
-                    logging.error('Error transfering files %s', status.get('nice_status_details'))
+                    logging.error('Error transfering files %s',
+                                  status.get('nice_status_details'))
                     self.status = JobStatus.FAILED
                     return
                 elif status['status'] == 'ACTIVE':
                     if number_transfered < status['files_transferred']:
                         number_transfered = status['files_transferred']
-                        logging.info('progress %d/%d', status['files_transferred'], status['files'])
-                        percent_complete = (float(status['files_transferred'] + float(status['files_skipped'])) / float(status['files'])) * 100
+                        logging.info(
+                            'progress %d/%d', status['files_transferred'], status['files'])
+                        percent_complete = (float(status['files_transferred'] + float(
+                            status['files_skipped'])) / float(status['files'])) * 100
                         self.display_status(
                             percent_complete=percent_complete,
                             task_id=task_id,
-                            num_completed=int(status['files_transferred']) + int(status['files_skipped']),
+                            num_completed=int(
+                                status['files_transferred']) + int(status['files_skipped']),
                             num_total=status['files'])
                     self.status = JobStatus.RUNNING
                 if event and event.is_set():
                     client.cancel_task(task_id)
-                    #self.error_cleanup()
                     return
             except Exception as e:
                 logging.error(format_debug(e))
                 client.cancel_task(task_id)
-                #self.error_cleanup()
                 return
             time.sleep(5)

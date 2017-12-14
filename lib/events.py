@@ -1,5 +1,6 @@
 from datetime import datetime
 
+
 class Event(object):
     """
     A simple data wrapper for event information
@@ -9,6 +10,7 @@ class Event(object):
         message (str): The message the event should display
         data (job, optional): The job that spawned the message
     """
+
     def __init__(self, **kwargs):
         self._time = kwargs.get('time')
         self._message = kwargs.get('message')
@@ -17,40 +19,42 @@ class Event(object):
     @property
     def time(self):
         return self._time
-    
+
     @time.setter
     def time(self, ntime):
         if not isinstance(ntime, datetime):
             raise ValueError("time must be a datetime object")
         self._time = ntime
-    
+
     @property
     def message(self):
         return self._message
-    
+
     @message.setter
     def message(self, nmessage):
         self._message = nmessage
-    
+
     @property
     def data(self):
         return self._data
-    
+
     @data.setter
     def data(self, ndata):
         self._data = ndata
 
-class Event_list(object):
+
+class EventList(object):
     """
     A list for holding global events
-    
+
     Parameters:
         event_list (list): list of events
     """
+
     def __init__(self):
         self._list = []
-    
-    def push(self, **kwargs):
+
+    def push(self, message, **kwargs):
         """
         Push an event into the event_list
 
@@ -58,7 +62,6 @@ class Event_list(object):
             message (str): The string the event will holding
             data (job: optional): The job that spawned the event
         """
-        message = kwargs.get('message')
         data = kwargs.get('data')
         event = Event(
             time=datetime.now(),
@@ -69,11 +72,9 @@ class Event_list(object):
     @property
     def list(self):
         return self._list
-    
+
     def replace(self, index, message):
         if index >= len(self._list) or index < 0:
             raise ValueError('Index {0} out of range {1}'.format(
                 index, len(self._list)))
         self._list[index].message = message
-        
-    

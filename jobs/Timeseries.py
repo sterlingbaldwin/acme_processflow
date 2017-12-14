@@ -12,18 +12,20 @@ from subprocess import Popen, PIPE
 from time import sleep
 from datetime import datetime
 
-from lib.util import print_debug
-from lib.util import print_message
-from lib.events import Event_list
-from lib.util import cmd_exists
+from lib.events import EventList
 from lib.slurm import Slurm
 from JobStatus import JobStatus
+from lib.util import (print_debug,
+                      print_message,
+                      cmd_exists,
+                      print_line)
 
 
 class Timeseries(object):
     """
     A wrapper around ncclimo, used to compute the climotologies from raw output data
     """
+
     def __init__(self, config, event_list):
         self.event_list = event_list
         self.config = {}
@@ -38,6 +40,8 @@ class Timeseries(object):
         self.end_time = None
         self.output_path = None
         self.inputs = {
+            'ui': '',
+            'year_set': '',
             'annual_mode': '',
             'start_year': '',
             'end_year': '',
@@ -49,9 +53,9 @@ class Timeseries(object):
             'file_list': '',
         }
         self.slurm_args = {
-            'num_cores': '-n 16', # 16 cores
-            'run_time': '-t 0-05:00', # 2 hours run time
-            'num_machines': '-N 1', # run on one machine
+            'num_cores': '-n 16',  # 16 cores
+            'run_time': '-t 0-05:00',  # 5 hours run time
+            'num_machines': '-N 1',  # run on one machine
             'oversubscribe': '--oversubscribe'
         }
         self.prevalidate(config)
@@ -74,23 +78,21 @@ class Timeseries(object):
         self.status = JobStatus.VALID
 
     def __str__(self):
-        return pformat({
+        return json.dumps({
             'type': self.type,
             'config': self.config,
             'status': self.status,
             'depends_on': self.depends_on,
             'job_id': self.job_id,
             'year_set': self.year_set
-        })
+        }, sort_keys=True, indent=4)
 
-    def execute(self):
+    def execute(self, dryrun=False):
         """
-        Calls ncclimo in a subprocess
+        Submits ncclimo to slurm after checking if it had been previously run
         """
         if self.postvalidate():
             self.status = JobStatus.COMPLETED
-            message = 'Timeseries already computed, skipping'
-            self.event_list.push(message=message)
             return 0
 
         file_list = self.config['file_list']
@@ -109,16 +111,20 @@ class Timeseries(object):
         ])
 
         # Submitting the job to SLURM
-        expected_name = 'timeseries_{start}_{end}'.format(
-            year_set=self.year_set,
-            start='{:04d}'.format(self.config.get('start_year')),
-            end='{:04d}'.format(self.config.get('end_year')))
-        run_script = os.path.join(self.config.get('run_scripts_path'), expected_name)
+        expected_name = '{type}_{start:04d}_{end:04d}'.format(
+            start=self.config.get('start_year'),
+            end=self.config.get('end_year'),
+            type=self.type)
+        run_script = os.path.join(
+            self.config.get('run_scripts_path'),
+            expected_name)
         if os.path.exists(run_script):
             os.remove(run_script)
 
-        self.slurm_args['output_file'] = '-o {output_file}'.format(output_file=run_script + '.out')
-        slurm_prefix = '\n'.join(['#SBATCH ' + self.slurm_args[s] for s in self.slurm_args]) + '\n'
+        self.slurm_args['output_file'] = '-o {output_file}'.format(
+            output_file=run_script + '.out')
+        slurm_prefix = '\n'.join(['#SBATCH ' + self.slurm_args[s]
+                                  for s in self.slurm_args]) + '\n'
 
         with open(run_script, 'w') as batchfile:
             batchfile.write('#!/bin/bash\n')
@@ -126,21 +132,19 @@ class Timeseries(object):
             batchfile.write(slurm_command)
 
         slurm = Slurm()
-        print 'submitting to queue {type}: {start:04d}-{end:04d}'.format(
+        msg = 'Submitting to queue {type}: {start:04d}-{end:04d}'.format(
             type=self.type,
             start=self.start_year,
             end=self.end_year)
+        print_line(
+            ui=self.config.get('ui', False),
+            line=msg,
+            event_list=self.event_list,
+            current_state=True)
         self.job_id = slurm.batch(run_script, '--oversubscribe')
-        self.status = JobStatus.SUBMITTED
-        message = '{type} id: {id} changed state to {state}'.format(
-            type=self.type,
-            id=self.job_id,
-            state=self.status)
-        logging.info(message)
-        self.event_list.push(message=message)
 
         return self.job_id
-    
+
     def _find_year(self, filename):
         pattern = '_\d\d\d\d\d\d_\d\d\d\d\d\d.*'
         match = re.search(pattern=pattern, string=filename)

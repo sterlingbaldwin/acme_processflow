@@ -1,35 +1,32 @@
-# system level modules
+
 import logging
 import os
 import re
 import json
-# system module functions
+
 from subprocess import Popen, PIPE
 from pprint import pformat
 from time import sleep
 from datetime import datetime
 from shutil import copyfile
-# job modules
+
 from JobStatus import JobStatus, StatusMap
-# output_viewer modules
-from output_viewer.index import OutputPage
-from output_viewer.index import OutputIndex
-from output_viewer.index import OutputRow
-from output_viewer.index import OutputGroup
-from output_viewer.index import OutputFile
-# lib.util modules
-from lib.util import print_debug
-from lib.util import print_message
-from lib.util import create_symlink_dir
-from lib.util import render
-from lib.util import get_climo_output_files
+
 from lib.slurm import Slurm
-from lib.events import Event_list
+from lib.events import EventList
+from lib.util import (print_debug,
+                      print_message,
+                      create_symlink_dir,
+                      render,
+                      print_line,
+                      get_climo_output_files)
+
 
 class AMWGDiagnostic(object):
     """
     A job class to perform the NCAR AMWG Diagnostic
     """
+
     def __init__(self, config, event_list):
         """
         Setup class attributes
@@ -49,6 +46,7 @@ class AMWGDiagnostic(object):
         self.output_path = None
         self.year_set = config.get('year_set', 0)
         self.inputs = {
+            'ui': '',
             'web_dir': '',
             'host_url': '',
             'test_casename': '',
@@ -72,22 +70,23 @@ class AMWGDiagnostic(object):
         self.end_year = config['end_year']
         self.job_id = 0
         self.depends_on = ['ncclimo']
+        self.host_suffix = '/index.html'
         self.slurm_args = {
-            'num_cores': '-n 16', # 16 cores
-            'run_time': '-t 0-02:00', # 2 hours run time
-            'num_machines': '-N 1', # run on one machine
+            'num_cores': '-n 16',  # 16 cores
+            'run_time': '-t 0-05:00',  # 2 hours run time
+            'num_machines': '-N 1',  # run on one machine
             'oversubscribe': '--oversubscribe'
         }
         self.prevalidate(config)
-    
+
     def __str__(self):
-        return pformat({
+        return json.dumps({
             'type': self.type,
             'config': self.config,
             'status': self.status,
             'depends_on': self.depends_on,
             'job_id': self.job_id,
-        })
+        }, sort_keys=True, indent=4)
 
     def prevalidate(self, config):
         """
@@ -128,18 +127,15 @@ class AMWGDiagnostic(object):
         else:
             return False
 
-    def execute(self):
+    def execute(self, dryrun=False):
         """
         Perform the actual work
         """
         # First check if the job has already been completed
         if self.postvalidate():
             self.status = JobStatus.COMPLETED
-            message = 'AMWG job already computed, skipping'
-            self.event_list.push(message=message)
-            logging.info(message)
             return 0
-        
+
         # Create directory of regridded climos
 
         regrid_path = os.path.join(
@@ -150,19 +146,30 @@ class AMWGDiagnostic(object):
             start_year=self.start_year,
             end_year=self.end_year)
         if not file_list or len(file_list) == 0:
-            print "ERROR: AMWG: {start:04d}-{end:04d} could not find input climatologies at {path}, did you add ncclimo to this year_set?".format(
-                start=self.start_year,
-                end=self.end_year,
-                path=regrid_path)
+            msg = """
+ERROR: AMWG: {start:04d}-{end:04d} could not find input climatologies at {path}\n
+did you add ncclimo to this year_set?""".format(start=self.start_year,
+                                                end=self.end_year,
+                                                path=regrid_path)
+            print_line(
+                ui=self.config.get('ui', False),
+                line=msg,
+                event_list=self.event_list)
             self.status = JobStatus.FAILED
+            return 0
         if not os.path.exists(self.config['test_path_climo']):
-            print 'creating temp directory for amwg'
+            msg = 'creating temp directory for amwg'
+            print_line(
+                ui=self.config.get('ui', False),
+                line=msg,
+                event_list=self.event_list,
+                current_state=True)
             os.makedirs(self.config['test_path_climo'])
         create_symlink_dir(
             src_dir=regrid_path,
             src_list=file_list,
             dst=self.config['test_path_climo'])
-        
+
         # Rename the files to the format amwg expects
         for item in os.listdir(self.config['test_path_climo']):
             search = re.search(r'\_\d\d\d\d\d\d\_', item)
@@ -182,19 +189,21 @@ class AMWGDiagnostic(object):
             variables=self.config,
             input_path=self.config.get('template_path'),
             output_path=template_out)
+
+        expected_name = '{type}_{start:04d}-{end:04d}'.format(
+            start=self.config.get('start_year'),
+            end=self.config.get('end_year'),
+            type=self.type)
         # Copy the rendered run script into the scripts directory
         run_script_template_out = os.path.join(
-            self.config.get('run_scripts_path'), 'amwg_{0}-{1}.csh'.format(
-                self.config.get('start_year'),
-                self.config.get('end_year')))
+            self.config.get('run_scripts_path'),
+            expected_name)
         copyfile(
             src=template_out,
             dst=run_script_template_out)
 
         # setup sbatch script
-        expected_name = 'amwg_{start:04d}-{end:04d}'.format(
-            start=self.config.get('start_year'),
-            end=self.config.get('end_year'))
+
         run_script = os.path.join(
             self.config.get('run_scripts_path'),
             expected_name)
@@ -205,32 +214,32 @@ class AMWGDiagnostic(object):
             output_file=run_script + '.out')
         cmd = '\ncsh {template}'.format(
             template=template_out)
-        slurm_args_str = ['#SBATCH {value}'.format(value=v) for k, v in self.slurm_args.items()]
+        slurm_args_str = ['#SBATCH {value}'.format(
+            value=v) for k, v in self.slurm_args.items()]
         slurm_prefix = '\n'.join(slurm_args_str)
         with open(run_script, 'w') as batchfile:
             batchfile.write('#!/bin/bash\n')
             batchfile.write(slurm_prefix)
             batchfile.write(cmd)
 
-        prev_dir = os.getcwd()
-        #os.chdir(output_path)
+        if dryrun:
+            self.status = JobStatus.COMPLETED
+            return 0
 
         slurm = Slurm()
-        print 'submitting to queue {type}: {start:04d}-{end:04d}'.format(
+        msg = 'submitting to queue {type}: {start:04d}-{end:04d}'.format(
             type=self.type,
             start=self.start_year,
             end=self.end_year)
+        print_line(
+            ui=self.config.get('ui', False),
+            line=msg,
+            event_list=self.event_list,
+            current_state=True)
         self.job_id = slurm.batch(run_script, '--oversubscribe')
-        #os.chdir(prev_dir)
 
         status = slurm.showjob(self.job_id)
         self.status = StatusMap[status.get('JobState')]
-        message = '{type} id: {id} changed state to {state}'.format(
-            type=self.type,
-            id=self.job_id,
-            state=self.status)
-        logging.info(message)
-        self.event_list.push(message=message)
 
         return self.job_id
 

@@ -8,22 +8,19 @@ diagnostics on model data.
 
 # Usage<a name="usage"></a>
 
-        usage: processflow.py [-h] [-c CONFIG] [-n] [-l LOG] [-u] [-m] [-s SIZE] [-f]
-                      [-r RESOURCE_DIR]
+        usage: processflow.py [-h] [-c CONFIG] [-u] [-l LOG] [-n] [-m] [-f]
+                        [-r RESOURCE_DIR]
 
         optional arguments:
         -h, --help            show this help message and exit
         -c CONFIG, --config CONFIG
                                 Path to configuration file.
-        -n, --no-ui           Turn off the GUI.
+        -u, --ui              Turn on the GUI.
         -l LOG, --log LOG     Path to logging output file.
-        -u, --no-cleanup      Don't perform pre or post run cleanup. This will leave
+        -n, --no-cleanup      Don't perform pre or post run cleanup. This will leave
                                 all run scripts in place.
         -m, --no-monitor      Don't run the remote monitor or move any files over
                                 globus.
-        -s SIZE, --size SIZE  The maximume size in gigabytes of a single transfer,
-                                defaults to 100. Must be larger then the largest
-                                single file.
         -f, --file-list       Turn on debug output of the internal file_list so you
                                 can see what the current state of the model files are
         -r RESOURCE_DIR, --resource-dir RESOURCE_DIR

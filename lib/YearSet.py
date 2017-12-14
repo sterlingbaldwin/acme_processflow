@@ -1,6 +1,7 @@
 from enum import Enum
 from pprint import pformat
 
+
 class SetStatus(Enum):
     NO_DATA = 0
     PARTIAL_DATA = 1
@@ -9,6 +10,17 @@ class SetStatus(Enum):
     COMPLETED = 4
     FAILED = 5
     IN_TRANSIT = 6
+
+
+SetStatusMap = {
+    SetStatus.NO_DATA: 'No Data Local',
+    SetStatus.PARTIAL_DATA: 'Partial Data Local',
+    SetStatus.DATA_READY: 'All Data Local',
+    SetStatus.RUNNING: 'Running',
+    SetStatus.COMPLETED: 'All Jobs Completed',
+    SetStatus.FAILED: 'At Least One Job Failed',
+    SetStatus.IN_TRANSIT: 'Data In'
+}
 
 
 class YearSet(object):
@@ -31,7 +43,15 @@ class YearSet(object):
 
     def add_job(self, job):
         self._jobs.append(job)
-    
+
+    @property
+    def start_year(self):
+        return self._set_start_year
+
+    @property
+    def end_year(self):
+        return self._set_end_year
+
     @property
     def length(self):
         return self._set_end_year - (self._set_start_year - 1)
@@ -39,35 +59,38 @@ class YearSet(object):
     @property
     def jobs(self):
         return self._jobs
-    
+
+    def get_job_names(self):
+        return [x.type for x in self._jobs]
+
     @property
     def status(self):
         return self._status
-    
+
     @status.setter
     def status(self, status):
         self._status = status
-    
+
     @property
     def set_number(self):
         return self._set_number
-    
+
     @set_number.setter
     def set_number(self, num):
         self._set_number = num
-    
+
     @property
     def set_start_year(self):
         return self._set_start_year
-    
+
     @set_start_year.setter
     def set_start_year(self, num):
         self._set_start_year = num
-    
+
     @property
     def set_end_year(self):
         return self._set_end_year
-    
+
     @set_end_year.setter
     def set_end_year(self, num):
         self._set_end_year = num

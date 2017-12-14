@@ -1,4 +1,5 @@
 import os
+import json
 import logging
 
 from subprocess import Popen, PIPE
@@ -6,18 +7,20 @@ from pprint import pformat
 from datetime import datetime
 from shutil import copyfile
 
-from lib.util import render
-from lib.util import get_climo_output_files
-from lib.util import create_symlink_dir
-from lib.events import Event_list
+from lib.events import EventList
 from lib.slurm import Slurm
 from JobStatus import JobStatus, StatusMap
+from lib.util import (render,
+                      get_climo_output_files,
+                      create_symlink_dir,
+                      print_line)
 
 
 class E3SMDiags(object):
     def __init__(self, config, event_list):
         self.event_list = event_list
         self.inputs = {
+            'ui': '',
             'regrid_base_path': '',
             'regrided_climo_path': '',
             'reference_data_path': '',
@@ -38,9 +41,9 @@ class E3SMDiags(object):
             'output_path': ''
         }
         self.slurm_args = {
-            'num_cores': '-n 16', # 16 cores
-            'run_time': '-t 0-02:00', # 2 hour max run time
-            'num_machines': '-N 1', # run on one machine
+            'num_cores': '-n 16',  # 16 cores
+            'run_time': '-t 0-05:00',  # 2 hour max run time
+            'num_machines': '-N 1',  # run on one machine
             'oversubscribe': '--oversubscribe'
         }
         self.start_time = None
@@ -48,22 +51,25 @@ class E3SMDiags(object):
         self.output_path = None
         self.config = {}
         self._status = JobStatus.INVALID
+        self.host_suffix = '/viewer/index.html'
         self._type = "e3sm_diags"
         self.year_set = config.get('year_set', 0)
         self.start_year = config['start_year']
         self.end_year = config['end_year']
         self.job_id = 0
         self.depends_on = ['ncclimo']
+        self.messages = []
         self.prevalidate(config)
 
     def __str__(self):
-        return pformat({
+        return json.dumps({
             'type': self.type,
             'config': self.config,
             'status': self.status,
             'depends_on': self.depends_on,
             'job_id': self.job_id,
-        })
+            'messages': self.messages
+        }, sort_keys=True, indent=4)
 
     def prevalidate(self, config):
         for key, val in config.items():
@@ -77,13 +83,18 @@ class E3SMDiags(object):
 
         valid = True
         for key, val in self.config.items():
-            if not val or val == '':
+            if val == '':
                 valid = False
+                msg = '{0}: {1} is missing or empty'.format(key, val)
+                self.messages.append(msg)
                 break
 
         if not os.path.exists(self.config.get('run_scripts_path')):
             os.makedirs(self.config.get('run_scripts_path'))
+        if isinstance(self.config['seasons'], str):
+            self.config['seasons'] = [self.config['seasons']]
         if self.year_set == 0:
+            self.messages.append('invalid year_set')
             self.status = JobStatus.INVALID
         if valid:
             self.status = JobStatus.VALID
@@ -103,16 +114,13 @@ class E3SMDiags(object):
         except:
             return False
         else:
-            return bool(len(contents) == len(self.config['sets']))
+            return bool(len(contents) >= len(self.config['sets']))
 
-    def execute(self):
+    def execute(self, dryrun=False):
 
         # Check if the output already exists
         if self.postvalidate():
             self.status = JobStatus.COMPLETED
-            message = 'ACME diags already computed, skipping'
-            self.event_list.push(message=message)
-            logging.info(message)
             return 0
         # render the parameters file
         self.output_path = self.config['output_path']
@@ -133,9 +141,10 @@ class E3SMDiags(object):
             input_path=self.config.get('template_path'),
             output_path=template_out)
 
-        run_name = 'e3sm_diag_{start:04d}_{end:04d}'.format(
+        run_name = '{type}_{start:04d}_{end:04d}'.format(
             start=self.config.get('start_year'),
-            end=self.config.get('end_year'))
+            end=self.config.get('end_year'),
+            type=self.type)
         template_copy = os.path.join(
             self.config.get('run_scripts_path'),
             run_name)
@@ -154,8 +163,6 @@ class E3SMDiags(object):
             dst=self.config['regrided_climo_path'])
 
         # setup sbatch script
-        expected_name = 'e3sm_diag_{name}'.format(
-            name=run_name)
         run_script = os.path.join(
             self.config.get('run_scripts_path'),
             run_name)
@@ -167,7 +174,9 @@ class E3SMDiags(object):
 
         cmd = 'acme_diags_driver.py -p {template}'.format(
             template=template_out)
-        slurm_args_str = ['#SBATCH {value}\n'.format(value=v) for k, v in self.slurm_args.items()]
+
+        slurm_args_str = ['#SBATCH {value}\n'.format(
+            value=v) for k, v in self.slurm_args.items()]
         slurm_prefix = ''.join(slurm_args_str)
         with open(run_script, 'w') as batchfile:
             batchfile.write('#!/bin/bash\n')
@@ -175,22 +184,20 @@ class E3SMDiags(object):
             batchfile.write(cmd)
 
         slurm = Slurm()
-        print 'submitting to queue {type}: {start:04d}-{end:04d}'.format(
+        msg = 'Submitting to queue {type}: {start:04d}-{end:04d}'.format(
             type=self.type,
             start=self.start_year,
             end=self.end_year)
+        print_line(
+            ui=self.config.get('ui', False),
+            line=msg,
+            event_list=self.event_list,
+            current_state=True)
         self.job_id = slurm.batch(run_script, '--oversubscribe')
         status = slurm.showjob(self.job_id)
         self.status = StatusMap[status.get('JobState')]
-        message = '{type} id: {id} changed state to {state}'.format(
-            type=self.type,
-            id=self.job_id,
-            state=self.status)
-        logging.info(message)
-        self.event_list.push(message=message)
 
         return self.job_id
-
 
     def __str__(self):
         return pformat({

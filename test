@@ -1,0 +1,53 @@
+#!/bin/bash
+PASSED=0
+TOTAL=0
+SECONDS=0
+BRANCH="$(git name-rev --name-only HEAD)"
+echo "running tests for branch $BRANCH"
+
+tests=("jobs/test_e3sm.py" "lib/test_initialize.py" "lib/test_yearset.py" "lib/test_filemanager.py" "lib/test_util.py" "lib/test_slurm.py" "jobs/test_transfer.py" "lib/test_mailer.py" "jobs/test_ncclimo.py" "jobs/test_timeseries.py" "jobs/test_amwg.py" "lib/test_runmanager.py")
+
+if [ "$1" == "all" ]; then
+    echo "Running end to end tests"
+    tests+=("./test_processflow.py")
+else
+    echo "Skipping end to end tests"
+fi
+
+for test in "${tests[@]}" 
+do
+    let "TOTAL+=1"
+    tname=$(python -c "name='${test}';tname=name.split('/')[-1].split('.')[0];print tname")
+    echo "--- testing ${tname} ---"
+    if COVERAGE_FILE=.coverage_$tname coverage run --source=.,lib,jobs --omit="lib/test*","test*","lib/display.py","jobs/test*","*__init__.py","setup.py" $test; then
+        echo "--- ${tname} passed ---"
+        let "PASSED+=1"
+    else
+        echo "${tname} failed"
+    fi
+done
+
+coverage combine .coverage_*
+coverage report
+coverage html
+coverage xml
+
+if [ -d /var/www/acme/acme-diags/baldwin32/htmlcov ]; then
+    rm -rf /var/www/acme/acme-diags/baldwin32/htmlcov
+fi
+if [ -d /var/www/acme/acme-diags ]; then
+    mv htmlcov /var/www/acme/acme-diags/baldwin32
+fi
+rm slurm-*
+
+echo $PASSED "out of" $TOTAL "modules passed their tests"
+duration=$SECONDS
+echo "Tests ran in $(($duration / 60)) minutes and $(($duration % 60)) seconds."
+
+if [ "$PASSED" != "$TOTAL" ]; then
+    echo "One or more tests failed"
+    exit 1
+else
+    echo "tests done"
+    echo "report available at https://acme-viewer.llnl.gov/baldwin32/htmlcov/"
+fi

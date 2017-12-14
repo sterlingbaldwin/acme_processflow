@@ -1,5 +1,8 @@
 from peewee import *
 
+database = SqliteDatabase(None)  # Defer initialization
+
+
 class DataFile(Model):
     name = CharField()
     local_path = CharField()
@@ -11,3 +14,6 @@ class DataFile(Model):
     datatype = CharField()
     remote_size = IntegerField()
     local_size = IntegerField()
+
+    class Meta:
+        database = database
