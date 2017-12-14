@@ -61,6 +61,8 @@ class FileManager(object):
         self.types = types if isinstance(types, list) else [types]
         self.active_transfers = 0
         self.db_path = database
+        if os.path.exists(database):
+            os.remove(database)
         self.mutex.acquire()
         DataFile._meta.database.init(database)
         if DataFile.table_exists():
@@ -343,25 +345,41 @@ class FileManager(object):
                         self.mutex.acquire()
                         name, path, size = self.update_remote_rest_sta_path(
                             client)
-                        DataFile.update(
-                            remote_status=filestatus['EXISTS'],
-                            remote_size=size,
-                            remote_path=path,
-                            name=name
-                        ).where(
-                            DataFile.datatype == 'rest'
-                        ).execute()
+                        try:
+                            DataFile.update(
+                                remote_status=filestatus['EXISTS'],
+                                remote_size=size,
+                                remote_path=path,
+                                name=name
+                            ).where(
+                                DataFile.datatype == 'rest'
+                            ).execute()
+                        except OperationalError as operror:
+                            line = 'Error writing to database, database is locked by another process'
+                            print_line(
+                                ui=self.ui,
+                                line=line,
+                                event_list=self.event_list)
+                            logging.error(line)
 
                         name, path, size = self.update_remote_rest_sta_path(
                             client, pattern='mpascice.rst')
-                        DataFile.update(
-                            remote_status=filestatus['EXISTS'],
-                            remote_size=size,
-                            remote_path=path,
-                            name=name
-                        ).where(
-                            DataFile.datatype == 'mpascice.rst'
-                        ).execute()
+                        try:
+                            DataFile.update(
+                                remote_status=filestatus['EXISTS'],
+                                remote_size=size,
+                                remote_path=path,
+                                name=name
+                            ).where(
+                                DataFile.datatype == 'mpascice.rst'
+                            ).execute()
+                        except OperationalError as operror:
+                            line = 'Error writing to database, database is locked by another process'
+                            print_line(
+                                ui=self.ui,
+                                line=line,
+                                event_list=self.event_list)
+                            logging.error(line)
 
                         if self.mutex.locked():
                             self.mutex.release()
@@ -409,6 +427,13 @@ class FileManager(object):
                     except Exception as e:
                         print_debug(e)
                         print "Do you have the correct start and end dates?"
+                    except OperationalError as operror:
+                        line = 'Error writing to database, database is locked by another process'
+                        print_line(
+                            ui=self.ui,
+                            line=line,
+                            event_list=self.event_list)
+                        logging.error(line)
                     finally:
                         if self.mutex.locked():
                             self.mutex.release()
@@ -439,6 +464,13 @@ class FileManager(object):
                         n = q.execute()
             except Exception as e:
                 print_debug(e)
+            except OperationalError as operror:
+                line = 'Error writing to database, database is locked by another process'
+                print_line(
+                    ui=self.ui,
+                    line=line,
+                    event_list=self.event_list)
+                logging.error(line)
             finally:
                 if self.mutex.locked():
                     self.mutex.release()
@@ -515,8 +547,13 @@ class FileManager(object):
                             or should_save:
                         datafile.local_size = local_size
                         datafile.save()
-        except Exception as e:
-            print_debug(e)
+        except OperationalError as operror:
+            line = 'Error writing to database, database is locked by another process'
+            print_line(
+                ui=self.ui,
+                line=line,
+                event_list=self.event_list)
+            logging.error(line)
         finally:
             if self.mutex.locked():
                 self.mutex.release()
@@ -628,10 +665,23 @@ class FileManager(object):
         except Exception as e:
             print_debug(e)
             return False
+        except OperationalError as operror:
+            line = 'Error writing to database, database is locked by another process'
+            print_line(
+                ui=self.ui,
+                line=line,
+                event_list=self.event_list)
+            logging.error(line)
+            return False
         finally:
             if self.mutex.locked():
                 self.mutex.release()
 
+        msg = 'Starting file transfer'
+        print_line(
+            ui=self.ui,
+            line=msg,
+            event_list=self.event_list)
         args = (transfer, event, event_list)
         thread = threading.Thread(
             target=self._handle_transfer,
@@ -644,17 +694,7 @@ class FileManager(object):
     def _handle_transfer(self, transfer, event, event_list):
         self.active_transfers += 1
         sleep(random.uniform(0.01, 0.1)) # this is to stop the simultanious print issue
-        msg = 'Starting file transfer'
-        print_line(
-            ui=self.ui,
-            line=msg,
-            event_list=self.event_list)
         transfer.execute(event)
-        msg = 'Transfer complete'
-        print_line(
-            ui=self.ui,
-            line=msg,
-            event_list=self.event_list)
         self.active_transfers -= 1
 
         if transfer.status == JobStatus.FAILED:
@@ -665,29 +705,50 @@ class FileManager(object):
                 event_list=self.event_list)
             logging.error(msg)
             return
-
-        self.mutex.acquire()
-        names = [x['name'] for x in transfer.file_list]
-        for datafile in DataFile.select().where(DataFile.name << names):
-            if os.path.exists(datafile.local_path) \
-                    and os.path.getsize(datafile.local_path) == datafile.remote_size:
-                datafile.local_status = filestatus['EXISTS']
-                datafile.local_size = os.path.getsize(datafile.local_path)
-            else:
-                msg = 'file transfer error on {}'.format(datafile.name)
-                print_line(
-                    ui=self.ui,
-                    line=msg,
-                    event_list=self.event_list)
-                datafile.local_status = filestatus['NOT_EXIST']
-                datafile.local_size = 0
-            datafile.save()
+        else:
+            self.transfer_cleanup(transfer)
+    
+    def transfer_cleanup(self, transfer):
+        try:
+            self.mutex.acquire()
+            names = [x['name'] for x in transfer.file_list]
+            for datafile in DataFile.select().where(DataFile.name << names):
+                if os.path.exists(datafile.local_path) \
+                        and os.path.getsize(datafile.local_path) == datafile.remote_size:
+                    datafile.local_status = filestatus['EXISTS']
+                    datafile.local_size = os.path.getsize(datafile.local_path)
+                else:
+                    msg = 'file transfer error on {}'.format(datafile.name)
+                    print_line(
+                        ui=self.ui,
+                        line=msg,
+                        event_list=self.event_list)
+                    datafile.local_status = filestatus['NOT_EXIST']
+                    datafile.local_size = 0
+                datafile.save()
+            total_files = DataFile.select().count()
+            local_files = DataFile.select().where(
+                DataFile.local_status == filestatus['EXISTS']
+            ).count()
+            msg = 'Transfer complete: {local}/{total} files local'.format(
+                local=local_files,
+                total=total_files)
+            print_line(
+                ui=self.ui,
+                line=msg,
+                event_list=self.event_list)
+        except OperationalError as operror:
+            line = 'Error writing to database, database is locked by another process'
+            print_line(
+                ui=self.ui,
+                line=line,
+                event_list=self.event_list)
+            logging.error(line)
         try:
             if self.mutex.locked():
                 self.mutex.release()
         except:
             pass
-
     def years_ready(self, start_year, end_year):
         """
         Checks if atm files exist from start year to end of endyear
