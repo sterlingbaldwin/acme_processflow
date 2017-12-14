@@ -43,7 +43,7 @@ class APrimeDiags(object):
         }
         self.slurm_args = {
             'num_cores': '-n 32',  # 32 cores
-            'run_time': '-t 0-02:00',  # 2 hours run time
+            'run_time': '-t 0-05:00',  # 2 hours run time
             'num_machines': '-N 1',  # run on one node
         }
         self.start_time = None

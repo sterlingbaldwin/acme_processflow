@@ -42,7 +42,7 @@ class E3SMDiags(object):
         }
         self.slurm_args = {
             'num_cores': '-n 16',  # 16 cores
-            'run_time': '-t 0-02:00',  # 2 hour max run time
+            'run_time': '-t 0-05:00',  # 2 hour max run time
             'num_machines': '-N 1',  # run on one machine
             'oversubscribe': '--oversubscribe'
         }
