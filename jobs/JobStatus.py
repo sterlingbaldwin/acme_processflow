@@ -11,6 +11,7 @@ class JobStatus(IntEnum):
     PENDING = 6
     WAITING_ON_INPUT = 7
     CANCELLED = 8
+    TIMEOUT = 9
 
 
 StatusMap = {
@@ -23,10 +24,12 @@ StatusMap = {
     'PENDING': JobStatus.PENDING,
     'WAITING_ON_INPUT': JobStatus.WAITING_ON_INPUT,
     'CANCELLED': JobStatus.CANCELLED,
-    'COMPLETING': JobStatus.COMPLETED
+    'COMPLETING': JobStatus.COMPLETED,
+    'TIMEOUT': JobStatus.TIMEOUT
 }
 
 ReverseMap = {
+    JobStatus.TIMEOUT: "Timeout",
     JobStatus.VALID: "Valid",
     JobStatus.INVALID: "Invalid",
     JobStatus.RUNNING: "Running",
