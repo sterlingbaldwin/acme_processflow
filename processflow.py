@@ -256,13 +256,6 @@ def main(test=False, **kwargs):
                         display_event=display_event,
                         emailaddr=config['global']['email'],
                         thread_list=thread_list)
-                    if transfer_started:
-                        msg = 'Starting file transfer'
-                        print_line(
-                            ui=config['global']['ui'],
-                            line=msg,
-                            event_list=event_list,
-                            current_state=True)
 
             msg = "Checking for ready job sets"
             print_line(
@@ -333,7 +326,6 @@ def main(test=False, **kwargs):
                 finalize(
                     config=config,
                     job_sets=runmanager.job_sets,
-                    state_path=state_path,
                     event_list=event_list,
                     status=status,
                     display_event=display_event,
