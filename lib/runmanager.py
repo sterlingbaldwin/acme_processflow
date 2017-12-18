@@ -38,19 +38,25 @@ class RunManager(object):
         self.max_running_jobs = 6
         if not os.path.exists(self.scripts_path):
             os.makedirs(self.scripts_path)
-    
+
     def check_max_running_jobs(self):
         """
         Checks if the maximum number of jobs are running
-        
+
         Returns True if the max or more are running, false otherwise
         """
-        job_info = self.slurm.queue()
-        running_jobs = 0
-        for job in job_info:
-            if job['STATE'] in ['R', 'PD']:
-                running_jobs += 1
-        return bool(running_jobs >= self.max_running_jobs)
+        try:
+            job_info = self.slurm.queue()
+        except:
+            return True
+        else:
+            running_jobs = 0
+            for job in job_info:
+                if job['STATE'] in ['R', 'PD']:
+                    running_jobs += 1
+                if running_jobs >= self.max_running_jobs:
+                    return True
+            return False
 
 
     def setup_job_sets(self, set_frequency, sim_start_year, sim_end_year, config, filemanager):
