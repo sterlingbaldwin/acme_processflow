@@ -146,6 +146,19 @@ class Slurm(object):
                 nodeinfo[j[:index]] = j[index + 1:]
         return nodeinfo
 
+    def get_node_number(self):
+        """
+        Use sinfo to return the number of nodes in the cluster
+        """
+        cmd = 'sinfo show nodes | grep up | wc -l'
+        p = Popen([cmd], stderr=PIPE, stdout=PIPE, shell=True)
+        out, err = p.communicate()
+        while 'Transport endpoint is not connected' in out and not e:
+            sleep(1)
+            p = Popen([cmd], stderr=PIPE, stdout=PIPE, shell=True)
+            err, out = p.communicate()
+        return int(out)
+
     def queue(self):
         """
         Get job queue status

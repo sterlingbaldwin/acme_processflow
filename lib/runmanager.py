@@ -35,7 +35,7 @@ class RunManager(object):
         self.kill_event = event
         self._dryrun = False
         self.scripts_path = scripts_path
-        self.max_running_jobs = 6
+        self.max_running_jobs = self.slurm.get_node_number() * 6
         if not os.path.exists(self.scripts_path):
             os.makedirs(self.scripts_path)
 
