@@ -692,13 +692,17 @@ class RunManager(object):
                             print_line(
                                 ui=self.ui,
                                 line=msg,
-                                event_list=self.event_list)
+                                event_list=self.event_list,
+                                current_state=True,
+                                ignore_text=True)
                             status = job.execute(dryrun=self._dryrun)
                             if status == -1:
                                 continue
                             if job.job_id == 0:
-                                msg = '{job} job already computed, skipping'.format(
-                                    job=job.type)
+                                msg = '{job}-{start:04d}-{end:04d} precomputed, skipping'.format(
+                                    job=job.type,
+                                    start=job.start_year,
+                                    end=job.end_year)
                                 print_line(
                                     ui=self.ui,
                                     line=msg,
