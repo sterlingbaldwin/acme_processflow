@@ -169,6 +169,15 @@ Please add a space and run again.'''.format(num=line_index)
     if not os.path.exists(config['global']['output_path']):
         os.makedirs(config['global']['output_path'])
 
+    pp_path = os.path.join(config['global']['output_path'], 'pp')
+    if not os.path.exists(pp_path):
+        os.makedirs(pp_path)
+    diag_path = os.path.join(config['global']['output_path'], 'diags')
+    if not os.path.exists(diags_path):
+        os.makedirs(diags_path)
+    config['global']['pp_path'] = pp_path
+    config['global']['diags_path'] = diags_path
+
     # Copy the config into the input directory for safe keeping
     input_config_path = os.path.join(config['global']['input_path'], 'run.cfg')
     try:
