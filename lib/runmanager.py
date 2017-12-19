@@ -143,11 +143,19 @@ class RunManager(object):
         output_base_path = config['global']['output_path']
         run_scripts_path = config['global']['run_scripts_path']
 
-        regrid_output_dir = os.path.join(
-            output_base_path,
-            'climo_regrid')
-        if not os.path.exists(regrid_output_dir):
+        regrid_output_path = os.path.join(
+            output_base_path, 'pp',
+            config['global']['remap_grid_name'], 'climo',
+            '{}yr'.format(year_set.length))
+        if not os.path.exists(regrid_output_path):
             os.makedirs(regrid_output_dir)
+        
+        native_output_dir = os.path.join(
+            output_base_path, 'pp',
+            config['global']['native_map_name'], 'climo',
+            '{}yr'.format(year_set.length))
+        if not os.path.exists(native_output_dir):
+            os.makedirs(native_output_dir)
 
         if required_jobs.get('ncclimo'):
             # Add the ncclimo job to the runmanager
@@ -157,8 +165,8 @@ class RunManager(object):
                 year_set=year_set,
                 input_path=atm_path,
                 regrid_map_path=config['ncclimo']['regrid_map_path'],
-                output_path=output_base_path,
-                regrid_output_dir=regrid_output_dir)
+                native_output_path=native_output_path,
+                regrid_output_path=regrid_output_path)
 
         if required_jobs.get('timeseries'):
             file_list = filemanager.get_file_paths_by_year(
@@ -268,25 +276,19 @@ class RunManager(object):
             year_set (int): the set number
             input_path (str): the path to the raw cam.h0 files
             regrid_map_path (str): the path to the regrid map
+            regrid_output_path (str): the output path for regridded climos
+            native_output_path (str): the output path for native climos
         """
         start_year = kwargs['start_year']
-        output_path = kwargs['output_path']
         end_year = kwargs['end_year']
+        regrid_output_path = kwargs['regrid_output_path']
+        native_output_path = kwargs['native_output_path']
         year_set = kwargs['year_set']
         input_path = kwargs['input_path']
         regrid_map_path = kwargs['regrid_map_path']
-        regrid_output_dir = kwargs['regrid_output_dir']
 
         if not self._precheck(year_set, 'ncclimo'):
             return
-
-        set_length = end_year - start_year + 1
-        climo_output_dir = os.path.join(
-            self.output_path,
-            'climo',
-            '{}yr'.format(set_length))
-        if not os.path.exists(climo_output_dir):
-            os.makedirs(climo_output_dir)
 
         config = {
             'ui': self.ui,
@@ -297,8 +299,8 @@ class RunManager(object):
             'annual_mode': 'sdd',
             'regrid_map_path': regrid_map_path,
             'input_directory': input_path,
-            'climo_output_directory': climo_output_dir,
-            'regrid_output_directory': regrid_output_dir,
+            'climo_output_directory': native_output_path,
+            'regrid_output_directory': regrid_output_path,
             'year_set': year_set.set_number,
         }
         climo = Climo(
