@@ -53,6 +53,14 @@ def parse_args(argv=None, print_help=None):
         '-r',
         '--resource-dir',
         help='Path to custom resource directory')
+    parser.add_argument(
+        '-i',
+        '--input-path',
+        help='Custom input path')
+    parser.add_argument(
+        '-o',
+        '--output-path',
+        help='Custom output path')
     if print_help:
         parser.print_help()
         return
@@ -142,10 +150,18 @@ Please add a space and run again.'''.format(num=line_index)
             print message
         return False, False, False
 
-    config['global']['input_path'] = os.path.join(
-        config['global']['project_path'], 'input')
-    config['global']['output_path'] = os.path.join(
-        config['global']['project_path'], 'output')
+    if args.input_path:
+        config['global']['input_path'] = args.input_path
+    else:
+        config['global']['input_path'] = os.path.join(
+            config['global']['project_path'],
+            'input')
+    if args.output_path:
+        config['global']['output_path'] = args.output_path
+    else:
+        config['global']['output_path'] = os.path.join(
+            config['global']['project_path'],
+            'output')
 
     # setup output and cache directories
     if not os.path.exists(config['global']['input_path']):
