@@ -172,14 +172,15 @@ Please add a space and run again.'''.format(num=line_index)
     pp_path = os.path.join(config['global']['output_path'], 'pp')
     if not os.path.exists(pp_path):
         os.makedirs(pp_path)
-    diag_path = os.path.join(config['global']['output_path'], 'diags')
+    diags_path = os.path.join(config['global']['output_path'], 'diags')
     if not os.path.exists(diags_path):
         os.makedirs(diags_path)
     config['global']['pp_path'] = pp_path
     config['global']['diags_path'] = diags_path
 
     # Copy the config into the input directory for safe keeping
-    input_config_path = os.path.join(config['global']['input_path'], 'run.cfg')
+    input_config_path = os.path.join(
+        config['global']['input_path'], 'run.cfg')
     try:
         copy(args.config, input_config_path)
     except:
@@ -335,12 +336,6 @@ Please add a space and run again.'''.format(num=line_index)
 def verify_config(config, template):
     messages = []
     valid = True
-    for key, val in config.items():
-        if key not in template:
-            msg = '{key} is not a valid config option, is it misspelled?'.format(
-                key=key)
-            messages.append(msg)
-            valid = False
     for key, val in template.items():
         if key not in config:
             msg = '{key} is missing from your config'.format(key=key)

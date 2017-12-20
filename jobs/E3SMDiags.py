@@ -22,6 +22,7 @@ class E3SMDiags(object):
         self.inputs = {
             'ui': '',
             'regrid_base_path': '',
+            'regrid_output_path': '',
             'regrided_climo_path': '',
             'reference_data_path': '',
             'test_data_path': '',
@@ -154,11 +155,11 @@ class E3SMDiags(object):
 
         # Create directory of regridded climos
         file_list = get_climo_output_files(
-            input_path=self.config['regrid_base_path'],
+            input_path=self.config['regrid_output_path'],
             start_year=self.start_year,
             end_year=self.end_year)
         create_symlink_dir(
-            src_dir=self.config['regrid_base_path'],
+            src_dir=self.config['regrid_output_path'],
             src_list=file_list,
             dst=self.config['regrided_climo_path'])
 
@@ -198,15 +199,6 @@ class E3SMDiags(object):
         self.status = StatusMap[status.get('JobState')]
 
         return self.job_id
-
-    def __str__(self):
-        return pformat({
-            'type': self.type,
-            'status': self.status,
-            'depends_on': self.depends_on,
-            'job_id': self.job_id,
-            'year_set': self.year_set
-        }, indent=4)
 
     @property
     def type(self):
