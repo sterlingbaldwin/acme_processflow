@@ -12,7 +12,7 @@ from subprocess import Popen, PIPE
 from time import sleep
 from datetime import datetime
 
-from lib.events import Event_list
+from lib.events import EventList
 from lib.slurm import Slurm
 from JobStatus import JobStatus
 from lib.util import (print_debug,
@@ -54,7 +54,7 @@ class Timeseries(object):
         }
         self.slurm_args = {
             'num_cores': '-n 16',  # 16 cores
-            'run_time': '-t 0-05:00',  # 2 hours run time
+            'run_time': '-t 0-05:00',  # 5 hours run time
             'num_machines': '-N 1',  # run on one machine
             'oversubscribe': '--oversubscribe'
         }
@@ -89,16 +89,10 @@ class Timeseries(object):
 
     def execute(self, dryrun=False):
         """
-        Calls ncclimo in a subprocess
+        Submits ncclimo to slurm after checking if it had been previously run
         """
         if self.postvalidate():
             self.status = JobStatus.COMPLETED
-            msg = 'Timeseries already computed, skipping'
-            print_line(
-                ui=self.config.get('ui', False),
-                line=msg,
-                event_list=self.event_list,
-                current_state=True)
             return 0
 
         file_list = self.config['file_list']

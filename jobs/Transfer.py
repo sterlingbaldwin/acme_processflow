@@ -14,7 +14,7 @@ from globus_cli.commands.login import do_link_login_flow, check_logged_in
 from globus_cli.services.transfer import get_client, autoactivate
 from globus_sdk import TransferData
 
-from lib.events import Event_list
+from lib.events import EventList
 from jobs.JobStatus import JobStatus
 from lib.util import (print_debug,
                       print_message,
@@ -129,7 +129,9 @@ class Transfer(object):
         """
 
         if percent_complete >= 100:
-            message = 'Transfer complete'
+            # message = 'Transfer complete'
+            # message = ''
+            return
         else:
             spacer = ' ' if num_completed < 10 else ''
             message = 'Transfer in progress {spacer}({completed}/{total}) ['.format(
@@ -204,9 +206,7 @@ class Transfer(object):
             dst=self.config.get('source_email'),
             display_event=self.config.get('display_event'))
         client = get_client()
-        # task_label = "{start} to {end}".format(
-        #     start=self.file_list[0]['name'],
-        #     end=self.file_list[-1]['name'])
+
         task_label = 'Autotransfer of {number} files at {time}'.format(
             number=len(self.file_list),
             time=time.strftime("%I-%M"))
@@ -294,11 +294,9 @@ class Transfer(object):
                     self.status = JobStatus.RUNNING
                 if event and event.is_set():
                     client.cancel_task(task_id)
-                    # self.error_cleanup()
                     return
             except Exception as e:
                 logging.error(format_debug(e))
                 client.cancel_task(task_id)
-                # self.error_cleanup()
                 return
             time.sleep(5)

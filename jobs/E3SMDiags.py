@@ -7,7 +7,7 @@ from pprint import pformat
 from datetime import datetime
 from shutil import copyfile
 
-from lib.events import Event_list
+from lib.events import EventList
 from lib.slurm import Slurm
 from JobStatus import JobStatus, StatusMap
 from lib.util import (render,
@@ -22,6 +22,7 @@ class E3SMDiags(object):
         self.inputs = {
             'ui': '',
             'regrid_base_path': '',
+            'regrid_output_path': '',
             'regrided_climo_path': '',
             'reference_data_path': '',
             'test_data_path': '',
@@ -42,7 +43,7 @@ class E3SMDiags(object):
         }
         self.slurm_args = {
             'num_cores': '-n 16',  # 16 cores
-            'run_time': '-t 0-02:00',  # 2 hour max run time
+            'run_time': '-t 0-05:00',  # 2 hour max run time
             'num_machines': '-N 1',  # run on one machine
             'oversubscribe': '--oversubscribe'
         }
@@ -51,6 +52,7 @@ class E3SMDiags(object):
         self.output_path = None
         self.config = {}
         self._status = JobStatus.INVALID
+        self.host_suffix = '/viewer/index.html'
         self._type = "e3sm_diags"
         self.year_set = config.get('year_set', 0)
         self.start_year = config['start_year']
@@ -120,13 +122,6 @@ class E3SMDiags(object):
         # Check if the output already exists
         if self.postvalidate():
             self.status = JobStatus.COMPLETED
-            msg = 'ACME diags already computed, skipping'
-            print_line(
-                ui=self.config.get('ui', False),
-                line=msg,
-                event_list=self.event_list,
-                current_state=True)
-            logging.info(msg)
             return 0
         # render the parameters file
         self.output_path = self.config['output_path']
@@ -160,11 +155,11 @@ class E3SMDiags(object):
 
         # Create directory of regridded climos
         file_list = get_climo_output_files(
-            input_path=self.config['regrid_base_path'],
+            input_path=self.config['regrid_output_path'],
             start_year=self.start_year,
             end_year=self.end_year)
         create_symlink_dir(
-            src_dir=self.config['regrid_base_path'],
+            src_dir=self.config['regrid_output_path'],
             src_list=file_list,
             dst=self.config['regrided_climo_path'])
 
@@ -204,15 +199,6 @@ class E3SMDiags(object):
         self.status = StatusMap[status.get('JobState')]
 
         return self.job_id
-
-    def __str__(self):
-        return pformat({
-            'type': self.type,
-            'status': self.status,
-            'depends_on': self.depends_on,
-            'job_id': self.job_id,
-            'year_set': self.year_set
-        }, indent=4)
 
     @property
     def type(self):

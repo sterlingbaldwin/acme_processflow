@@ -43,7 +43,7 @@ class Event(object):
         self._data = ndata
 
 
-class Event_list(object):
+class EventList(object):
     """
     A list for holding global events
 

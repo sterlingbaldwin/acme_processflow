@@ -12,6 +12,17 @@ class SetStatus(Enum):
     IN_TRANSIT = 6
 
 
+SetStatusMap = {
+    SetStatus.NO_DATA: 'No Data Local',
+    SetStatus.PARTIAL_DATA: 'Partial Data Local',
+    SetStatus.DATA_READY: 'All Data Local',
+    SetStatus.RUNNING: 'Running',
+    SetStatus.COMPLETED: 'All Jobs Completed',
+    SetStatus.FAILED: 'At Least One Job Failed',
+    SetStatus.IN_TRANSIT: 'Data In'
+}
+
+
 class YearSet(object):
 
     def __init__(self, set_number, start_year, end_year):
@@ -32,7 +43,7 @@ class YearSet(object):
 
     def add_job(self, job):
         self._jobs.append(job)
-    
+
     @property
     def start_year(self):
         return self._set_start_year

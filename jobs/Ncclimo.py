@@ -12,7 +12,7 @@ from subprocess import Popen, PIPE
 from time import sleep
 from datetime import datetime
 
-from lib.events import Event_list
+from lib.events import EventList
 from lib.slurm import Slurm
 from JobStatus import JobStatus
 from lib.util import (print_debug,
@@ -55,10 +55,9 @@ class Climo(object):
         }
         self.slurm_args = {
             'num_cores': '-n 16',  # 16 cores
-            'run_time': '-t 0-05:00',  # 2 hours run time
+            'run_time': '-t 0-05:00',  # 5 hours run time
             'num_machines': '-N 1',  # run on one machine
             'oversubscribe': '--oversubscribe'
-            # 'oversubscribe': '--oversubscribe'
         }
         self.prevalidate(config)
 
@@ -71,9 +70,11 @@ class Climo(object):
         for i in config:
             if i in self.inputs:
                 self.config[i] = config.get(i)
+        if config.get('ui') is None:
+            config['ui'] = False
         all_inputs = True
         for i in self.inputs:
-            if i not in self.config:
+            if i not in config:
                 all_inputs = False
                 msg = 'Argument {} missing for Ncclimo, prevalidation failed'.format(
                     i)
@@ -104,12 +105,6 @@ class Climo(object):
         # check if the output already exists and the job actually needs to run
         if self.postvalidate():
             self.status = JobStatus.COMPLETED
-            msg = 'Ncclimo job already computed, skipping'
-            print_line(
-                ui=self.config.get('ui', False),
-                line=msg,
-                event_list=self.event_list,
-                current_state=True)
             return 0
 
         self.output_path = self.config['regrid_output_directory']
@@ -124,7 +119,7 @@ class Climo(object):
             '-r', self.config['regrid_map_path'],
             '-o', self.config['climo_output_directory'],
             '-O', self.config['regrid_output_directory'],
-            '-l'
+            '--no_amwg_links', 
         ]
         slurm_command = ' '.join(cmd)
 

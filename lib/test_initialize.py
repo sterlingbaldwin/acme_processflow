@@ -1,8 +1,8 @@
 import os
 import unittest
 import threading
-from setup import setup
-from events import Event_list
+from initialize import initialize
+from events import EventList
 from peewee import *
 from models import DataFile
 from YearSet import YearSet
@@ -12,7 +12,7 @@ from filemanager import FileManager
 from runmanager import RunManager
 
 
-class TestSetup(unittest.TestCase):
+class TestInitialize(unittest.TestCase):
     """
     A test class for validating the project setup
 
@@ -28,11 +28,10 @@ class TestSetup(unittest.TestCase):
         display_event = threading.Event()
         thread_kill_event = threading.Event()
         mutex = threading.Lock()
-        event_list = Event_list()
+        event_list = EventList()
         thread_list = []
-        config, filemanager, runmanager = setup(
-            args,
-            display_event,
+        config, filemanager, runmanager = initialize(
+            argv=args,
             event_list=event_list,
             thread_list=thread_list,
             kill_event=thread_kill_event,
@@ -112,15 +111,14 @@ class TestSetup(unittest.TestCase):
         base_path = os.getcwd()
         resource_path = os.path.join(base_path, 'resources')
         args = ['-c', os.path.join(base_path, 'tests',
-                                   'test_run_no_sta.cfg'), '-f', '-n', '-r', resource_path]
+                                   'test_run_no_sta.cfg'), '-f', '-r', resource_path]
         display_event = threading.Event()
         thread_kill_event = threading.Event()
         mutex = threading.Lock()
-        event_list = Event_list()
+        event_list = EventList()
         thread_list = []
-        config, filemanager, runmanager = setup(
-            args,
-            display_event,
+        config, filemanager, runmanager = initialize(
+            argv=args,
             event_list=event_list,
             thread_list=thread_list,
             kill_event=thread_kill_event,
@@ -195,7 +193,7 @@ class TestSetup(unittest.TestCase):
         for key, value in config.items():
             for k2, v2 in value.items():
                 if expected_config[key][k2] != config[key][k2]:
-                    print expected_config[key][k2], config[key][k2]
+                    print key, k2, expected_config[key][k2], config[key][k2]
                 self.assertEqual(expected_config[key][k2], config[key][k2])
 
     def test_config_no_white_space(self):
@@ -207,11 +205,10 @@ class TestSetup(unittest.TestCase):
         display_event = threading.Event()
         thread_kill_event = threading.Event()
         mutex = threading.Lock()
-        event_list = Event_list()
+        event_list = EventList()
         thread_list = []
-        config, filemanager, runmanager = setup(
-            args,
-            display_event,
+        config, filemanager, runmanager = initialize(
+            argv=args,
             event_list=event_list,
             thread_list=thread_list,
             kill_event=thread_kill_event,
@@ -229,11 +226,10 @@ class TestSetup(unittest.TestCase):
         display_event = threading.Event()
         thread_kill_event = threading.Event()
         mutex = threading.Lock()
-        event_list = Event_list()
+        event_list = EventList()
         thread_list = []
-        config, filemanager, runmanager = setup(
-            args,
-            display_event,
+        config, filemanager, runmanager = initialize(
+            argv=args,
             event_list=event_list,
             thread_list=thread_list,
             kill_event=thread_kill_event,
@@ -252,11 +248,10 @@ class TestSetup(unittest.TestCase):
         display_event = threading.Event()
         thread_kill_event = threading.Event()
         mutex = threading.Lock()
-        event_list = Event_list()
+        event_list = EventList()
         thread_list = []
-        config, filemanager, runmanager = setup(
-            args,
-            display_event,
+        config, filemanager, runmanager = initialize(
+            argv=args,
             event_list=event_list,
             thread_list=thread_list,
             kill_event=thread_kill_event,
@@ -274,11 +269,10 @@ class TestSetup(unittest.TestCase):
         display_event = threading.Event()
         thread_kill_event = threading.Event()
         mutex = threading.Lock()
-        event_list = Event_list()
+        event_list = EventList()
         thread_list = []
-        config, filemanager, runmanager = setup(
-            args,
-            display_event,
+        config, filemanager, runmanager = initialize(
+            argv=args,
             event_list=event_list,
             thread_list=thread_list,
             kill_event=thread_kill_event,
@@ -296,11 +290,10 @@ class TestSetup(unittest.TestCase):
         display_event = threading.Event()
         thread_kill_event = threading.Event()
         mutex = threading.Lock()
-        event_list = Event_list()
+        event_list = EventList()
         thread_list = []
-        config, filemanager, runmanager = setup(
-            args,
-            display_event,
+        config, filemanager, runmanager = initialize(
+            argv=args,
             event_list=event_list,
             thread_list=thread_list,
             kill_event=thread_kill_event,
@@ -318,11 +311,10 @@ class TestSetup(unittest.TestCase):
         display_event = threading.Event()
         thread_kill_event = threading.Event()
         mutex = threading.Lock()
-        event_list = Event_list()
+        event_list = EventList()
         thread_list = []
-        config, filemanager, runmanager = setup(
-            args,
-            display_event,
+        config, filemanager, runmanager = initialize(
+            argv=args,
             event_list=event_list,
             thread_list=thread_list,
             kill_event=thread_kill_event,
@@ -339,11 +331,10 @@ class TestSetup(unittest.TestCase):
         display_event = threading.Event()
         thread_kill_event = threading.Event()
         mutex = threading.Lock()
-        event_list = Event_list()
+        event_list = EventList()
         thread_list = []
-        config, filemanager, runmanager = setup(
-            args,
-            display_event,
+        config, filemanager, runmanager = initialize(
+            argv=args,
             event_list=event_list,
             thread_list=thread_list,
             kill_event=thread_kill_event,
@@ -361,11 +352,10 @@ class TestSetup(unittest.TestCase):
         display_event = threading.Event()
         thread_kill_event = threading.Event()
         mutex = threading.Lock()
-        event_list = Event_list()
+        event_list = EventList()
         thread_list = []
-        config, filemanager, runmanager = setup(
-            args,
-            display_event,
+        config, filemanager, runmanager = initialize(
+            argv=args,
             event_list=event_list,
             thread_list=thread_list,
             kill_event=thread_kill_event,
@@ -383,11 +373,10 @@ class TestSetup(unittest.TestCase):
         display_event = threading.Event()
         thread_kill_event = threading.Event()
         mutex = threading.Lock()
-        event_list = Event_list()
+        event_list = EventList()
         thread_list = []
-        config, filemanager, runmanager = setup(
-            args,
-            display_event,
+        config, filemanager, runmanager = initialize(
+            argv=args,
             event_list=event_list,
             thread_list=thread_list,
             kill_event=thread_kill_event,

@@ -3,6 +3,7 @@ import re
 import sys
 import threading
 import logging
+import random
 
 from time import sleep
 from peewee import *
@@ -26,11 +27,12 @@ file_type_map = {
     'ice': 'mpascice.hist.am.timeSeriesStatsMonthly.YEAR-MONTH-01.nc',
     'ocn': 'mpaso.hist.am.timeSeriesStatsMonthly.YEAR-MONTH-01.nc',
     'rest': 'mpaso.rst.YEAR-01-01_00000.nc',
+    'mpascice.rst': 'mpascice.rst.YEAR-01-01_00000.nc',
     'streams.ocean': 'streams.ocean',
     'streams.cice': 'streams.cice',
     'mpas-cice_in': 'mpas-cice_in',
     'mpas-o_in': 'mpas-o_in',
-    'meridionalHeatTransport': 'mpaso.hist.am.meridionalHeatTransport.YEAR-MONTH-01.nc'
+    'meridionalHeatTransport': 'mpaso.hist.am.meridionalHeatTransport.YEAR-MONTH-01.nc',
 }
 
 
@@ -59,6 +61,8 @@ class FileManager(object):
         self.types = types if isinstance(types, list) else [types]
         self.active_transfers = 0
         self.db_path = database
+        if os.path.exists(database):
+            os.remove(database)
         self.mutex.acquire()
         DataFile._meta.database.init(database)
         if DataFile.table_exists():
@@ -96,6 +100,11 @@ class FileManager(object):
         })
 
     def populate_handle_rest(self, simstart, newfiles):
+        """
+        Add the restart files to the newfiles list to be added to the db
+        """
+
+        # First add the mpaso.rst
         name = file_type_map['rest'].replace(
             'YEAR', '{:04d}'.format(simstart + 1))
         local_path = os.path.join(
@@ -105,6 +114,7 @@ class FileManager(object):
         head, tail = os.path.split(local_path)
         if not os.path.exists(head):
             os.makedirs(head)
+
         if self.sta:
             remote_path = os.path.join(
                 self.remote_path,
@@ -120,6 +130,30 @@ class FileManager(object):
             local_path=local_path,
             remote_path=remote_path,
             _type='rest')
+
+        # Second add the mpascice.rst
+        name = file_type_map['mpascice.rst'].replace(
+            'YEAR', '{:04d}'.format(simstart + 1))
+        local_path = os.path.join(
+            self.local_path,
+            'rest',
+            name)
+
+        if self.sta:
+            remote_path = os.path.join(
+                self.remote_path,
+                'archive',
+                'rest',
+                '{year:04d}-01-01-00000'.format(year=simstart + 1),
+                name)
+        else:
+            remote_path = os.path.join(self.remote_path, name)
+        newfiles = self._add_file(
+            newfiles=newfiles,
+            name=name,
+            local_path=local_path,
+            remote_path=remote_path,
+            _type='mpascice.rst')
 
     def populate_handle_mpas(self, _type, newfiles):
         local_path = os.path.join(
@@ -168,6 +202,45 @@ class FileManager(object):
             remote_path=remote_path,
             _type='meridionalHeatTransport')
 
+    def populate_monthly(self, _type, newfiles, simstart, simend, experiment):
+        local_base = os.path.join(
+            self.local_path, _type)
+        if not os.path.exists(local_base):
+            os.makedirs(local_base)
+
+        for year in xrange(simstart, simend + 1):
+            for month in xrange(1, 13):
+                if _type == 'atm':
+                    name = file_type_map[_type].replace(
+                        'EXPERIMENT', experiment)
+                else:
+                    name = file_type_map[_type]
+                yearstr = '{0:04d}'.format(year)
+                monthstr = '{0:02d}'.format(month)
+                name = name.replace('YEAR', yearstr)
+                name = name.replace('MONTH', monthstr)
+                local_path = os.path.join(
+                    local_base, name)
+                if self.sta:
+                    remote_path = os.path.join(
+                        self.remote_path,
+                        'archive',
+                        _type,
+                        'hist',
+                        name)
+                else:
+                    remote_path = os.path.join(
+                        self.remote_path,
+                        name)
+                newfiles = self._add_file(
+                    newfiles=newfiles,
+                    name=name,
+                    local_path=local_path,
+                    remote_path=remote_path,
+                    _type=_type,
+                    year=year,
+                    month=month)
+
     def populate_file_list(self, simstart, simend, experiment):
         """
         Populate the database with the required DataFile entries
@@ -201,42 +274,7 @@ class FileManager(object):
                 elif _type == 'meridionalHeatTransport':
                     self.populate_heat_transport(newfiles)
                 else:
-                    local_base = os.path.join(
-                        self.local_path, _type)
-                    if not os.path.exists(local_base):
-                        os.makedirs(local_base)
-                    for year in xrange(simstart, simend + 1):
-                        for month in xrange(1, 13):
-                            if _type == 'atm':
-                                name = file_type_map[_type].replace(
-                                    'EXPERIMENT', experiment)
-                            else:
-                                name = file_type_map[_type]
-                            yearstr = '{0:04d}'.format(year)
-                            monthstr = '{0:02d}'.format(month)
-                            name = name.replace('YEAR', yearstr)
-                            name = name.replace('MONTH', monthstr)
-                            local_path = os.path.join(
-                                local_base, name)
-                            if self.sta:
-                                remote_path = os.path.join(
-                                    self.remote_path,
-                                    'archive',
-                                    _type,
-                                    'hist',
-                                    name)
-                            else:
-                                remote_path = os.path.join(
-                                    self.remote_path,
-                                    name)
-                            newfiles = self._add_file(
-                                newfiles=newfiles,
-                                name=name,
-                                local_path=local_path,
-                                remote_path=remote_path,
-                                _type=_type,
-                                year=year,
-                                month=month)
+                    self.populate_monthly(_type, newfiles, simstart, simend, experiment)
             msg = 'Inserting file data into the table'
             print_line(
                 ui=self.ui,
@@ -307,14 +345,42 @@ class FileManager(object):
                         self.mutex.acquire()
                         name, path, size = self.update_remote_rest_sta_path(
                             client)
-                        DataFile.update(
-                            remote_status=filestatus['EXISTS'],
-                            remote_size=size,
-                            remote_path=path,
-                            name=name
-                        ).where(
-                            DataFile.datatype == 'rest'
-                        ).execute()
+                        try:
+                            DataFile.update(
+                                remote_status=filestatus['EXISTS'],
+                                remote_size=size,
+                                remote_path=path,
+                                name=name
+                            ).where(
+                                DataFile.datatype == 'rest'
+                            ).execute()
+                        except OperationalError as operror:
+                            line = 'Error writing to database, database is locked by another process'
+                            print_line(
+                                ui=self.ui,
+                                line=line,
+                                event_list=self.event_list)
+                            logging.error(line)
+
+                        name, path, size = self.update_remote_rest_sta_path(
+                            client, pattern='mpascice.rst')
+                        try:
+                            DataFile.update(
+                                remote_status=filestatus['EXISTS'],
+                                remote_size=size,
+                                remote_path=path,
+                                name=name
+                            ).where(
+                                DataFile.datatype == 'mpascice.rst'
+                            ).execute()
+                        except OperationalError as operror:
+                            line = 'Error writing to database, database is locked by another process'
+                            print_line(
+                                ui=self.ui,
+                                line=line,
+                                event_list=self.event_list)
+                            logging.error(line)
+
                         if self.mutex.locked():
                             self.mutex.release()
                         self.updated_rest = True
@@ -327,40 +393,51 @@ class FileManager(object):
                 else:
                     remote_path = os.path.join(
                         self.remote_path, 'archive', _type, 'hist')
-                msg = 'Querying globus for {}'.format(_type)
-                print_line(
-                    ui=self.ui,
-                    line=msg,
-                    event_list=self.event_list,
-                    current_state=True)
-                res = self._get_ls(
-                    client=client,
-                    path=remote_path)
+                
+                if _type not in ['rest', 'mpascice.rst']:
+                    msg = 'Querying globus for {}'.format(_type)
+                    print_line(
+                        ui=self.ui,
+                        line=msg,
+                        event_list=self.event_list,
+                        current_state=True)
+                    res = self._get_ls(
+                        client=client,
+                        path=remote_path)
 
-                self.mutex.acquire()
-                try:
-                    names = [x.name for x in DataFile.select().where(
-                        DataFile.datatype == _type)]
-                    to_update_name = [x['name']
-                                      for x in res if x['name'] in names]
-                    to_update_size = [x['size']
-                                      for x in res if x['name'] in names]
-                    q = DataFile.update(
-                        remote_status=filestatus['EXISTS'],
-                        remote_size=to_update_size[to_update_name.index(
-                            DataFile.name)]
-                    ).where(
-                        (DataFile.name << to_update_name) &
-                        (DataFile.datatype == _type))
-                    n = q.execute()
-                except Exception as e:
-                    print_debug(e)
-                    print "Do you have the correct start and end dates?"
-                finally:
-                    if self.mutex.locked():
-                        self.mutex.release()
+                    self.mutex.acquire()
+                    try:
+                        names = [x.name for x in DataFile.select().where(
+                            DataFile.datatype == _type)]
+                        step = 100
+                        for idx in range(0, len(names), step):
+                            batch_names = names[idx: idx + step]
+                            to_update_name = [x['name']
+                                            for x in res if x['name'] in batch_names]
+                            to_update_size = [x['size']
+                                            for x in res if x['name'] in batch_names]
+                            q = DataFile.update(
+                                remote_status=filestatus['EXISTS'],
+                                remote_size=to_update_size[to_update_name.index(
+                                    DataFile.name)]
+                            ).where(
+                                (DataFile.name << to_update_name) &
+                                (DataFile.datatype == _type))
+                            n = q.execute()
+                    except Exception as e:
+                        print_debug(e)
+                        print "Do you have the correct start and end dates?"
+                    except OperationalError as operror:
+                        line = 'Error writing to database, database is locked by another process'
+                        print_line(
+                            ui=self.ui,
+                            line=line,
+                            event_list=self.event_list)
+                        logging.error(line)
+                    finally:
+                        if self.mutex.locked():
+                            self.mutex.release()
         else:
-
             remote_path = self.remote_path
             res = self._get_ls(
                 client=client,
@@ -370,21 +447,30 @@ class FileManager(object):
                 for _type in self.types:
                     names = [x.name for x in DataFile.select().where(
                         DataFile.datatype == _type)]
-                    to_update_name = [x['name']
-                                      for x in res if x['name'] in names]
-                    to_update_size = [x['size']
-                                      for x in res if x['name'] in names]
-
-                    q = DataFile.update(
-                        remote_status=filestatus['EXISTS'],
-                        remote_size=to_update_size[to_update_name.index(
-                            DataFile.name)]
-                    ).where(
-                        (DataFile.name << to_update_name) &
-                        (DataFile.datatype == _type))
-                    n = q.execute()
+                    step = 100
+                    for idx in range(0, len(names), step):
+                        batch_names = names[idx: idx + step]
+                        to_update_name = [x['name']
+                                        for x in res if x['name'] in batch_names]
+                        to_update_size = [x['size']
+                                        for x in res if x['name'] in batch_names]
+                        q = DataFile.update(
+                            remote_status=filestatus['EXISTS'],
+                            remote_size=to_update_size[to_update_name.index(
+                                DataFile.name)]
+                        ).where(
+                            (DataFile.name << to_update_name) &
+                            (DataFile.datatype == _type))
+                        n = q.execute()
             except Exception as e:
                 print_debug(e)
+            except OperationalError as operror:
+                line = 'Error writing to database, database is locked by another process'
+                print_line(
+                    ui=self.ui,
+                    line=line,
+                    event_list=self.event_list)
+                logging.error(line)
             finally:
                 if self.mutex.locked():
                     self.mutex.release()
@@ -405,7 +491,7 @@ class FileManager(object):
             else:
                 return res
 
-    def update_remote_rest_sta_path(self, client):
+    def update_remote_rest_sta_path(self, client, pattern='mpaso.rst'):
         if not self.sta:
             return
         path = os.path.join(
@@ -421,7 +507,6 @@ class FileManager(object):
         contents = self._get_ls(
             client=client,
             path=path)
-        pattern = 'mpaso.rst'
         remote_name = ''
         remote_path = ''
         size = 0
@@ -462,8 +547,13 @@ class FileManager(object):
                             or should_save:
                         datafile.local_size = local_size
                         datafile.save()
-        except Exception as e:
-            print_debug(e)
+        except OperationalError as operror:
+            line = 'Error writing to database, database is locked by another process'
+            print_line(
+                ui=self.ui,
+                line=line,
+                event_list=self.event_list)
+            logging.error(line)
         finally:
             if self.mutex.locked():
                 self.mutex.release()
@@ -575,10 +665,23 @@ class FileManager(object):
         except Exception as e:
             print_debug(e)
             return False
+        except OperationalError as operror:
+            line = 'Error writing to database, database is locked by another process'
+            print_line(
+                ui=self.ui,
+                line=line,
+                event_list=self.event_list)
+            logging.error(line)
+            return False
         finally:
             if self.mutex.locked():
                 self.mutex.release()
 
+        msg = 'Starting file transfer'
+        print_line(
+            ui=self.ui,
+            line=msg,
+            event_list=self.event_list)
         args = (transfer, event, event_list)
         thread = threading.Thread(
             target=self._handle_transfer,
@@ -590,17 +693,8 @@ class FileManager(object):
 
     def _handle_transfer(self, transfer, event, event_list):
         self.active_transfers += 1
-        msg = 'Starting file transfer'
-        print_line(
-            ui=self.ui,
-            line=msg,
-            event_list=self.event_list)
+        sleep(random.uniform(0.01, 0.1)) # this is to stop the simultanious print issue
         transfer.execute(event)
-        msg = 'Transfer complete'
-        print_line(
-            ui=self.ui,
-            line=msg,
-            event_list=self.event_list)
         self.active_transfers -= 1
 
         if transfer.status == JobStatus.FAILED:
@@ -611,29 +705,50 @@ class FileManager(object):
                 event_list=self.event_list)
             logging.error(msg)
             return
-
-        self.mutex.acquire()
-        names = [x['name'] for x in transfer.file_list]
-        for datafile in DataFile.select().where(DataFile.name << names):
-            if os.path.exists(datafile.local_path) \
-                    and os.path.getsize(datafile.local_path) == datafile.remote_size:
-                datafile.local_status = filestatus['EXISTS']
-                datafile.local_size = os.path.getsize(datafile.local_path)
-            else:
-                msg = 'file transfer error on {}'.format(datafile.name)
-                print_line(
-                    ui=self.ui,
-                    line=msg,
-                    event_list=self.event_list)
-                datafile.local_status = filestatus['NOT_EXIST']
-                datafile.local_size = 0
-            datafile.save()
+        else:
+            self.transfer_cleanup(transfer)
+    
+    def transfer_cleanup(self, transfer):
+        try:
+            self.mutex.acquire()
+            names = [x['name'] for x in transfer.file_list]
+            for datafile in DataFile.select().where(DataFile.name << names):
+                if os.path.exists(datafile.local_path) \
+                        and os.path.getsize(datafile.local_path) == datafile.remote_size:
+                    datafile.local_status = filestatus['EXISTS']
+                    datafile.local_size = os.path.getsize(datafile.local_path)
+                else:
+                    msg = 'file transfer error on {}'.format(datafile.name)
+                    print_line(
+                        ui=self.ui,
+                        line=msg,
+                        event_list=self.event_list)
+                    datafile.local_status = filestatus['NOT_EXIST']
+                    datafile.local_size = 0
+                datafile.save()
+            total_files = DataFile.select().count()
+            local_files = DataFile.select().where(
+                DataFile.local_status == filestatus['EXISTS']
+            ).count()
+            msg = 'Transfer complete: {local}/{total} files local'.format(
+                local=local_files,
+                total=total_files)
+            print_line(
+                ui=self.ui,
+                line=msg,
+                event_list=self.event_list)
+        except OperationalError as operror:
+            line = 'Error writing to database, database is locked by another process'
+            print_line(
+                ui=self.ui,
+                line=line,
+                event_list=self.event_list)
+            logging.error(line)
         try:
             if self.mutex.locked():
                 self.mutex.release()
         except:
             pass
-
     def years_ready(self, start_year, end_year):
         """
         Checks if atm files exist from start year to end of endyear
@@ -676,7 +791,7 @@ class FileManager(object):
     def get_file_paths_by_year(self, start_year, end_year, _type):
         self.mutex.acquire()
         try:
-            if _type in ['rest', 'streams.ocean', 'streams.cice', 'mpas-cice_in', 'mpas-o_in', 'meridionalHeatTransport']:
+            if _type in ['rest', 'streams.ocean', 'streams.cice', 'mpas-cice_in', 'mpas-o_in', 'meridionalHeatTransport', 'mpascice.rst']:
                 datafiles = DataFile.select().where(DataFile.datatype == _type)
             else:
                 datafiles = DataFile.select().where(

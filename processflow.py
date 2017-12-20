@@ -2,37 +2,26 @@
 # pylint: disable=C0111
 # pylint: disable=C0301
 
-import argparse
-import json
 import sys
 import os
 import threading
 import logging
-import time
-import stat
-
-from shutil import rmtree
-from shutil import move
-from shutil import copyfile
-from getpass import getpass
 from time import sleep
-from uuid import uuid4
-from pprint import pformat
-from datetime import datetime
 
 from globus_cli.services.transfer import get_client
 
-from jobs.Transfer import Transfer
-from jobs.JobStatus import JobStatus
-
-from lib.YearSet import YearSet, SetStatus
-from lib.mailer import Mailer
-from lib.events import Event, Event_list
-from lib.setup import setup, finishup
+from lib.events import EventList
+from lib.initialize import initialize
+from lib.finalize import finalize
 from lib.filemanager import FileManager
 from lib.runmanager import RunManager
 from lib.display import start_display
-from lib.util import *
+from lib.util import (print_line,
+                      path_exists,
+                      write_human_state,
+                      print_message,
+                      print_debug,
+                      transfer_directory)
 
 # check for NCL
 if not os.environ.get('NCARG_ROOT'):
@@ -46,8 +35,8 @@ if not os.environ.get('NCARG_ROOT'):
 # set variable to make vcs shut up
 os.environ['UVCDAT_ANONYMOUS_LOG'] = 'False'
 
-# create global Event_list
-event_list = Event_list()
+# create global EventList
+event_list = EventList()
 
 
 def main(test=False, **kwargs):
@@ -61,8 +50,6 @@ def main(test=False, **kwargs):
     thread_kill_event = threading.Event()
     mutex = threading.Lock()
     display_event = threading.Event()
-    debug = False
-    from_saved_state = False
 
     # A flag to tell if we have all the data locally
     all_data = False
@@ -73,7 +60,7 @@ def main(test=False, **kwargs):
 
     # Read in parameters from config
     args = kwargs['testargs'] if test else sys.argv[1:]
-    config, filemanager, runmanager = setup(
+    config, filemanager, runmanager = initialize(
         argv=args,
         event_list=event_list,
         thread_list=thread_list,
@@ -98,7 +85,7 @@ def main(test=False, **kwargs):
     if config['global'].get('ui'):
         try:
             sys.stdout.write('Turning on the display')
-            for i in range(10):
+            for _ in range(10):
                 sys.stdout.write('.')
                 sys.stdout.flush()
                 sleep(0.1)
@@ -160,7 +147,7 @@ def main(test=False, **kwargs):
             current_state=True)
         write_human_state(
             event_list=event_list,
-            job_sets=job_sets,
+            job_sets=runmanager.job_sets,
             state_path=state_path,
             print_file_list=config['global'].get('print_file_list'),
             mutex=mutex)
@@ -214,13 +201,15 @@ def main(test=False, **kwargs):
     local_check_delay = 2
     printed = False
     try:
-        loop_count = remote_check_delay
+        loop_count = remote_check_delay - 1
         if not config['global']['ui']:
             print "--------------------------"
             print " Entering Main Loop "
             print " Status file: {}".format(state_path)
             print "--------------------------"
         while True:
+            # flush stdout to play nice with nohup
+            # sys.stdout.flush()
             # Check the remote status once every 5 minutes
             if loop_count == remote_check_delay:
                 loop_count = 0
@@ -269,13 +258,6 @@ def main(test=False, **kwargs):
                         display_event=display_event,
                         emailaddr=config['global']['email'],
                         thread_list=thread_list)
-                    if transfer_started:
-                        msg = 'Starting file transfer'
-                        print_line(
-                            ui=config['global']['ui'],
-                            line=msg,
-                            event_list=event_list,
-                            current_state=True)
 
             msg = "Checking for ready job sets"
             print_line(
@@ -343,10 +325,9 @@ def main(test=False, **kwargs):
                     line=msg,
                     event_list=event_list,
                     current_state=True)
-                finishup(
+                finalize(
                     config=config,
                     job_sets=runmanager.job_sets,
-                    state_path=state_path,
                     event_list=event_list,
                     status=status,
                     display_event=display_event,

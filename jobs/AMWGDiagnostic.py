@@ -13,7 +13,7 @@ from shutil import copyfile
 from JobStatus import JobStatus, StatusMap
 
 from lib.slurm import Slurm
-from lib.events import Event_list
+from lib.events import EventList
 from lib.util import (print_debug,
                       print_message,
                       create_symlink_dir,
@@ -70,9 +70,10 @@ class AMWGDiagnostic(object):
         self.end_year = config['end_year']
         self.job_id = 0
         self.depends_on = ['ncclimo']
+        self.host_suffix = '/index.html'
         self.slurm_args = {
             'num_cores': '-n 16',  # 16 cores
-            'run_time': '-t 0-02:00',  # 2 hours run time
+            'run_time': '-t 0-05:00',  # 2 hours run time
             'num_machines': '-N 1',  # run on one machine
             'oversubscribe': '--oversubscribe'
         }
@@ -133,19 +134,11 @@ class AMWGDiagnostic(object):
         # First check if the job has already been completed
         if self.postvalidate():
             self.status = JobStatus.COMPLETED
-            msg = 'AMWG job already computed, skipping'
-            print_line(
-                ui=self.config.get('ui', False),
-                line=msg,
-                event_list=self.event_list)
-            logging.info(msg)
             return 0
 
         # Create directory of regridded climos
 
-        regrid_path = os.path.join(
-            os.sep.join(self.config['test_path_diag'].split(os.sep)[:-2]),
-            'climo_regrid')
+        regrid_path = self.config['regrided_climo_path']
         file_list = get_climo_output_files(
             input_path=regrid_path,
             start_year=self.start_year,
@@ -245,12 +238,6 @@ did you add ncclimo to this year_set?""".format(start=self.start_year,
 
         status = slurm.showjob(self.job_id)
         self.status = StatusMap[status.get('JobState')]
-        message = '{type} id: {id} changed state to {state}'.format(
-            type=self.type,
-            id=self.job_id,
-            state=self.status)
-        logging.info(message)
-        self.event_list.push(message=message)
 
         return self.job_id
 

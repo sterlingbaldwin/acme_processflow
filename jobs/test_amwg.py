@@ -6,7 +6,7 @@ from AMWGDiagnostic import AMWGDiagnostic
 from configobj import ConfigObj
 from JobStatus import JobStatus
 
-from lib.events import Event_list
+from lib.events import EventList
 
 
 class TestAMWGDiagnostic(unittest.TestCase):
@@ -80,7 +80,7 @@ class TestAMWGDiagnostic(unittest.TestCase):
         }
         amwg = AMWGDiagnostic(
             config=config,
-            event_list=Event_list())
+            event_list=EventList())
         self.assertEqual(amwg.status.name, 'VALID')
         self.assertFalse(amwg.postvalidate())
 
@@ -152,7 +152,7 @@ class TestAMWGDiagnostic(unittest.TestCase):
         }
         amwg = AMWGDiagnostic(
             config=config,
-            event_list=Event_list())
+            event_list=EventList())
         self.assertEqual(amwg.status.name, 'VALID')
         amwg.execute(dryrun=False)
         self.assertEqual(amwg.status.name, 'FAILED')
@@ -234,7 +234,7 @@ class TestAMWGDiagnostic(unittest.TestCase):
         }
         amwg = AMWGDiagnostic(
             config=config,
-            event_list=Event_list())
+            event_list=EventList())
         self.assertEqual(amwg.status.name, 'VALID')
         amwg.execute(dryrun=True)
         self.assertEqual(amwg.status.name, 'COMPLETED')
@@ -306,7 +306,7 @@ class TestAMWGDiagnostic(unittest.TestCase):
         }
         amwg = AMWGDiagnostic(
             config=config,
-            event_list=Event_list())
+            event_list=EventList())
         self.assertEqual(amwg.status.name, 'VALID')
         amwg.execute(dryrun=True)
         self.assertEqual(amwg.status.name, 'COMPLETED')

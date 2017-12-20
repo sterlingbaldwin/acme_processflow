@@ -1,4 +1,4 @@
-export VERSION="0.4.42"
+export VERSION="0.4.55"
 export BUILD_NAME="devel"
 export CONDA_BLD_PATH=~/conda-bld
 USER="acme"
@@ -18,7 +18,7 @@ if [ ! -z "$1" ]; then
 else
     export TAG="master"
 fi
-echo "Building version " $VESION
+echo "Building version " $VERSION"-"$BUILD_NAME 
 conda build -c acme -c conda-forge -c uvcdat -c lukasz .
 
 if [ ! -z "$1" ]; then

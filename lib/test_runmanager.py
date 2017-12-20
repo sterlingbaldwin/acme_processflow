@@ -6,7 +6,7 @@ import shutil
 from configobj import ConfigObj
 from runmanager import RunManager
 from filemanager import FileManager
-from events import Event_list
+from events import EventList
 
 
 class TestRunManager(unittest.TestCase):
@@ -29,6 +29,7 @@ class TestRunManager(unittest.TestCase):
 
     def test_runmanager_setup(self):
         filemanager = FileManager(
+            event_list=EventList(),
             database=os.path.join(self.project_path, 'test.db'),
             types=['atm'],
             sta=False,
@@ -37,7 +38,8 @@ class TestRunManager(unittest.TestCase):
             remote_path=self.remote_path,
             local_endpoint=self.local_endpoint)
         runmanager = RunManager(
-            event_list=Event_list(),
+            ui=False,
+            event_list=EventList(),
             output_path=self.output_path,
             caseID=self.config['global']['experiment'],
             scripts_path=self.run_scripts_path,
@@ -77,6 +79,7 @@ class TestRunManager(unittest.TestCase):
 
     def test_runmanager_write(self):
         filemanager = FileManager(
+            event_list=EventList(),
             database=os.path.join(self.project_path, 'test.db'),
             types=['atm'],
             sta=False,
@@ -85,7 +88,8 @@ class TestRunManager(unittest.TestCase):
             remote_path=self.remote_path,
             local_endpoint=self.local_endpoint)
         runmanager = RunManager(
-            event_list=Event_list(),
+            ui=False,
+            event_list=EventList(),
             output_path=self.output_path,
             caseID=self.config['global']['experiment'],
             scripts_path=self.run_scripts_path,

@@ -1,12 +1,12 @@
 import curses
 from datetime import datetime
 from time import sleep
-from lib.YearSet import SetStatus
-from jobs.JobStatus import JobStatus
-from lib.util import strfdelta
+from lib.YearSet import SetStatus, SetStatusMap
+from jobs.JobStatus import JobStatus, ReverseMap
+from lib.util import strfdelta, print_debug
 
 
-def handle_resize(pad, height, width):
+def handle_resize(pad, height, width, stdscr):
     """
     Checks for and handles a window resize event
 
@@ -27,9 +27,90 @@ def handle_resize(pad, height, width):
         stdscr.refresh()
         pad = curses.newpad(hmax, wmax)
         pad.refresh(0, 0, 3, 5, hmax, wmax)
+    else:
+        hmax = height - 3
+        wmax = width - 5
 
-    return pad
+    return pad, hmax, wmax
 
+def print_str(pad, line, color, y, x, hmax, wmax):
+    if y >= (hmax - 10):
+        x += 50
+        y = 0
+    try:
+        pad.addstr(y, x, line, color)
+    except Exception as e:
+        print_debug(e)
+        pass
+    finally:
+        return y, x
+
+def print_job_info(pad, job, y, x, hmax, wmax, now):
+    line = '  >   {type} -- {id} '.format(
+        type=job.type,
+        id=job.job_id)
+
+    y, x = print_str(pad, line, curses.color_pair(4), y, x, hmax, wmax)
+    tempx = x + len(line)
+    color_pair = curses.color_pair(4)
+    if job.status == JobStatus.COMPLETED:
+        color_pair = curses.color_pair(5)
+    elif job.status in [JobStatus.FAILED, 'CANCELED', JobStatus.INVALID]:
+        color_pair = curses.color_pair(3)
+    elif job.status == JobStatus.RUNNING:
+        color_pair = curses.color_pair(6)
+    elif job.status == JobStatus.SUBMITTED or job.status == JobStatus.PENDING:
+        color_pair = curses.color_pair(7)
+    # if the job is running, print elapsed time
+    if job.status == JobStatus.RUNNING \
+            and job.start_time is not None:
+        delta = now - job.start_time
+        deltastr = strfdelta(delta, "{H}:{M}:{S}")
+        line = '{status} run time: {time}'.format(
+            status=ReverseMap[job.status],
+            time=deltastr)
+    # if job has ended, print total time
+    elif job.status in [JobStatus.COMPLETED, JobStatus.FAILED] \
+            and job.end_time is not None \
+            and job.start_time is not None:
+        delta = job.end_time - job.start_time
+        line = '{status} elapsed time: {time}'.format(
+            status=ReverseMap[job.status],
+            time=strfdelta(delta, "{H}:{M}:{S}"))
+    else:
+        line = '{status}'.format(status=ReverseMap[job.status])
+
+    y, _ = print_str(pad, line, color_pair, y, tempx, hmax, wmax)
+    y += 1
+    return y, x
+
+def print_year_set_info(pad, year_set, y, x, hmax, wmax):
+    if y + len(year_set.jobs) >= (hmax - 10):
+        x += 50
+        y = 0
+    line1 = 'Year_set {num}: {start} - {end}: '.format(
+        num=year_set.set_number,
+        start=year_set.set_start_year,
+        end=year_set.set_end_year)
+    y, x = print_str(pad, line1, curses.color_pair(4), y, x, hmax, wmax)
+    x += len(line1)
+
+    color_pair = curses.color_pair(4)
+    if year_set.status == SetStatus.COMPLETED:
+        # set color to green
+        color_pair = curses.color_pair(5)
+    elif year_set.status == SetStatus.FAILED:
+        # set color to red
+        color_pair = curses.color_pair(3)
+    elif year_set.status == SetStatus.RUNNING:
+        # set color to purple
+        color_pair = curses.color_pair(6)
+    line2 = '{status}'.format(
+        status=SetStatusMap[year_set.status])
+    y, x = print_str(pad, line2, color_pair, y, x, hmax, wmax)
+    y += 1
+    x -= len(line1)
+    return y, x
 
 def display(stdscr, event, job_sets, filemanager, event_list):
     """
@@ -68,11 +149,12 @@ def display(stdscr, event, job_sets, filemanager, event_list):
 
         pad = curses.newpad(hmax, wmax)
         last_y = 0
+        hmax, wmax = 0, 0
         while True:
             if event and event.is_set():
                 return
             # Check if screen was re-sized (True or False)
-            pad = handle_resize(pad, height, width)
+            pad, hmax, wmax = handle_resize(pad, height, width, stdscr)
             now = datetime.now()
             # sleep until there are jobs
             if len(job_sets) == 0:
@@ -83,110 +165,23 @@ def display(stdscr, event, job_sets, filemanager, event_list):
             y = 0
             x = 0
             for year_set in job_sets:
-                line = 'Year_set {num}: {start} - {end}'.format(
-                    num=year_set.set_number,
-                    start=year_set.set_start_year,
-                    end=year_set.set_end_year)
-                try:
-                    pad.addstr(y, x, line, curses.color_pair(1))
-                except:
-                    continue
-                pad.clrtoeol()
-                y += 1
-
-                color_pair = curses.color_pair(4)
-                if year_set.status == SetStatus.COMPLETED:
-                    # set color to green
-                    color_pair = curses.color_pair(5)
-                elif year_set.status == SetStatus.FAILED:
-                    # set color to red
-                    color_pair = curses.color_pair(3)
-                elif year_set.status == SetStatus.RUNNING:
-                    # set color to purple
-                    color_pair = curses.color_pair(6)
-                line = 'status: {status}'.format(
-                    status=year_set.status)
-                try:
-                    pad.addstr(y, x, line, color_pair)
-                except:
-                    continue
-                if initializing:
-                    sleep(0.01)
-                    try:
-                        pad.refresh(0, 0, 3, 5, hmax, wmax)
-                    except:
-                        continue
-                pad.clrtoeol()
-                y += 1
-
-                # if the job_set is done collapse it
-                if year_set.status == SetStatus.COMPLETED \
-                        or year_set.status == SetStatus.NO_DATA \
-                        or year_set.status == SetStatus.PARTIAL_DATA:
-                    continue
+                y, x = print_year_set_info(pad, year_set, y, x, hmax, wmax)
+                # # if the job_set is done collapse it
+                # if year_set.status == SetStatus.COMPLETED \
+                #         or year_set.status == SetStatus.NO_DATA \
+                #         or year_set.status == SetStatus.PARTIAL_DATA:
+                #     continue
                 for job in year_set.jobs:
-                    line = '  >   {type} -- {id} '.format(
-                        type=job.type,
-                        id=job.job_id)
-                    try:
-                        pad.addstr(y, x, line, curses.color_pair(4))
-                    except:
-                        continue
-                    color_pair = curses.color_pair(4)
-                    if job.status == JobStatus.COMPLETED:
-                        color_pair = curses.color_pair(5)
-                    elif job.status in [JobStatus.FAILED, 'CANCELED', JobStatus.INVALID]:
-                        color_pair = curses.color_pair(3)
-                    elif job.status == JobStatus.RUNNING:
-                        color_pair = curses.color_pair(6)
-                    elif job.status == JobStatus.SUBMITTED or job.status == JobStatus.PENDING:
-                        color_pair = curses.color_pair(7)
-                    # if the job is running, print elapsed time
-                    if job.status == JobStatus.RUNNING:
-                        delta = now - job.start_time
-                        deltastr = strfdelta(delta, "{H}:{M}:{S}")
-                        line = '{status} elapsed time: {time}'.format(
-                            status=job.status,
-                            time=deltastr)
-                    # if job has ended, print total time
-                    elif job.status in [JobStatus.COMPLETED, JobStatus.FAILED] \
-                            and job.end_time \
-                            and job.start_time:
-                        delta = job.end_time - job.start_time
-                        line = '{status} elapsed time: {time}'.format(
-                            status=job.status,
-                            time=strfdelta(delta, "{H}:{M}:{S}"))
-                    else:
-                        line = '{status}'.format(status=job.status)
-                    try:
-                        pad.addstr(line, color_pair)
-                    except:
-                        continue
-                    pad.clrtoeol()
-                    if initializing:
-                        sleep(0.01)
-                        pad.refresh(0, 0, 3, 5, hmax, wmax)
-                    y += 1
+                    y, x = print_job_info(pad, job, y, x, hmax, wmax, now)
 
-            # print current state
-            events = event_list.list
-            color_pair = curses.color_pair(4)
-            line = ">>> {}".format(events[0].message)
-            try:
-                y += 1
-                pad.addstr(y, x, line, color_pair)
-                y += 1
-            except:
-                continue
-            pad.clrtobot()
-            y += 1
 
             # Transfer status
             if filemanager.active_transfers:
                 msg = 'Active transfers: {}'.format(filemanager.active_transfers)
                 try:
-                    pad.addstr(y, x, msg, curses.color_pair(4))
-                    pad.clrtoeol()
+                    y, x = print_str(pad, msg, curses.color_pair(4), y, x, hmax, wmax)
+                    # pad.addstr(y, x, msg, curses.color_pair(4))
+                    # pad.clrtoeol()
                 except:
                     pass
 
@@ -206,28 +201,21 @@ def display(stdscr, event, job_sets, filemanager, event_list):
                         y += 1
                     except:
                         pass
-                    pad.clrtoeol()
+                    # pad.clrtoeol()
 
             # Event log
+            y += 1
+            msg = "---- Status Log ----"
+            y, x = print_str(pad, msg, curses.color_pair(4), y, x, hmax, wmax)
+            y += 1
+            events = event_list.list
             event_length = len(events) - 1
-            for index in range(10):
-                i = event_length - index
-                if i == 0:
-                    break
-                line = events[i]
-                if 'Transfer' in line.message:
+            for line in events[-10:]:
+                if line == events[0]:
+                    continue
+                if 'Transfer in progress' in line.message:
                     continue
                 if 'hosted' in line.message:
-                    continue
-                if 'failed' in line.message or 'FAILED' in line.message:
-                    prefix = '[-]  '
-                    color_pair = curses.color_pair(4)
-                else:
-                    prefix = '[+]  '
-                    color_pair = curses.color_pair(5)
-                try:
-                    pad.addstr(y, x, prefix, curses.color_pair(4))
-                except:
                     continue
                 try:
                     msg = '{time}: {msg}'.format(
@@ -237,10 +225,14 @@ def display(stdscr, event, job_sets, filemanager, event_list):
                     y += 1
                 except:
                     continue
-                pad.clrtoeol()
-                if initializing:
-                    sleep(0.01)
-                    pad.refresh(0, 0, 3, 5, hmax, wmax)
+
+            y = hmax - 5
+            x = 0
+            # print current state
+            color_pair = curses.color_pair(4)
+            line = ">>> {}".format(events[0].message)
+            pad.addstr(y, x, line, color_pair)
+            y += 1
 
             # fidget spinner
             spin_line = spinner[spin_index]
@@ -252,13 +244,6 @@ def display(stdscr, event, job_sets, filemanager, event_list):
             except:
                 pass
 
-            # print cycle clean up
-            try:
-                pad.clrtoeol()
-                pad.clrtobot()
-                pad.refresh(0, 0, 3, 5, hmax, wmax)
-            except:
-                pass
             initializing = False
             sleep(1)
 

@@ -1,37 +1,36 @@
 import logging
-import subprocess
 import sys
 import traceback
 import re
 import os
-import threading
 import socket
-import glob
-import time
 
-from pprint import pformat
-from shutil import copytree, rmtree, move
-from subprocess import Popen, PIPE
 from time import sleep
-from time import strftime
 from datetime import datetime
-from uuid import uuid4
+from string import Formatter
 
 from globus_cli.commands.login import do_link_login_flow, check_logged_in
 from globus_cli.commands.ls import _get_ls_res as get_ls
 from globus_cli.services.transfer import get_client
 from globus_sdk import TransferData
 
-from YearSet import SetStatus
-from YearSet import YearSet
-from jobs.JobStatus import JobStatus, StatusMap, ReverseMap
+from jobs.JobStatus import ReverseMap
+from YearSet import SetStatusMap
 from mailer import Mailer
-from string import Formatter
-from slurm import Slurm
 from models import DataFile
 
 
 def print_line(ui, line, event_list, current_state=False, ignore_text=False):
+    """
+    Prints a message to either the console, the event_list, or the current event
+
+    Parameters:
+        ui (bool): The UI mode, either False for text-only, or True for GUI,
+        line (str): The message to print
+        event_list (EventList): the event list
+        current_state (bool): should this print to the current state or not
+        ignore_text (bool): should this be printed to the console if in text mode
+    """
     if ui:
         if current_state:
             event_list.replace(0, line)
@@ -52,22 +51,19 @@ def transfer_directory(**kwargs):
         src_path (str) the path to the source directory to copy
         dst_path (str) the path on the destination directory
     """
-    source_endpoint = kwargs['source_endpoint']
-    destination_endpoint = kwargs['destination_endpoint']
     src_path = kwargs['src_path']
-    dst_path = kwargs['dst_path']
     event_list = kwargs['event_list']
     event = kwargs['event']
 
     client = get_client()
     transfer = TransferData(
         client,
-        source_endpoint,
-        destination_endpoint,
+        kwargs['source_endpoint'],
+        kwargs['destination_endpoint'],
         sync_level='checksum')
     transfer.add_item(
         source_path=src_path,
-        destination_path=dst_path,
+        destination_path=kwargs['dst_path'],
         recursive=True)
     try:
         result = client.submit_transfer(transfer)
@@ -77,7 +73,12 @@ def transfer_directory(**kwargs):
 
     head, directory_name = os.path.split(src_path)
     msg = '{dir} transfer starting'.format(dir=directory_name)
-    event_list.push(message=msg)
+    print_line(
+        ui=False,
+        line=msg,
+        event_list=event_list,
+        current_state=True,
+        ignore_text=False)
     retcode = 0
     while True:
         if event and event.is_set():
@@ -86,15 +87,20 @@ def transfer_directory(**kwargs):
         status = client.get_task(task_id).get('status')
         if status == 'SUCCEEDED':
             msg = '{dir} transfer complete'.format(dir=directory_name)
-            retcode = True
+            retcode = 1
             break
         elif status == 'FAILED':
             msg = '{dir} transfer FAILED'.format(dir=directory_name)
-            retcode = False
+            retcode = 0
             break
         else:
             sleep(5)
-    event_list.push(message=msg)
+    print_line(
+        ui=False,
+        line=msg,
+        event_list=event_list,
+        current_state=True,
+        ignore_text=False)
     return retcode
 
 
@@ -121,7 +127,7 @@ def check_globus(**kwargs):
     client = get_client()
     try:
         for endpoint in endpoints:
-            res = get_ls(
+            _ = get_ls(
                 client,
                 endpoint['path'],
                 endpoint['id'],
@@ -135,6 +141,15 @@ def check_globus(**kwargs):
 
 
 def strfdelta(tdelta, fmt):
+    """
+    Turn a time delta into a string
+
+    Parameters:
+        tdelta (time.delta): the delta time to convert
+        fmt (str): the format string to convert to
+    Returns:
+        A string with the formatted delta
+    """
     f = Formatter()
     d = {}
     l = {'D': 86400, 'H': 3600, 'M': 60, 'S': 1}
@@ -239,10 +254,6 @@ https://www.globus.org/app/endpoints/{endpoint}/activate
 
 """.format(endpoint=endpoint, server=server['hostname'])
 
-                if not message_printed:
-                    print message
-                    message_printed = True
-
                 if not ui:
                     email_msg += message
                 else:
@@ -262,6 +273,9 @@ https://www.globus.org/app/endpoints/{endpoint}/activate
                     print "Error sending notification email"
                     logging.error("Unable to send notification email")
                     return False
+            if not message_printed:
+                print email_msg
+                message_printed = True
             sleep(10)
     if ui:
         display_event.clear()
@@ -289,12 +303,17 @@ def get_climo_output_files(input_path, start_year, end_year):
 def path_exists(config_items):
     """
     Checks the config for any netCDF file paths and validates that they exist
+
+    Parameters:
+        config_items (dict): The config to be checked
+    Returns:
+        bool, True if all netCDF files are present, False otherwise
     """
-    for section, options in config_items.items():
-        if type(options) != dict:
+    for _, options in config_items.items():
+        if not isinstance(options, dict):
             continue
         for key, val in options.items():
-            if not type(val) == str:
+            if not isinstance(val, str):
                 continue
             if val.endswith('.nc') and not os.path.exists(val):
                 print "File {key}: {value} does not exist, exiting.".format(key=key, value=val)
@@ -324,13 +343,20 @@ def format_debug(e):
     Return a string of an exceptions relavent information
     """
     _, _, tb = sys.exc_info()
-    return '1: {doc} \n2: {exec_info} \n3: {exec_0} \n 4: {exec_1} \n5: {lineno} \n6: {stack}'.format(
-        doc=e.__doc__,
-        exec_info=sys.exc_info(),
-        exec_0=sys.exc_info()[0],
-        exec_1=sys.exc_info()[1],
-        lineno=traceback.tb_lineno(sys.exc_info()[2]),
-        stack=traceback.print_tb(tb))
+    return """
+1: {doc}
+2: {exec_info}
+3: {exec_0}
+4: {exec_1}
+5: {lineno}
+6: {stack}
+""".format(
+    doc=e.__doc__,
+    exec_info=sys.exc_info(),
+    exec_0=sys.exc_info()[0],
+    exec_1=sys.exc_info()[1],
+    lineno=traceback.tb_lineno(sys.exc_info()[2]),
+    stack=traceback.print_tb(tb))
 
 
 def write_human_state(event_list, job_sets, mutex, state_path='run_state.txt', print_file_list=False):
@@ -338,7 +364,7 @@ def write_human_state(event_list, job_sets, mutex, state_path='run_state.txt', p
     Writes out a human readable representation of the current execution state
 
     Paremeters
-        event_list (Event_list): The global list of all events
+        event_list (EventList): The global list of all events
         job_sets (list: YearSet): The global list of all YearSets
         state_path (str): The path to where to write the run_state
         ui_mode (bool): The UI mode, True if the UI is on, False if the UI is off
@@ -358,7 +384,7 @@ def write_human_state(event_list, job_sets, mutex, state_path='run_state.txt', p
                 out_str += line
 
                 line = 'status: {status}\n'.format(
-                    status=year_set.status)
+                    status=SetStatusMap[year_set.status])
                 out_str += line
 
                 for job in year_set.jobs:
@@ -454,6 +480,12 @@ class colors:
 
 
 def print_message(message, status='error'):
+    """
+    Prints a message with either a green + or a red -
+
+    Parameters:
+        message (str): the message to print
+        status (str): th"""
     if status == 'error':
         print colors.FAIL + '[-] ' + colors.ENDC + colors.BOLD + str(message) + colors.ENDC
     elif status == 'ok':
@@ -538,7 +570,7 @@ def create_symlink_dir(src_dir, src_list, dst):
             os.symlink(source, destination)
         except Exception as e:
             msg = format_debug(e)
-            logging.error(e)
+            logging.error(msg)
 
 
 def thread_sleep(seconds, event):
@@ -546,7 +578,7 @@ def thread_sleep(seconds, event):
     Allows a thread to sleep for one second at at time, and cancel when if the
     thread event is set
     """
-    for i in range(seconds):
+    for _ in range(seconds):
         if event and event.is_set():
             return 1
         sleep(1)

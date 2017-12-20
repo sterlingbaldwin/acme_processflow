@@ -5,7 +5,7 @@ from Ncclimo import Climo as Ncclimo
 from configobj import ConfigObj
 from JobStatus import JobStatus
 
-from lib.events import Event_list
+from lib.events import EventList
 
 
 class TestNcclimo(unittest.TestCase):
@@ -32,7 +32,7 @@ class TestNcclimo(unittest.TestCase):
         }
         ncclimo = Ncclimo(
             config=config,
-            event_list=Event_list())
+            event_list=EventList())
         self.assertEqual(ncclimo.status, JobStatus.VALID)
 
     def test_ncclimo_valid_prevalidate(self):
@@ -51,7 +51,7 @@ class TestNcclimo(unittest.TestCase):
         }
         ncclimo = Ncclimo(
             config=config,
-            event_list=Event_list())
+            event_list=EventList())
         ncclimo.status = JobStatus.VALID
         self.assertFalse(ncclimo.prevalidate(config))
 
@@ -70,7 +70,7 @@ class TestNcclimo(unittest.TestCase):
         }
         ncclimo = Ncclimo(
             config=config,
-            event_list=Event_list())
+            event_list=EventList())
         self.assertEqual(ncclimo.status.name, 'INVALID')
 
     def test_ncclimo_execute_not_completed(self):
@@ -96,7 +96,7 @@ class TestNcclimo(unittest.TestCase):
         }
         ncclimo = Ncclimo(
             config=config,
-            event_list=Event_list())
+            event_list=EventList())
         self.assertEqual(ncclimo.status, JobStatus.VALID)
         self.assertFalse(ncclimo.execute(dryrun=True))
         self.assertEqual(ncclimo.status.name, 'COMPLETED')
@@ -124,7 +124,7 @@ class TestNcclimo(unittest.TestCase):
         }
         ncclimo = Ncclimo(
             config=config,
-            event_list=Event_list())
+            event_list=EventList())
         self.assertEqual(ncclimo.status, JobStatus.VALID)
         self.assertTrue(ncclimo.postvalidate())
 
@@ -151,7 +151,7 @@ class TestNcclimo(unittest.TestCase):
         }
         ncclimo = Ncclimo(
             config=config,
-            event_list=Event_list())
+            event_list=EventList())
         self.assertEqual(ncclimo.status, JobStatus.VALID)
         self.assertFalse(ncclimo.postvalidate())
 
@@ -178,7 +178,7 @@ class TestNcclimo(unittest.TestCase):
         }
         ncclimo = Ncclimo(
             config=config,
-            event_list=Event_list())
+            event_list=EventList())
         self.assertEqual(ncclimo.status, JobStatus.VALID)
         self.assertFalse(ncclimo.postvalidate())
 
@@ -205,7 +205,7 @@ class TestNcclimo(unittest.TestCase):
         }
         ncclimo = Ncclimo(
             config=config,
-            event_list=Event_list())
+            event_list=EventList())
         self.assertEqual(ncclimo.status, JobStatus.VALID)
         self.assertFalse(ncclimo.postvalidate())
 

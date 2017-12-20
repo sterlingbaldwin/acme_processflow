@@ -26,39 +26,68 @@ def parse_args(argv=None, print_help=None):
     parser = argparse.ArgumentParser()
     parser.add_argument('-c', '--config', help='Path to configuration file.')
     parser.add_argument(
-        '-u', '--ui', help='Turn on the GUI.', action='store_true')
-    parser.add_argument('-l', '--log', help='Path to logging output file.')
+        '-u',
+        '--ui',
+        help='Turn on the GUI.',
+        action='store_true')
     parser.add_argument(
-        '-n', '--no-cleanup', help='Don\'t perform pre or post run cleanup. This will leave all run scripts in place.', action='store_true')
+        '-l',
+        '--log',
+        help='Path to logging output file.')
     parser.add_argument(
-        '-m', '--no-monitor', help='Don\'t run the remote monitor or move any files over globus.', action='store_true')
+        '-n',
+        '--no-cleanup',
+        help='Don\'t perform post run cleanup. This will leave all files in place.',
+        action='store_true')
     parser.add_argument(
-        '-f', '--file-list', help='Turn on debug output of the internal file_list so you can see what the current state of the model files are', action='store_true')
-    parser.add_argument('-r', '--resource-dir',
-                        help='Path to custom resource directory')
+        '-m',
+        '--no-monitor',
+        help='Don\'t run the remote monitor or move any files over globus.',
+        action='store_true')
+    parser.add_argument(
+        '-f',
+        '--file-list',
+        help='Turn on debug output of the internal file_list so you can see what the current state of the model files are',
+        action='store_true')
+    parser.add_argument(
+        '-r',
+        '--resource-dir',
+        help='Path to custom resource directory')
+    parser.add_argument(
+        '-i',
+        '--input-path',
+        help='Custom input path')
+    parser.add_argument(
+        '-o',
+        '--output-path',
+        help='Custom output path')
     if print_help:
         parser.print_help()
         return
     return parser.parse_args(argv)
 
 
-def setup(argv, **kwargs):
+def initialize(argv, **kwargs):
     """
     Parse the commandline arguments, and setup the master config dict
 
     Parameters:
         parser (argparse.ArgumentParser): The parser object
+        event_list (EventList): The main list of events
+        thread_list (list): the main list of all running threads
+        mutex (threading.Lock): A mutex to handle db access
+        kill_event (threading.Event): An event used to kill all running threads
     """
-    print "Entering setup"
     # Setup the parser
     args = parse_args(argv=argv)
     if not args.config:
         parse_args(print_help=True)
         return False, False, False
-
+    print "Entering setup"
     event_list = kwargs['event_list']
     thread_list = kwargs['thread_list']
     mutex = kwargs['mutex']
+    event = kwargs['kill_event']
 
 
     # check if globus config is valid, else remove it
@@ -121,10 +150,18 @@ Please add a space and run again.'''.format(num=line_index)
             print message
         return False, False, False
 
-    config['global']['input_path'] = os.path.join(
-        config['global']['project_path'], 'input')
-    config['global']['output_path'] = os.path.join(
-        config['global']['project_path'], 'output')
+    if args.input_path:
+        config['global']['input_path'] = args.input_path
+    else:
+        config['global']['input_path'] = os.path.join(
+            config['global']['project_path'],
+            'input')
+    if args.output_path:
+        config['global']['output_path'] = args.output_path
+    else:
+        config['global']['output_path'] = os.path.join(
+            config['global']['project_path'],
+            'output')
 
     # setup output and cache directories
     if not os.path.exists(config['global']['input_path']):
@@ -132,8 +169,18 @@ Please add a space and run again.'''.format(num=line_index)
     if not os.path.exists(config['global']['output_path']):
         os.makedirs(config['global']['output_path'])
 
+    pp_path = os.path.join(config['global']['output_path'], 'pp')
+    if not os.path.exists(pp_path):
+        os.makedirs(pp_path)
+    diags_path = os.path.join(config['global']['output_path'], 'diags')
+    if not os.path.exists(diags_path):
+        os.makedirs(diags_path)
+    config['global']['pp_path'] = pp_path
+    config['global']['diags_path'] = diags_path
+
     # Copy the config into the input directory for safe keeping
-    input_config_path = os.path.join(config['global']['input_path'], 'run.cfg')
+    input_config_path = os.path.join(
+        config['global']['input_path'], 'run.cfg')
     try:
         copy(args.config, input_config_path)
     except:
@@ -272,8 +319,8 @@ Please add a space and run again.'''.format(num=line_index)
         output_path=config['global']['output_path'],
         caseID=config['global']['experiment'],
         scripts_path=run_script_path,
-        thread_list=kwargs['thread_list'],
-        event=kwargs['kill_event'])
+        thread_list=thread_list,
+        event=event)
     runmanager.setup_job_sets(
         set_frequency=config['global']['set_frequency'],
         sim_start_year=sim_start_year,
@@ -289,12 +336,6 @@ Please add a space and run again.'''.format(num=line_index)
 def verify_config(config, template):
     messages = []
     valid = True
-    for key, val in config.items():
-        if key not in template:
-            msg = '{key} is not a valid config option, is it misspelled?'.format(
-                key=key)
-            messages.append(msg)
-            valid = False
     for key, val in template.items():
         if key not in config:
             msg = '{key} is missing from your config'.format(key=key)
@@ -313,78 +354,6 @@ def verify_config(config, template):
                 messages.append(msg)
                 valid = False
     return valid, messages
-
-
-def finishup(config, job_sets, state_path, event_list, status, display_event, thread_list, kill_event):
-    message = 'Performing post run cleanup'
-    event_list.push(message=message)
-    if not config.get('global').get('no_cleanup', False):
-        print 'Not cleaning up temp directories'
-    else:
-        tmp = os.path.join(config['global']['output_path'], 'tmp')
-        if os.path.exists(tmp):
-            rmtree(tmp)
-
-    message = 'All processing complete' if status == 1 else "One or more job failed"
-    emailaddr = config.get('global').get('email')
-    if emailaddr:
-        event_list.push(
-            message='Sending notification email to {}'.format(emailaddr))
-        try:
-            if status == 1:
-                msg = 'Post processing for {exp} has completed successfully\n'.format(
-                    exp=config['global']['experiment'])
-            else:
-                msg = 'One or more job(s) for {exp} failed\n\n'.format(
-                    exp=config['global']['experiment'])
-
-            for job_set in job_sets:
-                msg += '\nYearSet {start}-{end}: {status}\n'.format(
-                    start=job_set.set_start_year,
-                    end=job_set.set_end_year,
-                    status=job_set.status)
-                for job in job_set.jobs:
-                    if job.status == JobStatus.COMPLETED:
-                        if job.config.get('host_url'):
-                            msg += '    > {job} - COMPLETED  :: output hosted :: {url}\n'.format(
-                                url=job.config['host_url'],
-                                job=job.type)
-                        else:
-                            msg += '    > {job} - COMPLETED  :: output located :: {output}\n'.format(
-                                output=job.output_path,
-                                job=job.type)
-                    elif job.status in [JobStatus.FAILED, JobStatus.CANCELLED]:
-                        output_path = os.path.join(
-                            job.config['run_scripts_path'],
-                            '{job}_{start:04d}_{end:04d}.out'.format(
-                                job=job.type,
-                                start=job.start_year,
-                                end=job.end_year))
-                        msg += '    > {job} - {status} :: console output :: {output}\n'.format(
-                            output=output_path,
-                            job=job.type,
-                            status=job.status)
-                    else:
-                        msg += '    > {job} - {state}\n'.format(
-                            job=job.type,
-                            state=job.status)
-                msg += '\n\n'
-
-            m = Mailer(src='processflowbot@llnl.gov', dst=emailaddr)
-            m.send(
-                status=message,
-                msg=msg)
-        except Exception as e:
-            print_debug(e)
-    event_list.push(message=message)
-    display_event.set()
-    print_type = 'ok' if status == 1 else 'error'
-    print_message(message, print_type)
-    logging.info("All processes complete")
-    for t in thread_list:
-        kill_event.set()
-        t.join(timeout=1.0)
-    time.sleep(2)
 
 
 def check_config_white_space(filepath):

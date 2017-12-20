@@ -10,7 +10,7 @@ from time import sleep
 from datetime import datetime
 from shutil import copyfile
 
-from lib.events import Event_list
+from lib.events import EventList
 from lib.slurm import Slurm
 from JobStatus import JobStatus, StatusMap
 from lib.util import (render,
@@ -25,6 +25,7 @@ class APrimeDiags(object):
         """
         self.event_list = event_list
         self.inputs = {
+            'target_host_path': '',
             'ui': '',
             'web_dir': '',
             'host_url': '',
@@ -43,7 +44,7 @@ class APrimeDiags(object):
         }
         self.slurm_args = {
             'num_cores': '-n 32',  # 32 cores
-            'run_time': '-t 0-02:00',  # 2 hours run time
+            'run_time': '-t 0-05:00',  # 2 hours run time
             'num_machines': '-N 1',  # run on one node
         }
         self.start_time = None
@@ -51,6 +52,7 @@ class APrimeDiags(object):
         self.output_path = config['output_path']
         self.filemanager = config['filemanager']
         self.config = {}
+        self.host_suffix = '/index.html'
         self.status = JobStatus.INVALID
         self._type = 'aprime_diags'
         self.year_set = config['year_set']
@@ -122,7 +124,7 @@ class APrimeDiags(object):
             return False
         output_total = sum([len(files)
                             for r, d, files in os.walk(self.output_path)])
-        return bool(output_total >= 800)
+        return bool(output_total >= 600)
 
     def setup_input_directory(self):
         """
@@ -137,7 +139,8 @@ class APrimeDiags(object):
         """
         types = ['atm', 'ocn', 'ice', 'streams.ocean',
                  'streams.cice', 'rest', 'mpas-o_in',
-                 'mpas-cice_in', 'meridionalHeatTransport']
+                 'mpas-cice_in', 'meridionalHeatTransport',
+                 'mpascice.rst']
         test_archive_path = os.path.join(
             self.config['input_path'],
             self.config['experiment'],
@@ -169,8 +172,6 @@ class APrimeDiags(object):
         # First check if the job has already been completed
         if self.postvalidate():
             self.status = JobStatus.COMPLETED
-            message = 'Coupled_diag job already computed, skipping'
-            self.event_list.push(message=message)
             return 0
 
         # create symlinks to the input data
