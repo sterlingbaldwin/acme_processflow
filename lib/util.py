@@ -38,7 +38,10 @@ def print_line(ui, line, event_list, current_state=False, ignore_text=False):
             event_list.push(line)
     else:
         if not ignore_text:
-            print line
+            msg = '{time}: {line}'.format(
+                time=datetime.now().strftime('%I:%M'),
+                line=line)
+            print msg
 
 
 def transfer_directory(**kwargs):
