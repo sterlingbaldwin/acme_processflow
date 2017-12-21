@@ -5,7 +5,7 @@ import time
 from shutil import rmtree
 from jobs.JobStatus import JobStatus, StatusMap
 from lib.mailer import Mailer
-from lib.util import print_message, print_line
+from lib.util import print_message, print_line, print_debug
 
 
 def finalize(config, job_sets, event_list, status, display_event, thread_list, kill_event):
