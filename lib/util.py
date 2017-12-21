@@ -38,8 +38,13 @@ def print_line(ui, line, event_list, current_state=False, ignore_text=False):
             event_list.push(line)
     else:
         if not ignore_text:
+            now = datetime.now()
+            timestr = '{hour}:{min}:{sec}'.format(
+                hour=now.strftime('%H'),
+                min=now.strftime('%M'),
+                sec=now.strftime('%S'))
             msg = '{time}: {line}'.format(
-                time=datetime.now().strftime('%I:%M'),
+                time=timestr,
                 line=line)
             print msg
 
