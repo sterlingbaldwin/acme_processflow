@@ -31,9 +31,11 @@ def print_line(ui, line, event_list, current_state=False, ignore_text=False):
         current_state (bool): should this print to the current state or not
         ignore_text (bool): should this be printed to the console if in text mode
     """
+    logging.info(line)
     if ui:
         if current_state:
             event_list.replace(0, line)
+            event_list.push(line)
         else:
             event_list.push(line)
     else:

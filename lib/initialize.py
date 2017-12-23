@@ -19,7 +19,8 @@ from jobs.JobStatus import JobStatus
 from util import (setup_globus,
                   check_globus,
                   print_message,
-                  print_debug)
+                  print_debug,
+                  print_line)
 
 
 def parse_args(argv=None, print_help=None):
@@ -83,12 +84,15 @@ def initialize(argv, **kwargs):
     if not args.config:
         parse_args(print_help=True)
         return False, False, False
-    print "Entering setup"
     event_list = kwargs['event_list']
     thread_list = kwargs['thread_list']
     mutex = kwargs['mutex']
     event = kwargs['kill_event']
-
+    print_line(
+        ui=config['global']['ui'],
+        line='Entering setup',
+        event_list=event_list,
+        current_state=True)
 
     # check if globus config is valid, else remove it
     globus_config = os.path.join(os.path.expanduser('~'), '.globus.cfg')
@@ -268,20 +272,37 @@ Please add a space and run again.'''.format(num=line_index)
         simstart=config['global']['simulation_start_year'],
         simend=config['global']['simulation_end_year'],
         experiment=config['global']['experiment'])
-    print 'Updating local status'
+    print_line(
+        ui=config['global']['ui'],
+        line='Updating local status',
+        event_list=event_list,
+        current_state=True)
     filemanager.update_local_status()
-    print 'Local status update complete'
+    print_line(
+        ui=config['global']['ui'],
+        line='Local status update complete',
+        event_list=event_list,
+        current_state=True)
     all_data = filemanager.all_data_local()
     if all_data:
-        print 'All data is local'
+        line = 'All data is local'
     else:
-        print 'Additional data needed'
+        line = 'Additional data needed'
+    print_line(
+        ui=config['global']['ui'],
+        line=line,
+        event_list=event_list,
+        current_state=True)
 
     logging.info("FileManager setup complete")
     logging.info(str(filemanager))
 
     if all_data or args.no_monitor:
-        print "skipping globus setup"
+        print_line(
+            ui=config['global']['ui'],
+            line="skipping globus setup",
+            event_list=event_list,
+            current_state=True)
     else:
         endpoints = [endpoint for endpoint in config['transfer'].values()]
         addr = config.get('global').get('email')
@@ -299,9 +320,18 @@ Please add a space and run again.'''.format(num=line_index)
             print "Globus setup error"
             return False, False, False
         else:
-            print 'Globus authentication complete'
+            print_line(
+                ui=config['global']['ui'],
+                line='Globus authentication complete',
+                event_list=event_list,
+                current_state=True)
 
-        print 'Checking file access on globus transfer nodes'
+        line = 'Checking file access on globus transfer nodes'
+        print_line(
+                ui=config['global']['ui'],
+                line=line,
+                event_list=event_list,
+                current_state=True)
         setup_success, endpoint = check_globus(
             source_endpoint=config['transfer']['source_endpoint'],
             source_path=config['global']['source_path'],
@@ -329,7 +359,7 @@ Please add a space and run again.'''.format(num=line_index)
         filemanager=filemanager)
 
     logging.info('Starting run with config')
-    logging.info(pformat(config))
+    logging.info(json.dumps(config, indent=4, sort_keys=True))
     return config, filemanager, runmanager
 
 
