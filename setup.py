@@ -5,11 +5,13 @@ data_files = [(sys.prefix + '/share/processflow/resources',
                ['resources/e3sm_diags_template.py',
                 'resources/amwg_template.csh',
                 'resources/config_template.json',
-                'resources/aprime_template.bash'])]
+                'resources/aprime_template.bash',
+                'resources/acme-banner_1.jpg',
+                'resources/aprime_index.html'])]
 
 setup(
     name="acme_processflow",
-    version="0.4.59",
+    version="0.4.60",
     author="Sterling Baldwin",
     author_email="baldwin32@llnl.gov",
     description="ACME Automated Processflow for handling post processing jobs for raw model data",
