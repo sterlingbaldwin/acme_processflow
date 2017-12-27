@@ -89,7 +89,7 @@ def initialize(argv, **kwargs):
     mutex = kwargs['mutex']
     event = kwargs['kill_event']
     print_line(
-        ui=config['global']['ui'],
+        ui=False,
         line='Entering setup',
         event_list=event_list,
         current_state=True)
@@ -344,6 +344,7 @@ Please add a space and run again.'''.format(num=line_index)
 
     # setup the runmanager
     runmanager = RunManager(
+        resource_path=config['global']['resource_dir'],
         ui=config['global']['ui'],
         event_list=event_list,
         output_path=config['global']['output_path'],
