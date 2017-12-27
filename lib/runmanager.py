@@ -4,13 +4,14 @@ import time
 import re
 from datetime import datetime
 from threading import Thread
-from shutil import copytree, move
+from shutil import copytree, move, copy2
 from subprocess import Popen
 
 from lib.slurm import Slurm
 from lib.util import (get_climo_output_files,
                       create_symlink_dir,
-                      print_line)
+                      print_line,
+                      render)
 
 from lib.YearSet import YearSet, SetStatus
 from jobs.Ncclimo import Climo
@@ -22,7 +23,7 @@ from jobs.JobStatus import JobStatus, StatusMap, ReverseMap
 
 
 class RunManager(object):
-    def __init__(self, event_list, output_path, caseID, scripts_path, thread_list, event, ui):
+    def __init__(self, event_list, output_path, caseID, scripts_path, thread_list, event, ui, resource_path):
         self.ui = ui
         self.output_path = output_path
         self.slurm = Slurm()
@@ -35,6 +36,7 @@ class RunManager(object):
         self.kill_event = event
         self._dryrun = False
         self.scripts_path = scripts_path
+        self._resource_path = resource_path
         self.max_running_jobs = self.slurm.get_node_number() * 6
         if not os.path.exists(self.scripts_path):
             os.makedirs(self.scripts_path)
@@ -903,9 +905,43 @@ class RunManager(object):
                 move(
                     src=host_dir,
                     dst=target_host_dir)
+            
+            if not os.path.exists(os.path.join(target_host_dir, 'index.html')):
+                logging.info(msg)
+                variables = {
+                    'experiment': job.config['experiment'],
+                    'start_year': job.start_year,
+                    'end_year': job.end_year
+                }
+                resource_path = os.path.join(
+                    self._resource_path,
+                    'aprime_index.html')
+                output_path = os.path.join(
+                    target_host_dir,
+                    'index.html')
+                try:
+                    render(
+                        variables=variables,
+                        input_path=resource_path,
+                        output_path=output_path)
+                except:
+                    msg = 'Failed to render index for a-prime'
+                    logging.error(msg)
+
+            if not os.path.exists(os.path.join(target_host_dir, 'acme-banner_1.jpg')):
+                try:
+                    src = os.path.join(self._resource_path, 'acme-banner_1.jpg')
+                    dst = os.path.join(target_host_dir, 'acme-banner_1.jpg')
+                    copy2(
+                        src=src,
+                        dst=dst)
+                except Exception as e:
+                    msg = 'Failed to copy acme banner from {src} to {dst}'.format(
+                        src=src, dst=dst)
+                    logging.error(msg)
 
             msg = '{job} hosted at {url}/index.html'.format(
-                url=job.config.get('host_url'),
+                url=job.config['host_url'],
                 job=job.type)
             print_line(
                 ui=self.ui,
@@ -921,8 +957,8 @@ class RunManager(object):
             head, _ = os.path.split(job.config.get('test_path_diag'))
             img_src = os.path.join(head, img_dir)
             self.setup_local_hosting(job, img_src)
-            msg = '{job} hosted at {url}/index.html'.format(
-                url=job.config.get('host_url'),
+            msg = '{job} hosted at {url}'.format(
+                url=job.config['host_url'],
                 job=job.type)
             print_line(
                 ui=self.ui,
@@ -932,11 +968,8 @@ class RunManager(object):
         elif job.type == 'e3sm_diags':
             img_src = job.config.get('results_dir')
             self.setup_local_hosting(job, img_src)
-            host_url = '{url}/viewer/index.html'.format(
-                url=job.config.get('host_url'))
-            job.config['host_url'] = host_url
             msg = '{job} hosted at {url}'.format(
-                url=host_url,
+                url=job.config['host_url'],
                 job=job.type)
             print_line(
                 ui=self.ui,
@@ -978,12 +1011,6 @@ class RunManager(object):
         try:
             msg = 'Copying images from {src} to {dst}'.format(
                 src=img_src, dst=host_dir)
-            print_line(
-                ui=self.ui,
-                line=msg,
-                event_list=self.event_list,
-                current_state=True,
-                ignore_text=False)
             logging.info(msg)
             if os.path.exists(img_src) and not os.path.exists(host_dir):
                 copytree(src=img_src, dst=host_dir)

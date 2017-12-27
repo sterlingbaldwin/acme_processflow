@@ -1,0 +1,760 @@
+<html><head>
+<meta http-equiv="content-type" content="text/html; charset=UTF-8"></head><body bgcolor="ivory">
+
+
+<title>ACME Coupled Diagnostic Plots</title>
+
+
+<br>
+<p><img src="acme-banner_1.jpg" style="float:right;width:500px;height:100px;">
+</p>
+
+<br>
+<br>
+<div style="text-align:center">
+<font size="+3" color="seagreen"><b>ACME Coupled Priority Metrics</b></font><br>
+</div>
+
+<br>
+<br>
+<br>
+<div style="text-align:center">
+<font size="+2" color="sienna"><b>
+%%experiment%%<br>(Climatological years: 1-10) vs. obs (climo)
+</b></font>
+</div>
+  <br>
+  <br>
+  <hr size="2" noshade="noshade">
+
+  <font size="+1" color="red"><b>Time Series Plots: Global and Zonal-band means (ATM)</b></font><br>
+
+  <div style="text-align:left">
+  <font size="-1" color="peru">%%experiment%% (Years: 1-10)</font><br>
+  <font size="-1" color="peru">obs (climo)</font>
+  </div>
+
+  <hr size="2" noshade="noshade">
+
+  <table>
+	<tbody><tr>
+	  <th><br>
+	  </th><th align="LEFT"><font size="+1" color="brown">Precipitation (GPCP)</font>
+		</th></tr><tr>
+		  <th align="LEFT"><a href="%%experiment%%_PRECT_ANN_reg_ts.png">PRECT</a> 
+		  </th><td align="LEFT">Precipitation Rate
+	</td></tr><tr>
+	  <td><br>
+	</td></tr><tr>
+	  <th><br>
+	  </th><th align="LEFT"><font size="+1" color="brown">Radiation (CERES-EBAF)</font>
+		</th></tr><tr>
+		  <th align="LEFT"><a href="%%experiment%%_RESTOM_ANN_reg_ts.png">RESTOM</a> 
+		  </th><td align="LEFT">TOM Net Radiative Flux
+		</td></tr><tr>
+		  <th align="LEFT"><a href="%%experiment%%_FLNT_ANN_reg_ts.png">FLNT</a> 
+		  </th><td align="LEFT">TOM Net LW Flux
+		</td></tr><tr>
+		  <th align="LEFT"><a href="%%experiment%%_FSNT_ANN_reg_ts.png">FSNT</a> 
+		  </th><td align="LEFT">TOM Net SW Flux
+	</td></tr><tr>
+	  <td><br>
+  </td></tr></tbody></table>
+    <br>
+    <br>
+    
+    <hr size="2" noshade="noshade">
+
+    <font size="+1" color="red"><b>Time Series Plots: Global/Hemispheric means (OCN/ICE)</b></font>
+    
+
+    <div style="text-align:left">
+    <font size="-1" color="peru">%%experiment%% (Years: 1-10)</font><br>
+    </div>
+
+    <hr size="2" noshade="noshade">
+
+    <table>
+      <tbody><tr>
+        <th align="LEFT"><a href="sst_global_%%experiment%%.png">Global SST</a>
+      </th></tr><tr>
+        <th align="LEFT"><a href="OHCAnomaly_global_%%experiment%%.png">Global OHC</a>
+      </th></tr><tr>
+        <th align="LEFT"><a href="iceAreaNH_%%experiment%%.png">NH Ice Area</a>
+      </th></tr><tr>
+        <th align="LEFT"><a href="iceAreaSH_%%experiment%%.png">SH Ice Area</a>
+      </th></tr><tr>
+        <th align="LEFT"><a href="iceVolumeNH_%%experiment%%.png">NH Ice Volume</a>
+      </th></tr><tr>
+        <th align="LEFT"><a href="iceVolumeSH_%%experiment%%.png">SH Ice Volume</a>
+  </th></tr><tr>
+  <td><br>
+  </td></tr></tbody></table>
+  <hr size="2" noshade="noshade">
+  <font size="+1" color="red"><b>Climatology Plots (ATM)</b></font><br>
+
+  <div style="text-align:left">
+  <font size="-1" color="peru">%%experiment%% (Years: 1-10)</font><br>
+  <font size="-1" color="peru">obs (climo)</font>
+  </div>
+
+  <hr size="2" noshade="noshade">
+
+  <table>
+	<tbody><tr>
+	  <th><br>
+	  </th><th align="LEFT"><font size="+1" color="brown">Precipitation (GPCP)</font>
+	  </th><th>DJF
+	  </th><th>JJA
+	  </th><th>ANN
+		</th></tr><tr>
+		  <th align="LEFT">PRECT 
+		  </th><td align="LEFT">Precipitation Rate
+		  </td><td align="LEFT"><a href="%%experiment%%-GPCP_PRECT_climo_DJF.png">plot</a>
+		  </td><td align="LEFT"><a href="%%experiment%%-GPCP_PRECT_climo_JJA.png">plot</a>
+		  </td><td align="LEFT"><a href="%%experiment%%-GPCP_PRECT_climo_ANN.png">plot</a>
+	</td></tr><tr>
+	  <td><br>
+	</td></tr><tr>
+	  <th><br>
+	  </th><th align="LEFT"><font size="+1" color="brown">Radiation (CERES-EBAF)</font>
+	  </th><th>DJF
+	  </th><th>JJA
+	  </th><th>ANN
+		</th></tr><tr>
+		  <th align="LEFT">FSNTOA 
+		  </th><td align="LEFT">TOA net SW flux
+		  </td><td align="LEFT"><a href="%%experiment%%-CERES-EBAF_FSNTOA_climo_DJF.png">plot</a>
+		  </td><td align="LEFT"><a href="%%experiment%%-CERES-EBAF_FSNTOA_climo_JJA.png">plot</a>
+		  </td><td align="LEFT"><a href="%%experiment%%-CERES-EBAF_FSNTOA_climo_ANN.png">plot</a>
+		</td></tr><tr>
+		  <th align="LEFT">FLUT 
+		  </th><td align="LEFT">TOA upward LW flux
+		  </td><td align="LEFT"><a href="%%experiment%%-CERES-EBAF_FLUT_climo_DJF.png">plot</a>
+		  </td><td align="LEFT"><a href="%%experiment%%-CERES-EBAF_FLUT_climo_JJA.png">plot</a>
+		  </td><td align="LEFT"><a href="%%experiment%%-CERES-EBAF_FLUT_climo_ANN.png">plot</a>
+		</td></tr><tr>
+		  <th align="LEFT">SWCF 
+		  </th><td align="LEFT">TOA shortwave cloud forcing
+		  </td><td align="LEFT"><a href="%%experiment%%-CERES-EBAF_SWCF_climo_DJF.png">plot</a>
+		  </td><td align="LEFT"><a href="%%experiment%%-CERES-EBAF_SWCF_climo_JJA.png">plot</a>
+		  </td><td align="LEFT"><a href="%%experiment%%-CERES-EBAF_SWCF_climo_ANN.png">plot</a>
+		</td></tr><tr>
+		  <th align="LEFT">LWCF 
+		  </th><td align="LEFT">TOA longwave cloud forcing
+		  </td><td align="LEFT"><a href="%%experiment%%-CERES-EBAF_LWCF_climo_DJF.png">plot</a>
+		  </td><td align="LEFT"><a href="%%experiment%%-CERES-EBAF_LWCF_climo_JJA.png">plot</a>
+		  </td><td align="LEFT"><a href="%%experiment%%-CERES-EBAF_LWCF_climo_ANN.png">plot</a>
+	</td></tr><tr>
+	  <td><br>
+	</td></tr><tr>
+	  <th><br>
+	  </th><th align="LEFT"><font size="+1" color="brown">Wind Stress (ERS)</font>
+	  </th><th>DJF
+	  </th><th>JJA
+	  </th><th>ANN
+		</th></tr><tr>
+		  <th align="LEFT">TAU 
+		  </th><td align="LEFT">Ocean Wind Stress
+		  </td><td align="LEFT"><a href="%%experiment%%-ERS_TAU_climo_DJF.png">plot</a>
+		  </td><td align="LEFT"><a href="%%experiment%%-ERS_TAU_climo_JJA.png">plot</a>
+		  </td><td align="LEFT"><a href="%%experiment%%-ERS_TAU_climo_ANN.png">plot</a>
+	</td></tr><tr>
+	  <td><br>
+  </td></tr></tbody></table>
+    
+    <br>
+    <hr size="2" noshade="noshade">
+    <font size="+1" color="red"><b>Climatology Plots (OCN/ICE)</b></font>
+
+    <div style="text-align:left">
+    <font size="-1" color="peru">%%experiment%% (Years: 1-10)</font><br>
+    <font size="-1" color="peru">obs (climo)</font>
+    </div>
+
+    <hr size="2" noshade="noshade">
+    <table>
+    <tbody><tr>
+      <th align="LEFT"><font size="+1" color="green">Global Ocean</font>
+      </th></tr><tr>
+        <th><br>
+        </th><th align="LEFT"><font size="+1" color="brown">SST Hadley-NOAA-OI</font>
+        </th><th>JFM
+        </th><th>JAS
+        </th><th>ANN
+      </th></tr><tr>
+      <th align="LEFT">SST
+      </th><th><br>
+      </th><td align="LEFT"><a href="sstHADOI_%%experiment%%_JFM_years%%start_year%%-%%end_year%%.png">plot</a>
+      </td><td align="LEFT"><a href="sstHADOI_%%experiment%%_JAS_years%%start_year%%-%%end_year%%.png">plot</a>
+      </td><td align="LEFT"><a href="sstHADOI_%%experiment%%_ANN_years%%start_year%%-%%end_year%%.png">plot</a>
+      </td></tr><tr>
+        <th><br>
+        </th><th align="LEFT"><font size="+1" color="brown">SSS Aquarius</font>
+        </th><th>JFM
+        </th><th>JAS
+        </th><th>ANN
+      </th></tr><tr>
+        <th align="LEFT">SSS
+        </th><th><br>
+        </th><td align="LEFT"><a href="sssAquarius_%%experiment%%_JFM_years%%start_year%%-%%end_year%%.png">plot</a>
+        </td><td align="LEFT"><a href="sssAquarius_%%experiment%%_JAS_years%%start_year%%-%%end_year%%.png">plot</a>
+        </td><td align="LEFT"><a href="sssAquarius_%%experiment%%_ANN_years%%start_year%%-%%end_year%%.png">plot</a>
+      </td></tr><tr>
+        <th><br>
+        </th><th align="LEFT"><font size="+1" color="brown">MLD Holte-Talley ARGO</font>
+        </th><th>JFM
+        </th><th>JAS
+        </th><th>ANN
+      </th></tr><tr>
+        <th align="LEFT">MLD
+        </th><th><br>
+        </th><td align="LEFT"><a href="mldHolteTalleyARGO_%%experiment%%_JFM_years%%start_year%%-%%end_year%%.png">plot</a>
+        </td><td align="LEFT"><a href="mldHolteTalleyARGO_%%experiment%%_JAS_years%%start_year%%-%%end_year%%.png">plot</a>
+        </td><td align="LEFT"><a href="mldHolteTalleyARGO_%%experiment%%_ANN_years%%start_year%%-%%end_year%%.png">plot</a>
+      </td></tr><tr>
+        <th><br>
+      </th></tr><tr>
+        <th align="LEFT"><font size="+1" color="green">Northern Hemisphere Sea-ice</font>
+      </th></tr><tr>
+        <th><br>
+        </th><th align="LEFT"><font size="+1" color="brown">SSM/I NASATeam</font>
+        </th><th>JFM
+        </th><th>JAS
+      </th></tr><tr>
+        <th align="LEFT">Ice Conc. 
+        </th><td align="LEFT">Ice concentration
+        </td><td align="LEFT"><a href="iceconcNASATeamNH_%%experiment%%_JFM_years%%start_year%%-%%end_year%%.png">plot</a>
+        </td><td align="LEFT"><a href="iceconcNASATeamNH_%%experiment%%_JAS_years%%start_year%%-%%end_year%%.png">plot</a>
+      </td></tr><tr>
+        <th><br>
+        </th><th align="LEFT"><font size="+1" color="brown">SSM/I Bootstrap</font>
+        </th><th>JFM
+        </th><th>JAS
+      </th></tr><tr>
+        <th align="LEFT">Ice Conc. 
+        </th><td align="LEFT">Ice concentration
+        </td><td align="LEFT"><a href="iceconcBootstrapNH_%%experiment%%_JFM_years%%start_year%%-%%end_year%%.png">plot</a>
+        </td><td align="LEFT"><a href="iceconcBootstrapNH_%%experiment%%_JAS_years%%start_year%%-%%end_year%%.png">plot</a>
+      </td></tr><tr>
+        <th><br>
+        </th><th align="LEFT"><font size="+1" color="brown">ICESat</font>
+        </th><th>FM
+        </th><th>ON
+      </th></tr><tr>
+        <th align="LEFT">Ice Thick. 
+        </th><td align="LEFT">Ice Thickness
+        </td><td align="LEFT"><a href="icethickNH_%%experiment%%_FM_years%%start_year%%-%%end_year%%.png">plot</a>
+        </td><td align="LEFT"><a href="icethickNH_%%experiment%%_ON_years%%start_year%%-%%end_year%%.png">plot</a>
+      </td></tr><tr>
+        <th><br>
+      </th></tr><tr>
+        <th align="LEFT"><font size="+1" color="green">Southern Hemisphere Sea-ice</font>
+      </th></tr><tr>
+        <th><br>
+        </th><th align="LEFT"><font size="+1" color="brown">SSM/I NASATeam</font>
+        </th><th>DJF
+        </th><th>JJA
+      </th></tr><tr>
+        <th align="LEFT">Ice Conc. 
+        </th><td align="LEFT">Ice concentration
+        </td><td align="LEFT"><a href="iceconcNASATeamSH_%%experiment%%_DJF_years%%start_year%%-%%end_year%%.png">plot</a>
+        </td><td align="LEFT"><a href="iceconcNASATeamSH_%%experiment%%_JJA_years%%start_year%%-%%end_year%%.png">plot</a>
+      </td></tr><tr>
+        <th><br>
+        </th><th align="LEFT"><font size="+1" color="brown">SSM/I Bootstrap</font>
+        </th><th>DJF
+        </th><th>JJA
+      </th></tr><tr>
+        <th align="LEFT">Ice Conc. 
+        </th><td align="LEFT">Ice concentration
+        </td><td align="LEFT"><a href="iceconcBootstrapSH_%%experiment%%_DJF_years%%start_year%%-%%end_year%%.png">plot</a>
+        </td><td align="LEFT"><a href="iceconcBootstrapSH_%%experiment%%_JJA_years%%start_year%%-%%end_year%%.png">plot</a>
+      </td></tr><tr>
+        <th><br>
+        </th><th align="LEFT"><font size="+1" color="brown">ICESat</font>
+        </th><th>FM
+        </th><th>ON
+      </th></tr><tr>
+        <th align="LEFT">Ice Thick. 
+        </th><td align="LEFT">Ice Thickness
+        </td><td align="LEFT"><a href="icethickSH_%%experiment%%_FM_years%%start_year%%-%%end_year%%.png">plot</a>
+        </td><td align="LEFT"><a href="icethickSH_%%experiment%%_ON_years%%start_year%%-%%end_year%%.png">plot</a>
+      </td></tr><tr>
+        <td><br>
+    </td></tr></tbody></table>
+    <hr size="2" noshade="noshade">
+    <font size="+1" color="red"><b>Other OCN/ICE plots</b></font>
+
+    <div style="text-align:left">
+    <font size="-1" color="peru">Time series/Trends for Years: 1-10</font><br>
+    <font size="-1" color="peru">Climatologies for Years: 1-10</font><br>
+    <font size="-1" color="peru">Nino3.4 diagnostics for Years: 1-10</font>
+    </div>
+
+    <hr size="2" noshade="noshade">
+    <table>
+      <tbody><tr>
+        <th align="LEFT"><font size="+1" color="green">Meridional Heat Transport (MHT)</font>
+      </th></tr><tr>
+        <th align="LEFT"><a href="mht_%%experiment%%_years%%start_year%%-%%end_year%%.png">Global Ocean MHT</a> 
+      </th></tr><tr>
+        <td><br>
+      </td></tr><tr>
+        <td><br>
+      </td></tr><tr>
+        <th align="LEFT"><font size="+1" color="green">Nino3.4 Index</font>
+      </th></tr><tr>
+        <th align="LEFT"><a href="NINO34_%%experiment%%.png">Time series of Nino3.4 Index</a>
+      </th></tr><tr>
+        <th align="LEFT"><a href="NINO34_spectra_%%experiment%%.png">Nino3.4 Power Spectrum</a>
+      </th></tr><tr>
+        <th><br>
+      </th></tr><tr>
+        <th><br>
+      </th></tr><tr>
+        <th align="LEFT"><font size="+1" color="green">T, S, OHC anomaly trends with depth</font>
+      </th></tr><tr>
+        <th align="LEFT"><a href="TAnomalyZ_global_%%experiment%%.png">T anomaly vs depth/time</a>
+      </th></tr><tr>
+        <th align="LEFT"><a href="SAnomalyZ_global_%%experiment%%.png">S anomaly vs depth/time</a>
+      </th></tr><tr>
+        <th align="LEFT"><a href="OHCAnomalyZ_global_%%experiment%%.png">OHC anomaly vs depth/time</a>
+    </th></tr></tbody></table>
+  <br>
+  <hr size="2" noshade="noshade">
+
+  <font size="+1" color="red"><b>ENSO Diagnostics (ATM)</b></font><br>
+
+  <div style="text-align:left">
+  <font size="-1" color="peru">%%experiment%% (Years: 1-10)</font><br>
+  <font size="-1" color="peru">obs (climo)</font>
+  </div>
+
+  <hr size="2" noshade="noshade">
+
+<!-- 
+  <br>
+  <font color=green size=+1><b>Equatorial SOI Index</b></font><br>
+  <TABLE>
+        <TR>
+          <TH ALIGN=LEFT><A HREF="%%experiment%%_PSL_ANN_EQSOI.png">EQSOI</a> 
+        <TR>
+          <TD><BR>
+  </TABLE>
+-->
+
+  <br>
+  <font size="+1" color="green"><b>NINO Index</b></font><br>
+  <table>
+        <tbody><tr>
+          <th align="LEFT"><a href="%%experiment%%_TS_ANN_NINO.png">Nino3, Nino3.4, Nino4</a> 
+        </th></tr><tr>
+          <td><br>
+  </td></tr></tbody></table>
+
+
+  <br>
+  <font size="+1" color="green"><b>EQSOI and Nino3.4 Index</b></font><br>
+  <table>
+        <tbody><tr>
+          <th align="LEFT"><a href="%%experiment%%_ANN_EQSOI_Nino3.4.png">EQSOI, Nino 3.4</a> 
+        </th></tr><tr>
+          <td><br>
+  </td></tr></tbody></table>
+
+
+  <br>
+  <font size="+1" color="green"><b>ENSO Seasonality</b></font><br>
+  <table>
+        <tbody><tr>
+          <th align="LEFT"><a href="%%experiment%%_TS_seasonality_NINO.png">Nino3, Nino3.4, Nino4</a> 
+        </th></tr><tr>
+          <td><br>
+  </td></tr></tbody></table>
+        <br>
+        <font size="+1" color="green"><b>Meridional Avg. Over Tropical Pacific (5S-5N)</b></font><br>
+        <br>
+
+        <table>
+        <tbody><tr>
+          <th><br>
+          </th><th align="LEFT"><font size="+1" color="brown">Precipitation (GPCP)</font>
+          </th><th>DJF
+          </th><th>JJA
+          </th><th>ANN
+                        </th></tr><tr>
+                          <th align="LEFT">PRECT 
+                          </th><td align="LEFT">Precipitation Rate
+                          </td><td align="LEFT"><a href="%%experiment%%-GPCP_PRECT_meridional_avg_Tropical_Pacific_DJF.png">plot</a>
+                          </td><td align="LEFT"><a href="%%experiment%%-GPCP_PRECT_meridional_avg_Tropical_Pacific_JJA.png">plot</a>
+                          </td><td align="LEFT"><a href="%%experiment%%-GPCP_PRECT_meridional_avg_Tropical_Pacific_ANN.png">plot</a>
+        </td></tr><tr>
+          <td><br>
+        </td></tr><tr>
+          <th><br>
+          </th><th align="LEFT"><font size="+1" color="brown">Temperature (HadISST)</font>
+          </th><th>DJF
+          </th><th>JJA
+          </th><th>ANN
+                        </th></tr><tr>
+                          <th align="LEFT">TS 
+                          </th><td align="LEFT">Surface Temperature
+                          </td><td align="LEFT"><a href="%%experiment%%-HadISST_TS_meridional_avg_Tropical_Pacific_DJF.png">plot</a>
+                          </td><td align="LEFT"><a href="%%experiment%%-HadISST_TS_meridional_avg_Tropical_Pacific_JJA.png">plot</a>
+                          </td><td align="LEFT"><a href="%%experiment%%-HadISST_TS_meridional_avg_Tropical_Pacific_ANN.png">plot</a>
+        </td></tr><tr>
+          <td><br>
+        </td></tr><tr>
+          <th><br>
+          </th><th align="LEFT"><font size="+1" color="brown">Wind Stress (ERS)</font>
+          </th><th>DJF
+          </th><th>JJA
+          </th><th>ANN
+                        </th></tr><tr>
+                          <th align="LEFT">TAUX 
+                          </th><td align="LEFT">Ocean Zonal Wind Stress
+                          </td><td align="LEFT"><a href="%%experiment%%-ERS_TAUX_meridional_avg_Tropical_Pacific_DJF.png">plot</a>
+                          </td><td align="LEFT"><a href="%%experiment%%-ERS_TAUX_meridional_avg_Tropical_Pacific_JJA.png">plot</a>
+                          </td><td align="LEFT"><a href="%%experiment%%-ERS_TAUX_meridional_avg_Tropical_Pacific_ANN.png">plot</a>
+        </td></tr><tr>
+          <td><br>
+  </td></tr></tbody></table>
+        <br>
+        <br>
+        <font size="+1" color="green"><b>Bjerknes Feedback: (Nino4 TAUX vs. Nino3 SST)</b></font><br>
+        <br>
+        <table>
+                <tbody><tr>
+                  <th><br>
+                  </th><th align="LEFT"><font size="+1" color="brown">Wind Stress (COREv2_flux)</font>
+                  </th><th>Scatter Plot
+                                </th></tr><tr>
+                                  <th align="LEFT">TAUX 
+                                  </th><td align="LEFT">Ocean Zonal Wind Stress
+                                  </td><td align="LEFT"><a href="%%experiment%%-COREv2_flux_feedback_TAUX_Nino4_ANN_TS_Nino3_ANN.png">plot</a>
+                </td></tr><tr>
+                  <td><br>
+  </td></tr></tbody></table>
+        <br>
+        <br>
+        <font size="+1" color="green"><b>Heat Flux-SST Feedbacks: Nino3 Region</b></font><br>
+        <br>
+        <table>
+                <tbody><tr>
+                  <th><br>
+                  </th><th align="LEFT"><font size="+1" color="brown">Surface Heat Flux (COREv2_flux)</font>
+                  </th><th>Scatter Plot
+                                </th></tr><tr>
+                                  <th align="LEFT">LHFLX 
+                                  </th><td align="LEFT">Latent Heat Flux
+                                  </td><td align="LEFT"><a href="%%experiment%%-COREv2_flux_feedback_LHFLX_Nino3_ANN_TS_Nino3_ANN.png">plot</a>
+                                </td></tr><tr>
+                                  <th align="LEFT">SHFLX 
+                                  </th><td align="LEFT">Sensible Heat Flux
+                                  </td><td align="LEFT"><a href="%%experiment%%-COREv2_flux_feedback_SHFLX_Nino3_ANN_TS_Nino3_ANN.png">plot</a>
+                                </td></tr><tr>
+                                  <th align="LEFT">FLNS 
+                                  </th><td align="LEFT">Longwave Heat Flux
+                                  </td><td align="LEFT"><a href="%%experiment%%-COREv2_flux_feedback_FLNS_Nino3_ANN_TS_Nino3_ANN.png">plot</a>
+                                </td></tr><tr>
+                                  <th align="LEFT">FSNS 
+                                  </th><td align="LEFT">Shortwave Heat Flux
+                                  </td><td align="LEFT"><a href="%%experiment%%-COREv2_flux_feedback_FSNS_Nino3_ANN_TS_Nino3_ANN.png">plot</a>
+                                </td></tr><tr>
+                                  <th align="LEFT">RESSURF 
+                                  </th><td align="LEFT">Surface Net Heat Flux
+                                  </td><td align="LEFT"><a href="%%experiment%%-COREv2_flux_feedback_RESSURF_Nino3_ANN_TS_Nino3_ANN.png">plot</a>
+                </td></tr><tr>
+                  <td><br>
+  </td></tr></tbody></table>
+        <br>
+        <br>
+        <font size="+1" color="green"><b>Tropical Pacific: Inter-annual Std. Dev.</b></font><br>
+        <br>
+        <table>
+	<tbody><tr>
+	  <th><br>
+	  </th><th align="LEFT"><font size="+1" color="brown">Precipitation (COREv2)</font>
+	  </th><th>DJF
+	  </th><th>JJA
+	  </th><th>ANN
+                        </th></tr><tr>
+                          <th align="LEFT">PRECT 
+                          </th><td align="LEFT">Precipitation Rate
+                          </td><td align="LEFT"><a href="%%experiment%%-COREv2_PRECT_stddev_Greater_Tropical_Pacific_DJF.png">plot</a>
+                          </td><td align="LEFT"><a href="%%experiment%%-COREv2_PRECT_stddev_Greater_Tropical_Pacific_JJA.png">plot</a>
+                          </td><td align="LEFT"><a href="%%experiment%%-COREv2_PRECT_stddev_Greater_Tropical_Pacific_ANN.png">plot</a>
+	</td></tr><tr>
+	  <td><br>
+	</td></tr><tr>
+	  <th><br>
+	  </th><th align="LEFT"><font size="+1" color="brown">Temperature (NCEP2)</font>
+	  </th><th>DJF
+	  </th><th>JJA
+	  </th><th>ANN
+                        </th></tr><tr>
+                          <th align="LEFT">TS 
+                          </th><td align="LEFT">Surface Temperature
+                          </td><td align="LEFT"><a href="%%experiment%%-NCEP2_TS_stddev_Greater_Tropical_Pacific_DJF.png">plot</a>
+                          </td><td align="LEFT"><a href="%%experiment%%-NCEP2_TS_stddev_Greater_Tropical_Pacific_JJA.png">plot</a>
+                          </td><td align="LEFT"><a href="%%experiment%%-NCEP2_TS_stddev_Greater_Tropical_Pacific_ANN.png">plot</a>
+	</td></tr><tr>
+	  <td><br>
+	</td></tr><tr>
+	  <th><br>
+	  </th><th align="LEFT"><font size="+1" color="brown">Sea Level Pressure (NCEP2_surface)</font>
+	  </th><th>DJF
+	  </th><th>JJA
+	  </th><th>ANN
+                        </th></tr><tr>
+                          <th align="LEFT">PSL 
+                          </th><td align="LEFT">Sea Level Pressure
+                          </td><td align="LEFT"><a href="%%experiment%%-NCEP2_surface_PSL_stddev_Greater_Tropical_Pacific_DJF.png">plot</a>
+                          </td><td align="LEFT"><a href="%%experiment%%-NCEP2_surface_PSL_stddev_Greater_Tropical_Pacific_JJA.png">plot</a>
+                          </td><td align="LEFT"><a href="%%experiment%%-NCEP2_surface_PSL_stddev_Greater_Tropical_Pacific_ANN.png">plot</a>
+	</td></tr><tr>
+	  <td><br>
+	</td></tr><tr>
+	  <th><br>
+	  </th><th align="LEFT"><font size="+1" color="brown">Wind Stress (COREv2_flux)</font>
+	  </th><th>DJF
+	  </th><th>JJA
+	  </th><th>ANN
+                        </th></tr><tr>
+                          <th align="LEFT">TAUX 
+                          </th><td align="LEFT">Ocean Zonal Wind Stress
+                          </td><td align="LEFT"><a href="%%experiment%%-COREv2_flux_TAUX_stddev_Greater_Tropical_Pacific_DJF.png">plot</a>
+                          </td><td align="LEFT"><a href="%%experiment%%-COREv2_flux_TAUX_stddev_Greater_Tropical_Pacific_JJA.png">plot</a>
+                          </td><td align="LEFT"><a href="%%experiment%%-COREv2_flux_TAUX_stddev_Greater_Tropical_Pacific_ANN.png">plot</a>
+	</td></tr><tr>
+	  <td><br>
+	</td></tr><tr>
+	  <th><br>
+	  </th><th align="LEFT"><font size="+1" color="brown">Surface Heat Flux (COREv2_flux)</font>
+	  </th><th>DJF
+	  </th><th>JJA
+	  </th><th>ANN
+                        </th></tr><tr>
+                          <th align="LEFT">LHFLX 
+                          </th><td align="LEFT">Latent Heat Flux
+                          </td><td align="LEFT"><a href="%%experiment%%-COREv2_flux_LHFLX_stddev_Greater_Tropical_Pacific_DJF.png">plot</a>
+                          </td><td align="LEFT"><a href="%%experiment%%-COREv2_flux_LHFLX_stddev_Greater_Tropical_Pacific_JJA.png">plot</a>
+                          </td><td align="LEFT"><a href="%%experiment%%-COREv2_flux_LHFLX_stddev_Greater_Tropical_Pacific_ANN.png">plot</a>
+                        </td></tr><tr>
+                          <th align="LEFT">SHFLX 
+                          </th><td align="LEFT">Sensible Heat Flux
+                          </td><td align="LEFT"><a href="%%experiment%%-COREv2_flux_SHFLX_stddev_Greater_Tropical_Pacific_DJF.png">plot</a>
+                          </td><td align="LEFT"><a href="%%experiment%%-COREv2_flux_SHFLX_stddev_Greater_Tropical_Pacific_JJA.png">plot</a>
+                          </td><td align="LEFT"><a href="%%experiment%%-COREv2_flux_SHFLX_stddev_Greater_Tropical_Pacific_ANN.png">plot</a>
+                        </td></tr><tr>
+                          <th align="LEFT">FLNS 
+                          </th><td align="LEFT">Longwave Heat Flux
+                          </td><td align="LEFT"><a href="%%experiment%%-COREv2_flux_FLNS_stddev_Greater_Tropical_Pacific_DJF.png">plot</a>
+                          </td><td align="LEFT"><a href="%%experiment%%-COREv2_flux_FLNS_stddev_Greater_Tropical_Pacific_JJA.png">plot</a>
+                          </td><td align="LEFT"><a href="%%experiment%%-COREv2_flux_FLNS_stddev_Greater_Tropical_Pacific_ANN.png">plot</a>
+                        </td></tr><tr>
+                          <th align="LEFT">FSNS 
+                          </th><td align="LEFT">Shortwave Heat Flux
+                          </td><td align="LEFT"><a href="%%experiment%%-COREv2_flux_FSNS_stddev_Greater_Tropical_Pacific_DJF.png">plot</a>
+                          </td><td align="LEFT"><a href="%%experiment%%-COREv2_flux_FSNS_stddev_Greater_Tropical_Pacific_JJA.png">plot</a>
+                          </td><td align="LEFT"><a href="%%experiment%%-COREv2_flux_FSNS_stddev_Greater_Tropical_Pacific_ANN.png">plot</a>
+                        </td></tr><tr>
+                          <th align="LEFT">RESSURF 
+                          </th><td align="LEFT">Surface Net Heat Flux
+                          </td><td align="LEFT"><a href="%%experiment%%-COREv2_flux_RESSURF_stddev_Greater_Tropical_Pacific_DJF.png">plot</a>
+                          </td><td align="LEFT"><a href="%%experiment%%-COREv2_flux_RESSURF_stddev_Greater_Tropical_Pacific_JJA.png">plot</a>
+                          </td><td align="LEFT"><a href="%%experiment%%-COREv2_flux_RESSURF_stddev_Greater_Tropical_Pacific_ANN.png">plot</a>
+	</td></tr><tr>
+	  <td><br>
+  </td></tr></tbody></table>
+        <br>
+        <br>
+        <font size="+1" color="green"><b>Regression on Nino3 Index</b></font><br>
+        <br>
+        <table>
+	<tbody><tr>
+	  <th><br>
+	  </th><th align="LEFT"><font size="+1" color="brown">Precipitation (COREv2)</font>
+	  </th><th>DJF
+	  </th><th>JJA
+	  </th><th>ANN
+                        </th></tr><tr>
+                          <th align="LEFT">PRECT 
+                          </th><td align="LEFT">Precipitation Rate
+                          </td><td align="LEFT"><a href="%%experiment%%_regr_PRECT_global_DJF_TS_Nino3_DJF.png">plot</a>
+                          </td><td align="LEFT"><a href="%%experiment%%_regr_PRECT_global_JJA_TS_Nino3_JJA.png">plot</a>
+                          </td><td align="LEFT"><a href="%%experiment%%_regr_PRECT_global_ANN_TS_Nino3_ANN.png">plot</a>
+	</td></tr><tr>
+	  <td><br>
+	</td></tr><tr>
+	  <th><br>
+	  </th><th align="LEFT"><font size="+1" color="brown">Temperature (NCEP2)</font>
+	  </th><th>DJF
+	  </th><th>JJA
+	  </th><th>ANN
+                        </th></tr><tr>
+                          <th align="LEFT">TS 
+                          </th><td align="LEFT">Surface Temperature
+                          </td><td align="LEFT"><a href="%%experiment%%_regr_TS_global_DJF_TS_Nino3_DJF.png">plot</a>
+                          </td><td align="LEFT"><a href="%%experiment%%_regr_TS_global_JJA_TS_Nino3_JJA.png">plot</a>
+                          </td><td align="LEFT"><a href="%%experiment%%_regr_TS_global_ANN_TS_Nino3_ANN.png">plot</a>
+	</td></tr><tr>
+	  <td><br>
+	</td></tr><tr>
+	  <th><br>
+	  </th><th align="LEFT"><font size="+1" color="brown">Sea Level Pressure (NCEP2_surface)</font>
+	  </th><th>DJF
+	  </th><th>JJA
+	  </th><th>ANN
+                        </th></tr><tr>
+                          <th align="LEFT">PSL 
+                          </th><td align="LEFT">Sea Level Pressure
+                          </td><td align="LEFT"><a href="%%experiment%%_regr_PSL_global_DJF_TS_Nino3_DJF.png">plot</a>
+                          </td><td align="LEFT"><a href="%%experiment%%_regr_PSL_global_JJA_TS_Nino3_JJA.png">plot</a>
+                          </td><td align="LEFT"><a href="%%experiment%%_regr_PSL_global_ANN_TS_Nino3_ANN.png">plot</a>
+	</td></tr><tr>
+	  <td><br>
+	</td></tr><tr>
+	  <th><br>
+	  </th><th align="LEFT"><font size="+1" color="brown">Wind Stress (COREv2_flux)</font>
+	  </th><th>DJF
+	  </th><th>JJA
+	  </th><th>ANN
+                        </th></tr><tr>
+                          <th align="LEFT">TAUX 
+                          </th><td align="LEFT">Ocean Zonal Wind Stress
+                          </td><td align="LEFT"><a href="%%experiment%%_regr_TAUX_global_DJF_TS_Nino3_DJF.png">plot</a>
+                          </td><td align="LEFT"><a href="%%experiment%%_regr_TAUX_global_JJA_TS_Nino3_JJA.png">plot</a>
+                          </td><td align="LEFT"><a href="%%experiment%%_regr_TAUX_global_ANN_TS_Nino3_ANN.png">plot</a>
+	</td></tr><tr>
+	  <td><br>
+	</td></tr><tr>
+	  <th><br>
+	  </th><th align="LEFT"><font size="+1" color="brown">Surface Heat Flux (COREv2_flux)</font>
+	  </th><th>DJF
+	  </th><th>JJA
+	  </th><th>ANN
+                        </th></tr><tr>
+                          <th align="LEFT">LHFLX 
+                          </th><td align="LEFT">Latent Heat Flux
+                          </td><td align="LEFT"><a href="%%experiment%%_regr_LHFLX_global_DJF_TS_Nino3_DJF.png">plot</a>
+                          </td><td align="LEFT"><a href="%%experiment%%_regr_LHFLX_global_JJA_TS_Nino3_JJA.png">plot</a>
+                          </td><td align="LEFT"><a href="%%experiment%%_regr_LHFLX_global_ANN_TS_Nino3_ANN.png">plot</a>
+                        </td></tr><tr>
+                          <th align="LEFT">SHFLX 
+                          </th><td align="LEFT">Sensible Heat Flux
+                          </td><td align="LEFT"><a href="%%experiment%%_regr_SHFLX_global_DJF_TS_Nino3_DJF.png">plot</a>
+                          </td><td align="LEFT"><a href="%%experiment%%_regr_SHFLX_global_JJA_TS_Nino3_JJA.png">plot</a>
+                          </td><td align="LEFT"><a href="%%experiment%%_regr_SHFLX_global_ANN_TS_Nino3_ANN.png">plot</a>
+                        </td></tr><tr>
+                          <th align="LEFT">FLNS 
+                          </th><td align="LEFT">Longwave Heat Flux
+                          </td><td align="LEFT"><a href="%%experiment%%_regr_FLNS_global_DJF_TS_Nino3_DJF.png">plot</a>
+                          </td><td align="LEFT"><a href="%%experiment%%_regr_FLNS_global_JJA_TS_Nino3_JJA.png">plot</a>
+                          </td><td align="LEFT"><a href="%%experiment%%_regr_FLNS_global_ANN_TS_Nino3_ANN.png">plot</a>
+                        </td></tr><tr>
+                          <th align="LEFT">FSNS 
+                          </th><td align="LEFT">Shortwave Heat Flux
+                          </td><td align="LEFT"><a href="%%experiment%%_regr_FSNS_global_DJF_TS_Nino3_DJF.png">plot</a>
+                          </td><td align="LEFT"><a href="%%experiment%%_regr_FSNS_global_JJA_TS_Nino3_JJA.png">plot</a>
+                          </td><td align="LEFT"><a href="%%experiment%%_regr_FSNS_global_ANN_TS_Nino3_ANN.png">plot</a>
+                        </td></tr><tr>
+                          <th align="LEFT">RESSURF 
+                          </th><td align="LEFT">Surface Net Heat Flux
+                          </td><td align="LEFT"><a href="%%experiment%%_regr_RESSURF_global_DJF_TS_Nino3_DJF.png">plot</a>
+                          </td><td align="LEFT"><a href="%%experiment%%_regr_RESSURF_global_JJA_TS_Nino3_JJA.png">plot</a>
+                          </td><td align="LEFT"><a href="%%experiment%%_regr_RESSURF_global_ANN_TS_Nino3_ANN.png">plot</a>
+	</td></tr><tr>
+	  <td><br>
+  </td></tr></tbody></table>
+        <br>
+        <br>
+	<font size="+1" color="green"><b>ENSO Evolution: Lead-lag Regression/Correlation on Nino3.4 Index</b></font><br>
+        <br>
+        <table>
+	<tbody><tr>
+	  <th><br>
+	  </th><th align="LEFT"><font size="+1" color="brown">Precipitation (COREv2)</font>
+          </th><th>Regression
+          </th><th>Correlation
+                        </th></tr><tr>
+                          <th align="LEFT">PRECT 
+                          </th><td align="LEFT">Precipitation Rate
+                          </td><td align="LEFT"><a href="%%experiment%%_ENSO_evolution_regr_PRECT_global_ANN_TS_Nino3.4_ANN.png">plot</a>
+                          </td><td align="LEFT"><a href="%%experiment%%_ENSO_evolution_corr_PRECT_global_ANN_TS_Nino3.4_ANN.png">plot</a>
+	</td></tr><tr>
+	  <td><br>
+	</td></tr><tr>
+	  <th><br>
+	  </th><th align="LEFT"><font size="+1" color="brown">Temperature (NCEP2)</font>
+          </th><th>Regression
+          </th><th>Correlation
+                        </th></tr><tr>
+                          <th align="LEFT">TS 
+                          </th><td align="LEFT">Surface Temperature
+                          </td><td align="LEFT"><a href="%%experiment%%_ENSO_evolution_regr_TS_global_ANN_TS_Nino3.4_ANN.png">plot</a>
+                          </td><td align="LEFT"><a href="%%experiment%%_ENSO_evolution_corr_TS_global_ANN_TS_Nino3.4_ANN.png">plot</a>
+	</td></tr><tr>
+	  <td><br>
+	</td></tr><tr>
+	  <th><br>
+	  </th><th align="LEFT"><font size="+1" color="brown">Sea Level Pressure (NCEP2_surface)</font>
+          </th><th>Regression
+          </th><th>Correlation
+                        </th></tr><tr>
+                          <th align="LEFT">PSL 
+                          </th><td align="LEFT">Sea Level Pressure
+                          </td><td align="LEFT"><a href="%%experiment%%_ENSO_evolution_regr_PSL_global_ANN_TS_Nino3.4_ANN.png">plot</a>
+                          </td><td align="LEFT"><a href="%%experiment%%_ENSO_evolution_corr_PSL_global_ANN_TS_Nino3.4_ANN.png">plot</a>
+	</td></tr><tr>
+	  <td><br>
+	</td></tr><tr>
+	  <th><br>
+	  </th><th align="LEFT"><font size="+1" color="brown">Wind Stress (COREv2_flux)</font>
+          </th><th>Regression
+          </th><th>Correlation
+                        </th></tr><tr>
+                          <th align="LEFT">TAUX 
+                          </th><td align="LEFT">Ocean Zonal Wind Stress
+                          </td><td align="LEFT"><a href="%%experiment%%_ENSO_evolution_regr_TAUX_global_ANN_TS_Nino3.4_ANN.png">plot</a>
+                          </td><td align="LEFT"><a href="%%experiment%%_ENSO_evolution_corr_TAUX_global_ANN_TS_Nino3.4_ANN.png">plot</a>
+	</td></tr><tr>
+	  <td><br>
+	</td></tr><tr>
+	  <th><br>
+	  </th><th align="LEFT"><font size="+1" color="brown">Surface Heat Flux (COREv2_flux)</font>
+          </th><th>Regression
+          </th><th>Correlation
+                        </th></tr><tr>
+                          <th align="LEFT">LHFLX 
+                          </th><td align="LEFT">Latent Heat Flux
+                          </td><td align="LEFT"><a href="%%experiment%%_ENSO_evolution_regr_LHFLX_global_ANN_TS_Nino3.4_ANN.png">plot</a>
+                          </td><td align="LEFT"><a href="%%experiment%%_ENSO_evolution_corr_LHFLX_global_ANN_TS_Nino3.4_ANN.png">plot</a>
+                        </td></tr><tr>
+                          <th align="LEFT">SHFLX 
+                          </th><td align="LEFT">Sensible Heat Flux
+                          </td><td align="LEFT"><a href="%%experiment%%_ENSO_evolution_regr_SHFLX_global_ANN_TS_Nino3.4_ANN.png">plot</a>
+                          </td><td align="LEFT"><a href="%%experiment%%_ENSO_evolution_corr_SHFLX_global_ANN_TS_Nino3.4_ANN.png">plot</a>
+                        </td></tr><tr>
+                          <th align="LEFT">FLNS 
+                          </th><td align="LEFT">Longwave Heat Flux
+                          </td><td align="LEFT"><a href="%%experiment%%_ENSO_evolution_regr_FLNS_global_ANN_TS_Nino3.4_ANN.png">plot</a>
+                          </td><td align="LEFT"><a href="%%experiment%%_ENSO_evolution_corr_FLNS_global_ANN_TS_Nino3.4_ANN.png">plot</a>
+                        </td></tr><tr>
+                          <th align="LEFT">FSNS 
+                          </th><td align="LEFT">Shortwave Heat Flux
+                          </td><td align="LEFT"><a href="%%experiment%%_ENSO_evolution_regr_FSNS_global_ANN_TS_Nino3.4_ANN.png">plot</a>
+                          </td><td align="LEFT"><a href="%%experiment%%_ENSO_evolution_corr_FSNS_global_ANN_TS_Nino3.4_ANN.png">plot</a>
+                        </td></tr><tr>
+                          <th align="LEFT">RESSURF 
+                          </th><td align="LEFT">Surface Net Heat Flux
+                          </td><td align="LEFT"><a href="%%experiment%%_ENSO_evolution_regr_RESSURF_global_ANN_TS_Nino3.4_ANN.png">plot</a>
+                          </td><td align="LEFT"><a href="%%experiment%%_ENSO_evolution_corr_RESSURF_global_ANN_TS_Nino3.4_ANN.png">plot</a>
+	</td></tr><tr>
+	  <td><br>
+  </td></tr></tbody></table>
+  <hr size="2" noshade="noshade">
+  
+  
+</body></html>
