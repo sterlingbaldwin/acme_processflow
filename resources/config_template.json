@@ -10,7 +10,9 @@
         "email",
         "host_directory",
         "short_term_archive",
-        "set_jobs"
+        "set_jobs",
+        "remap_grid_name",
+        "native_grid_name"
     ],
     "e3sm_diags": [
         "host_directory",

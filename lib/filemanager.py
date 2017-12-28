@@ -251,7 +251,11 @@ class FileManager(object):
             experiment (str): the name of the experiment
                 ex: 20170915.beta2.A_WCYCL1850S.ne30_oECv3_ICG.edison
         """
-        print 'Creating file table'
+        msg = 'Creating file table'
+        print_line(
+            ui=False,
+            line=msg,
+            event_list=self.event_list)
         if self.sta:
             msg = 'Using short term archive'
         else:

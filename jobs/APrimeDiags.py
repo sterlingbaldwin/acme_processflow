@@ -25,6 +25,7 @@ class APrimeDiags(object):
         """
         self.event_list = event_list
         self.inputs = {
+            'target_host_path': '',
             'ui': '',
             'web_dir': '',
             'host_url': '',

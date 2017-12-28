@@ -138,9 +138,7 @@ class AMWGDiagnostic(object):
 
         # Create directory of regridded climos
 
-        regrid_path = os.path.join(
-            os.sep.join(self.config['test_path_diag'].split(os.sep)[:-2]),
-            'climo_regrid')
+        regrid_path = self.config['regrided_climo_path']
         file_list = get_climo_output_files(
             input_path=regrid_path,
             start_year=self.start_year,

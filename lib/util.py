@@ -14,7 +14,7 @@ from globus_cli.commands.ls import _get_ls_res as get_ls
 from globus_cli.services.transfer import get_client
 from globus_sdk import TransferData
 
-from jobs.JobStatus import ReverseMap
+from jobs.JobStatus import ReverseMap, JobStatus
 from YearSet import SetStatusMap
 from mailer import Mailer
 from models import DataFile
@@ -31,14 +31,24 @@ def print_line(ui, line, event_list, current_state=False, ignore_text=False):
         current_state (bool): should this print to the current state or not
         ignore_text (bool): should this be printed to the console if in text mode
     """
+    logging.info(line)
     if ui:
         if current_state:
             event_list.replace(0, line)
+            event_list.push(line)
         else:
             event_list.push(line)
     else:
         if not ignore_text:
-            print line
+            now = datetime.now()
+            timestr = '{hour}:{min}:{sec}'.format(
+                hour=now.strftime('%H'),
+                min=now.strftime('%M'),
+                sec=now.strftime('%S'))
+            msg = '{time}: {line}'.format(
+                time=timestr,
+                line=line)
+            print msg
 
 
 def transfer_directory(**kwargs):
@@ -388,11 +398,33 @@ def write_human_state(event_list, job_sets, mutex, state_path='run_state.txt', p
                 out_str += line
 
                 for job in year_set.jobs:
-                    line = '  >   {type} -- {id}: {status}\n'.format(
-                        type=job.type,
-                        id=job.job_id,
-                        status=ReverseMap[job.status])
-                    out_str += line
+                    msg = ''
+                    if job.status == JobStatus.COMPLETED:
+                        if job.config.get('host_url'):
+                            msg += '    > {job} - COMPLETED  :: output hosted :: {url}\n'.format(
+                                url=job.config['host_url'],
+                                job=job.type)
+                        else:
+                            msg += '    > {job} - COMPLETED  :: output located :: {output}\n'.format(
+                                output=job.output_path,
+                                job=job.type)
+                    elif job.status in [JobStatus.FAILED, JobStatus.CANCELLED]:
+                        output_path = os.path.join(
+                            job.config['run_scripts_path'],
+                            '{job}_{start:04d}_{end:04d}.out'.format(
+                                job=job.type,
+                                start=job.start_year,
+                                end=job.end_year))
+                        msg += '    > {job} - {status} :: console output :: {output}\n'.format(
+                            output=output_path,
+                            job=job.type,
+                            status=ReverseMap[job.status])
+                    else:
+                        msg += '    > {job} - {state}\n'.format(
+                            job=job.type,
+                            state=ReverseMap[job.status])
+
+                    out_str += msg
 
                 out_str += '\n'
 

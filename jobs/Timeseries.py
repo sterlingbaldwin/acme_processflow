@@ -170,7 +170,6 @@ class Timeseries(object):
                     if start == self.config['start_year'] and end == self.config['end_year']:
                         found = True
                         break
-
             if not found:
                 complete = False
                 break

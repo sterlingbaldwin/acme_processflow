@@ -208,8 +208,6 @@ def main(test=False, **kwargs):
             print " Status file: {}".format(state_path)
             print "--------------------------"
         while True:
-            # flush stdout to play nice with nohup
-            sys.stdout.flush()
             # Check the remote status once every 5 minutes
             if loop_count == remote_check_delay:
                 loop_count = 0

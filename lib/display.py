@@ -167,10 +167,10 @@ def display(stdscr, event, job_sets, filemanager, event_list):
             for year_set in job_sets:
                 y, x = print_year_set_info(pad, year_set, y, x, hmax, wmax)
                 # # if the job_set is done collapse it
-                # if year_set.status == SetStatus.COMPLETED \
-                #         or year_set.status == SetStatus.NO_DATA \
-                #         or year_set.status == SetStatus.PARTIAL_DATA:
-                #     continue
+                if year_set.status == SetStatus.COMPLETED \
+                        or year_set.status == SetStatus.NO_DATA \
+                        or year_set.status == SetStatus.PARTIAL_DATA:
+                    continue
                 for job in year_set.jobs:
                     y, x = print_job_info(pad, job, y, x, hmax, wmax, now)
 
