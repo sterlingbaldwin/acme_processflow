@@ -884,16 +884,20 @@ class RunManager(object):
         if job.type == 'aprime_diags':
             # aprime handles its own hosting
             host_dir = job.config['web_dir']
-            while True:
-                try:
-                    p = Popen(['chmod', '-R', '0755', host_dir])
-                    out, err = p.communicate()
-                except:
-                    sleep(1)
-                else:
-                    break
-            head, _ = os.path.split(host_dir)
-            os.chmod(head, 0755)
+            if os.path.exists(host_dir):
+                while True:
+                    try:
+                        p = Popen(['chmod', '-R', '0755', host_dir])
+                        out, err = p.communicate()
+                    except:
+                        sleep(1)
+                    else:
+                        break
+            try:
+                head, _ = os.path.split(host_dir)
+                os.chmod(head, 0755)
+            except:
+                pass
 
             # move the files from the place that aprime auto
             # generates them to where we actually want them to be
@@ -901,10 +905,21 @@ class RunManager(object):
             head, tail = os.path.split(target_host_dir)
             if not os.path.exists(head):
                 os.makedirs(head)
-            if os.path.exists(host_dir) and not os.path.exists(target_host_dir):
-                move(
-                    src=host_dir,
-                    dst=target_host_dir)
+            if os.path.exists(host_dir):
+                if not os.path.exists(target_host_dir):
+                    move(src=host_dir,
+                         dst=target_host_dir)
+            elif os.path.exists(job.config['output_path']):
+                if not os.path.exists(target_host_dir):
+                    source = os.path.join(
+                        job.config['output_path'],
+                        'coupled_diagnostics',
+                        '{exp}_vs_obs'.format(exp=job.config['experiment']),
+                        '{exp}_years{start}-{end}_vs_obs'.format(
+                            exp=job.config['experiment'], start=job.start_year, end=job.end_year))
+                    if os.path.exists(source):
+                        copy2(src=source,
+                              dst=target_host_dir)
             
             if not os.path.exists(os.path.join(target_host_dir, 'index.html')):
                 logging.info(msg)
