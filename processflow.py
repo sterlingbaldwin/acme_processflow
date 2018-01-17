@@ -114,14 +114,7 @@ def main(test=False, **kwargs):
         event_list=event_list)
     filemanager.update_local_status()
     all_data = filemanager.all_data_local()
-    if not all_data:
-        print_line(
-            config['global']['ui'],
-            "Updating remote file status",
-            event_list,
-            current_state=False)
-        filemanager.update_remote_status(client)
-        all_data_remote = filemanager.all_data_remote()
+    
     msg = "Writing human readable state to file"
     print_line(
         ui=config['global']['ui'],
@@ -135,6 +128,14 @@ def main(test=False, **kwargs):
         state_path=state_path,
         print_file_list=config['global'].get('print_file_list'),
         mutex=mutex)
+    if not all_data:
+        print_line(
+            config['global']['ui'],
+            "Updating remote file status",
+            event_list,
+            current_state=False)
+        filemanager.update_remote_status(client)
+        all_data_remote = filemanager.all_data_remote()
 
     dryrun = config['global'].get('dry_run')
     if dryrun:
