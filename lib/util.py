@@ -146,7 +146,7 @@ def check_globus(**kwargs):
         print_debug(e)
         return False, endpoint
     else:
-        print "Access granted"
+        print "----- Access granted -----"
         return True, None
 
 

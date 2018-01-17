@@ -196,7 +196,7 @@ Please add a space and run again.'''.format(num=line_index)
     else:
         log_path = os.path.join(
             config.get('global').get('output_path'),
-            'workflow.log')
+            'processflow.log')
     config['global']['log_path'] = log_path
     logging.basicConfig(
         format='%(asctime)s:%(levelname)s: %(message)s',
