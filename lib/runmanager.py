@@ -180,12 +180,12 @@ class RunManager(object):
                 end_year=year_set.set_end_year,
                 _type='atm')
 
-            regrid_output_path = os.path.join(
+            regrid_output_path_ts = os.path.join(
                 output_base_path, 'pp',
                 regrid_map_name, 'monthly', 'ts',
                 '{}yr'.format(year_set.length))
-            if not os.path.exists(regrid_output_path):
-                os.makedirs(regrid_output_path)
+            if not os.path.exists(regrid_output_path_ts):
+                os.makedirs(regrid_output_path_ts)
             
             native_output_path = os.path.join(
                 output_base_path, 'pp',
@@ -202,7 +202,7 @@ class RunManager(object):
                 input_path=atm_path,
                 regrid_map_path=config['ncclimo']['regrid_map_path'],
                 var_list=config['ncclimo']['var_list'],
-                regrid_output_path=regrid_output_path,
+                regrid_output_path=regrid_output_path_ts,
                 native_output_path=native_output_path,
                 file_list=file_list)
 
@@ -746,7 +746,12 @@ class RunManager(object):
                             event_list=self.event_list,
                             current_state=True,
                             ignore_text=True)
-                        status = job.execute(dryrun=self._dryrun)
+                        try:
+                            status = job.execute(dryrun=self._dryrun)
+                        except:
+                            # Slurm threw an exception. Reset the job so we can try again
+                            job.status = JobStatus.VALID
+                            continue
                         if status == -1:
                             continue
                         if job.job_id == 0:

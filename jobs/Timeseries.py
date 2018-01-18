@@ -176,24 +176,14 @@ class Timeseries(object):
         """
         for path in [self.config.get('native_output_directory'), self.config.get('regrid_output_directory')]:
             contents = os.listdir(path)
-
+            
+            # Loop through each variable and make sure its been put into the output directory
             for var in self.config.get('var_list'):
-                file_list = [x for x in contents
-                            if re.search(string=x, pattern='{}_'.format(var))
-                            and re.search(string=x, pattern=r'\d{6}_\d{6}')]
+                pattern = '{var}_{start:04d}01_{end:04d}12'.format(
+                    var=var, start=self.start_year, end=self.end_year)
+                file_list = [x for x in contents if re.search(string=x, pattern=pattern)]
                 if not file_list:
                     return False
-                found = False
-                for f in file_list:
-                    s, e = self._find_year(f)
-                    if s == self.start_year and e == self.end_year:
-                        found = True
-                        break
-                if not found:
-                    msg = 'couldnt find {}-{} for {} in {} with file_list {}'.format(self.start_year, self.end_year, var, path, file_list)
-                    logging.error(msg)
-                    return False
-
         return True
 
     @property
