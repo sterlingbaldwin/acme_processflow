@@ -49,6 +49,7 @@ def print_line(ui, line, event_list, current_state=False, ignore_text=False):
                 time=timestr,
                 line=line)
             print msg
+            sys.stdout.flush()
 
 
 def transfer_directory(**kwargs):
