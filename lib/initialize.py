@@ -196,15 +196,21 @@ Please add a space and run again.'''.format(num=line_index)
     else:
         log_path = os.path.join(
             config.get('global').get('output_path'),
-            'workflow.log')
+            'processflow.log')
+    # print_line(
+    #     ui=config['global']['ui'],
+    #     line='Log saved to {}'.format(log_path),
+    #     event_list=event_list,
+    #     current_state=True)
     config['global']['log_path'] = log_path
     logging.basicConfig(
         format='%(asctime)s:%(levelname)s: %(message)s',
         datefmt='%m/%d/%Y %I:%M:%S %p',
         filename=log_path,
         filemode='w',
-        level=logging.INFO)
-    logging.getLogger('globus_sdk').setLevel(logging.WARNING)
+        level=logging.DEBUG)
+    logging.getLogger('globus_sdk').setLevel(logging.ERROR)
+    logging.getLogger('globus_cli').setLevel(logging.ERROR)
 
     # Make sure the set_frequency is a list of ints
     set_frequency = config['global']['set_frequency']
@@ -260,7 +266,7 @@ Please add a space and run again.'''.format(num=line_index)
         event_list=event_list,
         ui=config['global']['ui'],
         database=os.path.join(
-            config['global']['project_path'], 'input', 'workflow.db'),
+            config['global']['project_path'], 'input', 'processflow.db'),
         types=config['global']['file_types'],
         sta=config['global']['short_term_archive'],
         remote_path=config['global']['source_path'],

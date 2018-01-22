@@ -180,12 +180,19 @@ class RunManager(object):
                 end_year=year_set.set_end_year,
                 _type='atm')
 
-            output_path = os.path.join(
+            regrid_output_path_ts = os.path.join(
                 output_base_path, 'pp',
                 regrid_map_name, 'monthly', 'ts',
                 '{}yr'.format(year_set.length))
-            if not os.path.exists(output_path):
-                os.makedirs(output_path)
+            if not os.path.exists(regrid_output_path_ts):
+                os.makedirs(regrid_output_path_ts)
+            
+            native_output_path = os.path.join(
+                output_base_path, 'pp',
+                native_map_name, 'monthly', 'ts',
+                '{}yr'.format(year_set.length))
+            if not os.path.exists(native_output_path):
+                os.makedirs(native_output_path)
 
             # Add the timeseries job to the runmanager
             self.add_timeseries(
@@ -195,7 +202,8 @@ class RunManager(object):
                 input_path=atm_path,
                 regrid_map_path=config['ncclimo']['regrid_map_path'],
                 var_list=config['ncclimo']['var_list'],
-                output_path=output_path,
+                regrid_output_path=regrid_output_path_ts,
+                native_output_path=native_output_path,
                 file_list=file_list)
 
         if required_jobs.get('aprime') or required_jobs.get('aprime_diags'):
@@ -375,13 +383,15 @@ class RunManager(object):
             input_path (str): the path to the raw cam.h0 files
             regrid_map_path (str): the path to the regrid map
             var_list (list(str)): the list of variables to extract
-            output_path (str): the path to store the timeseries output
+            regrid_output_path (str): the path to store the regridded timeseries output
+            native_output_path (str): the path to store the native timeseries output
         """
         start_year = kwargs['start_year']
         end_year = kwargs['end_year']
         year_set = kwargs['year_set']
         input_path = kwargs['input_path']
-        output_path = kwargs['output_path']
+        regrid_output_path = kwargs['regrid_output_path']
+        native_output_path = kwargs['native_output_path']
         regrid_map_path = kwargs['regrid_map_path']
         var_list = kwargs['var_list']
         file_list = kwargs['file_list']
@@ -399,7 +409,8 @@ class RunManager(object):
             'var_list': var_list,
             'start_year': start_year,
             'end_year': end_year,
-            'output_directory': output_path,
+            'regrid_output_directory': regrid_output_path,
+            'native_output_directory': native_output_path,
             'regrid_map_path': regrid_map_path
         }
         timeseries = Timeseries(
@@ -735,7 +746,12 @@ class RunManager(object):
                             event_list=self.event_list,
                             current_state=True,
                             ignore_text=True)
-                        status = job.execute(dryrun=self._dryrun)
+                        try:
+                            status = job.execute(dryrun=self._dryrun)
+                        except:
+                            # Slurm threw an exception. Reset the job so we can try again
+                            job.status = JobStatus.VALID
+                            continue
                         if status == -1:
                             continue
                         if job.job_id == 0:

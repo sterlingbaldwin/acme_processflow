@@ -49,6 +49,7 @@ def print_line(ui, line, event_list, current_state=False, ignore_text=False):
                 time=timestr,
                 line=line)
             print msg
+            sys.stdout.flush()
 
 
 def transfer_directory(**kwargs):
@@ -146,7 +147,7 @@ def check_globus(**kwargs):
         print_debug(e)
         return False, endpoint
     else:
-        print "Access granted"
+        print "----- Access granted -----"
         return True, None
 
 

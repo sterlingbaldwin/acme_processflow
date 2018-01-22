@@ -538,7 +538,7 @@ class FileManager(object):
         self.mutex.acquire()
         try:
             datafiles = DataFile.select().where(
-                DataFile.local_status == filestatus['NOT_EXIST'])
+                DataFile.local_status == filestatus['NOT_EXIST']).execute()
             for datafile in datafiles:
                 should_save = False
                 if os.path.exists(datafile.local_path):

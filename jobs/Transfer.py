@@ -267,9 +267,8 @@ class Transfer(object):
                     self.display_status(
                         percent_complete=percent_complete,
                         task_id=task_id,
-                        num_completed=int(
-                            status['files_transferred']) + int(status['files_skipped']),
-                        num_total=status['files'])
+                        num_completed=int(status['subtasks_total']),
+                        num_total=int(status['subtasks_total']))
                     message = 'Transfer job completed'
                     self.status = JobStatus.COMPLETED
                     return
@@ -281,16 +280,17 @@ class Transfer(object):
                 elif status['status'] == 'ACTIVE':
                     if number_transfered < status['files_transferred']:
                         number_transfered = status['files_transferred']
-                        logging.info(
-                            'progress %d/%d', status['files_transferred'], status['files'])
-                        percent_complete = (float(status['files_transferred'] + float(
-                            status['files_skipped'])) / float(status['files'])) * 100
+                        msg = 'progress {}/{}'.format(
+                            status['subtasks_total'] - status['subtasks_pending'], status['subtasks_total'])
+                        logging.info(msg)
+                        percent_complete = float(
+                            status['subtasks_total'] - status['subtasks_pending']) / status['subtasks_total'] * 100
                         self.display_status(
                             percent_complete=percent_complete,
                             task_id=task_id,
                             num_completed=int(
-                                status['files_transferred']) + int(status['files_skipped']),
-                            num_total=status['files'])
+                                status['subtasks_total'] - status['subtasks_pending']),
+                            num_total=status['subtasks_total'])
                     self.status = JobStatus.RUNNING
                 if event and event.is_set():
                     client.cancel_task(task_id)

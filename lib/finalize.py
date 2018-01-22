@@ -3,7 +3,7 @@ import logging
 import time
 
 from shutil import rmtree
-from jobs.JobStatus import JobStatus, StatusMap
+from jobs.JobStatus import JobStatus, StatusMap, ReverseMap
 from lib.mailer import Mailer
 from lib.util import print_message, print_line, print_debug
 
@@ -72,11 +72,11 @@ def finalize(config, job_sets, event_list, status, display_event, thread_list, k
                         msg += '    > {job} - {status} :: console output :: {output}\n'.format(
                             output=output_path,
                             job=job.type,
-                            status=StatusMap[job.status])
+                            status=ReverseMap[job.status])
                     else:
                         msg += '    > {job} - {state}\n'.format(
                             job=job.type,
-                            state=StatusMap[job.status])
+                            state=ReverseMap[job.status])
                 msg += '\n\n'
 
             m = Mailer(src='processflowbot@llnl.gov', dst=emailaddr)
