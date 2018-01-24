@@ -5,6 +5,7 @@ import re
 import os
 import socket
 
+from shutil import rmtree
 from time import sleep
 from datetime import datetime
 from string import Formatter

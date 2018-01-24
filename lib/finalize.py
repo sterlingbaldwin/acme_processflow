@@ -2,24 +2,26 @@ import os
 import logging
 import time
 
-from shutil import rmtree
 from jobs.JobStatus import JobStatus, StatusMap, ReverseMap
 from lib.mailer import Mailer
 from lib.util import print_message, print_line, print_debug, native_cleanup
 
 
 def finalize(config, job_sets, event_list, status, display_event, thread_list, kill_event):
-    if status == 1 and config['global']['native_cleanup'] == 1:
+    if status == 1 and config['global']['native_grid_cleanup'] in [1, '1', 'true']:
         message = 'Performing post run cleanup'
-        print_line(
+        native_cleanup(
+            output_path=config['global']['output_path'],
+            native_grid_name=config['global']['native_grid_name'])
+    else:
+        message = 'Leaving native grid files in place'
+
+    print_line(
             ui=config['global']['ui'],
             line=message,
             event_list=event_list,
             current_state=True,
             ignore_text=False)
-        native_cleanup(
-            output_path=config['global']['output_path'],
-            native_grid_name=config['global']['native_grid_name'])
 
     message = 'All processing complete' if status == 1 else "One or more job failed"
     emailaddr = config.get('global').get('email')
