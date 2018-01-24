@@ -616,3 +616,17 @@ def thread_sleep(seconds, event):
             return 1
         sleep(1)
     return 0
+
+def native_cleanup(output_path, native_grid_name):
+    """
+    Remove non-regridded files after run completion
+    """
+    native_path = os.path.join(
+        output_path, 'pp', native_grid_name)
+    if os.path.exists(native_path):
+        try:
+            rmtree(native_path)
+        except OSError:
+            return False
+        else:
+            return True
