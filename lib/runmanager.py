@@ -241,6 +241,7 @@ class RunManager(object):
                 os.makedirs(output_path)
 
             self.add_aprime(
+                sim_start_year=config['global']['simulation_start_year'],
                 target_host_path=target_host_path,
                 output_path=output_path,
                 web_directory=web_directory,
@@ -438,6 +439,7 @@ class RunManager(object):
             test_mpas_mesh_name (str): The test mpas mesh name
             aprime_code_path (str): the path to the aprime code
             target_host_path (str): the real hosting directory
+            sim_start_year (int): the simulation start year
         """
         target_host_path = kwargs['target_host_path']
         web_directory = kwargs['web_directory']
@@ -452,6 +454,7 @@ class RunManager(object):
         test_mpas_mesh_name = kwargs['test_mpas_mesh_name']
         aprime_code_path = kwargs['aprime_code_path']
         filemanager = kwargs['filemanager']
+        sim_start_year = kwargs['sim_start_year']
 
         if not self._precheck(year_set, 'aprime_diags'):
             return
@@ -487,6 +490,7 @@ class RunManager(object):
             return
 
         config = {
+            'simulation_start_year': sim_start_year,
             'target_host_path': target_host_path,
             'ui': self.ui,
             'web_dir': web_directory,
@@ -748,7 +752,7 @@ class RunManager(object):
                             ignore_text=True)
                         try:
                             status = job.execute(dryrun=self._dryrun)
-                        except:
+                        except Exception as e:
                             # Slurm threw an exception. Reset the job so we can try again
                             job.status = JobStatus.VALID
                             continue
