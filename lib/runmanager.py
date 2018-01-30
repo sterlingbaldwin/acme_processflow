@@ -4,7 +4,7 @@ import time
 import re
 from datetime import datetime
 from threading import Thread
-from shutil import copytree, move, copy2
+from shutil import copytree, move, copytree, rmtree, copy2
 from subprocess import Popen
 
 from lib.slurm import Slurm
@@ -182,14 +182,14 @@ class RunManager(object):
 
             regrid_output_path_ts = os.path.join(
                 output_base_path, 'pp',
-                regrid_map_name, 'monthly', 'ts',
+                regrid_map_name, 'ts', 'monthly',
                 '{}yr'.format(year_set.length))
             if not os.path.exists(regrid_output_path_ts):
                 os.makedirs(regrid_output_path_ts)
-            
+
             native_output_path = os.path.join(
                 output_base_path, 'pp',
-                native_map_name, 'monthly', 'ts',
+                native_map_name, 'ts', 'monthly',
                 '{}yr'.format(year_set.length))
             if not os.path.exists(native_output_path):
                 os.makedirs(native_output_path)
@@ -241,7 +241,7 @@ class RunManager(object):
                 os.makedirs(output_path)
 
             self.add_aprime(
-                sim_start_year=config['global']['simulation_start_year'],
+                simulation_start_year=config['global']['simulation_start_year'],
                 target_host_path=target_host_path,
                 output_path=output_path,
                 web_directory=web_directory,
@@ -454,7 +454,7 @@ class RunManager(object):
         test_mpas_mesh_name = kwargs['test_mpas_mesh_name']
         aprime_code_path = kwargs['aprime_code_path']
         filemanager = kwargs['filemanager']
-        sim_start_year = kwargs['sim_start_year']
+        simulation_start_year = kwargs['simulation_start_year']
 
         if not self._precheck(year_set, 'aprime_diags'):
             return
@@ -490,7 +490,7 @@ class RunManager(object):
             return
 
         config = {
-            'simulation_start_year': sim_start_year,
+            'simulation_start_year': simulation_start_year,
             'target_host_path': target_host_path,
             'ui': self.ui,
             'web_dir': web_directory,
@@ -754,6 +754,10 @@ class RunManager(object):
                             status = job.execute(dryrun=self._dryrun)
                         except Exception as e:
                             # Slurm threw an exception. Reset the job so we can try again
+                            msg = '{job} failed to start execution'.format(job=job.type)
+                            logging.error(msg)
+                            msg = repr(e)
+                            logging.error(e)
                             job.status = JobStatus.VALID
                             continue
                         if status == -1:
@@ -902,9 +906,15 @@ class RunManager(object):
 
         # Finally host the files
         if job.type == 'aprime_diags':
+
             # aprime handles its own hosting
             host_dir = job.config['web_dir']
             if os.path.exists(host_dir):
+                try:
+                    head, _ = os.path.split(host_dir)
+                    os.chmod(head, 0755)
+                except:
+                    pass
                 while True:
                     try:
                         p = Popen(['chmod', '-R', '0755', host_dir])
@@ -913,22 +923,21 @@ class RunManager(object):
                         sleep(1)
                     else:
                         break
-            try:
-                head, _ = os.path.split(host_dir)
-                os.chmod(head, 0755)
-            except:
-                pass
-
             # move the files from the place that aprime auto
             # generates them to where we actually want them to be
+
+            # first make sure the parent directory exists
             target_host_dir = job.config['target_host_path']
             head, tail = os.path.split(target_host_dir)
             if not os.path.exists(head):
                 os.makedirs(head)
+
+            # next copy over the aprime output
             if os.path.exists(host_dir):
-                if not os.path.exists(target_host_dir):
-                    move(src=host_dir,
-                         dst=target_host_dir)
+                if os.path.exists(target_host_dir):
+                    rmtree(target_host_dir)
+                move(src=host_dir,
+                     dst=target_host_dir)
             elif os.path.exists(job.config['output_path']):
                 if not os.path.exists(target_host_dir):
                     source = os.path.join(
@@ -938,9 +947,12 @@ class RunManager(object):
                         '{exp}_years{start}-{end}_vs_obs'.format(
                             exp=job.config['experiment'], start=job.start_year, end=job.end_year))
                     if os.path.exists(source):
-                        copy2(src=source,
-                              dst=target_host_dir)
-            
+                        copytree(src=source,
+                                 dst=target_host_dir)
+                    else:
+                        msg = 'Unable to find source directory: {}'.format(source)
+                        logging.error(msg)
+
             if not os.path.exists(os.path.join(target_host_dir, 'index.html')):
                 logging.info(msg)
                 variables = {
@@ -1027,10 +1039,8 @@ class RunManager(object):
         host_dir = job.config.get('web_dir')
         url = job.config.get('host_url')
         if os.path.exists(job.config.get('web_dir')):
-            new_id = time.strftime("%Y-%m-%d-%I-%M")
-            host_dir += '_' + new_id
-            url += '_' + new_id + job.host_suffix
-            job.config['host_url'] = url
+            rmtree(job.config.get('web_dir'))
+
         if not os.path.exists(img_src):
             msg = '{job} hosting failed, no image source at {path}'.format(
                 job=job.type,

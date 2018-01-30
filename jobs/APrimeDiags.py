@@ -168,13 +168,13 @@ class APrimeDiags(object):
 
     def execute(self, dryrun=False):
         """
-        Perform the actual work
+        Setup the run script which will symlink in all the required data,
+        and submit that script to resource manager
         """
         # First check if the job has already been completed
         if self.postvalidate():
             self.status = JobStatus.COMPLETED
             return 0
-        self.status = JobStatus.PENDING
 
         set_string = '{start:04d}_{end:04d}'.format(
             start=self.config.get('start_year'),
@@ -230,10 +230,18 @@ class APrimeDiags(object):
                  'mpas-cice_in', 'meridionalHeatTransport',
                  'mpascice.rst']
         for datatype in types:
-            input_files += self.filemanager.get_file_paths_by_year(
-                start_year=self.config['simulation_start_year'],
+            new_files = self.filemanager.get_file_paths_by_year(
+                start_year=self.start_year,
                 end_year=self.end_year,
                 _type=datatype)
+            if new_files is None or len(new_files) == 0:
+                return -1
+            input_files += new_files
+        if self.config['simulation_start_year'] != self.start_year:
+            input_files += self.filemanager.get_file_paths_by_year(
+                start_year=self.config['simulation_start_year'],
+                end_year=self.config['simulation_start_year'] + 1,
+                _type='ocn')
         variables = {
             'WORKDIR': self.config.get('aprime_code_path'),
             'CONSOLE_OUTPUT': '{}.out'.format(run_script),

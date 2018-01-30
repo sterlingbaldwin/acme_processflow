@@ -46,6 +46,7 @@ class AMWGDiagnostic(object):
         self.output_path = None
         self.year_set = config.get('year_set', 0)
         self.inputs = {
+            'simulation_start_year': '',
             'ui': '',
             'web_dir': '',
             'host_url': '',
