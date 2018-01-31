@@ -431,7 +431,7 @@ class FileManager(object):
                             n = q.execute()
                     except Exception as e:
                         print_debug(e)
-                        print "Do you have the correct start and end dates?"
+                        print "Do you have the correct start and end dates and experiment name?"
                     except OperationalError as operror:
                         line = 'Error writing to database, database is locked by another process'
                         print_line(
