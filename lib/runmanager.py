@@ -175,10 +175,6 @@ class RunManager(object):
                 regrid_output_path=regrid_output_path)
 
         if required_jobs.get('timeseries'):
-            file_list = filemanager.get_file_paths_by_year(
-                start_year=year_set.set_start_year,
-                end_year=year_set.set_end_year,
-                _type='atm')
 
             regrid_output_path_ts = os.path.join(
                 output_base_path, 'pp',
@@ -196,6 +192,7 @@ class RunManager(object):
 
             # Add the timeseries job to the runmanager
             self.add_timeseries(
+                filemanager=filemanager,
                 start_year=year_set.set_start_year,
                 end_year=year_set.set_end_year,
                 year_set=year_set,
@@ -203,8 +200,7 @@ class RunManager(object):
                 regrid_map_path=config['ncclimo']['regrid_map_path'],
                 var_list=config['ncclimo']['var_list'],
                 regrid_output_path=regrid_output_path_ts,
-                native_output_path=native_output_path,
-                file_list=file_list)
+                native_output_path=native_output_path)
 
         if required_jobs.get('aprime') or required_jobs.get('aprime_diags'):
             # Add the aprime job
@@ -386,6 +382,7 @@ class RunManager(object):
             var_list (list(str)): the list of variables to extract
             regrid_output_path (str): the path to store the regridded timeseries output
             native_output_path (str): the path to store the native timeseries output
+            filemanager (FileManager): A pointer to the global filemanager
         """
         start_year = kwargs['start_year']
         end_year = kwargs['end_year']
@@ -395,14 +392,14 @@ class RunManager(object):
         native_output_path = kwargs['native_output_path']
         regrid_map_path = kwargs['regrid_map_path']
         var_list = kwargs['var_list']
-        file_list = kwargs['file_list']
+        filemanager = kwargs['filemanager']
 
         if not self._precheck(year_set, 'timeseries'):
             return
 
         config = {
+            'filemanager': filemanager,
             'ui': self.ui,
-            'file_list': file_list,
             'run_scripts_path': self.scripts_path,
             'annual_mode': 'sdd',
             'caseId': self.caseID,
