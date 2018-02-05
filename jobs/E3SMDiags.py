@@ -153,36 +153,31 @@ class E3SMDiags(object):
             src=template_out,
             dst=template_copy)
 
-        # Create directory of regridded climos
-        file_list = get_climo_output_files(
-            input_path=self.config['regrid_output_path'],
-            start_year=self.start_year,
-            end_year=self.end_year)
-        create_symlink_dir(
-            src_dir=self.config['regrid_output_path'],
-            src_list=file_list,
-            dst=self.config['regrided_climo_path'])
-
         # setup sbatch script
         run_script = os.path.join(
             self.config.get('run_scripts_path'),
             run_name)
         if os.path.exists(run_script):
             os.remove(run_script)
-
-        self.slurm_args['output_file'] = '-o {output_file}'.format(
-            output_file=run_script + '.out')
-
-        cmd = 'acme_diags_driver.py -p {template}'.format(
-            template=template_out)
-
-        slurm_args_str = ['#SBATCH {value}\n'.format(
-            value=v) for k, v in self.slurm_args.items()]
-        slurm_prefix = ''.join(slurm_args_str)
-        with open(run_script, 'w') as batchfile:
-            batchfile.write('#!/bin/bash\n')
-            batchfile.write(slurm_prefix)
-            batchfile.write(cmd)
+        
+        # Create directory of regridded climos
+        file_list = get_climo_output_files(
+            input_path=self.config['regrid_output_path'],
+            start_year=self.start_year,
+            end_year=self.end_year)
+        variables = {
+            'SRC_LIST': file_list,
+            'SRC_DIR': self.config['regrid_output_path'],
+            'DST': self.config['regrided_climo_path'],
+            'CONSOLE_OUTPUT': '{}.out'.format(run_script),
+            'PARAMS_PATH': template_out
+        }
+        resource_dir, _ = os.path.split(self.config.get('template_path'))
+        submission_template_path = os.path.join(resource_dir, 'e3sm_diags_submission_template.sh')
+        render(
+            variables=variables,
+            input_path=submission_template_path,
+            output_path=run_script)
 
         slurm = Slurm()
         msg = 'Submitting to queue {type}: {start:04d}-{end:04d}'.format(

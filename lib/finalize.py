@@ -2,37 +2,26 @@ import os
 import logging
 import time
 
-from shutil import rmtree
 from jobs.JobStatus import JobStatus, StatusMap, ReverseMap
 from lib.mailer import Mailer
-from lib.util import print_message, print_line, print_debug
+from lib.util import print_message, print_line, print_debug, native_cleanup
 
 
 def finalize(config, job_sets, event_list, status, display_event, thread_list, kill_event):
-    message = 'Performing post run cleanup'
-    print_line(
-        ui=config['global']['ui'],
-        line=message,
-        event_list=event_list,
-        current_state=True,
-        ignore_text=False)
-    if not config.get('global').get('no_cleanup', False):
-        msg = 'Not cleaning up temp directories'
-        print_line(
-            ui=config['global']['ui'],
-            line=msg,
-            event_list=event_list,
-            current_state=True,
-            ignore_text=False)
+    if status == 1 and config['global']['native_grid_cleanup'] in [1, '1', 'true']:
+        message = 'Performing post run cleanup'
+        native_cleanup(
+            output_path=config['global']['output_path'],
+            native_grid_name=config['global']['native_grid_name'])
     else:
-        msg = 'Cleaning up climo files'
-        print_line(
+        message = 'Leaving native grid files in place'
+
+    print_line(
             ui=config['global']['ui'],
-            line=msg,
+            line=message,
             event_list=event_list,
             current_state=True,
             ignore_text=False)
-        cleanup(output_path=config['global']['output_path'])
 
     message = 'All processing complete' if status == 1 else "One or more job failed"
     emailaddr = config.get('global').get('email')
@@ -95,12 +84,3 @@ def finalize(config, job_sets, event_list, status, display_event, thread_list, k
         t.join(timeout=1.0)
     time.sleep(2)
 
-def cleanup(output_path):
-    """
-    Remove non-regridded climatologies after run completion
-    """
-    climo_path = os.path.join(
-        output_path,
-        'climo')
-    if os.path.exists(climo_path):
-        rmtree(climo_path)

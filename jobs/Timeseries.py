@@ -31,6 +31,7 @@ class Timeseries(object):
         self.config = {}
         self._status = JobStatus.INVALID
         self._type = 'timeseries'
+        self.filemanager = config['filemanager']
         self.year_set = config.get('year_set', 0)
         self.start_year = config['start_year']
         self.end_year = config['end_year']
@@ -109,7 +110,10 @@ class Timeseries(object):
             self.status = JobStatus.COMPLETED
             return 0
 
-        file_list = self.config['file_list']
+        file_list = self.filemanager.get_file_paths_by_year(
+            start_year=self.start_year,
+            end_year=self.end_year,
+            _type='atm')
         file_list.sort()
         list_string = ' '.join(file_list)
         slurm_command = ' '.join([

@@ -7,11 +7,14 @@ data_files = [(sys.prefix + '/share/processflow/resources',
                 'resources/config_template.json',
                 'resources/aprime_template.bash',
                 'resources/acme-banner_1.jpg',
-                'resources/aprime_index.html'])]
+                'resources/aprime_index.html',
+                'resources/aprime_submission_template.sh',
+                'resources/e3sm_diags_submission_template.sh',
+                'resources/amwg_submission_template.sh'])]
 
 setup(
     name="acme_processflow",
-    version="1.0.0",
+    version="0.4.65",
     author="Sterling Baldwin",
     author_email="baldwin32@llnl.gov",
     description="ACME Automated Processflow for handling post processing jobs for raw model data",

@@ -12,7 +12,8 @@
         "short_term_archive",
         "set_jobs",
         "remap_grid_name",
-        "native_grid_name"
+        "native_grid_name",
+        "native_grid_cleanup"
     ],
     "e3sm_diags": [
         "host_directory",

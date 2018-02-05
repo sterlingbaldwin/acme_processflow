@@ -186,7 +186,7 @@ class Climo(object):
             input_path=regrid_dir,
             start_year=set_start_year,
             end_year=set_end_year)
-        if len(file_list) < 17:
+        if len(file_list) < 12:
             return False
 
         return True

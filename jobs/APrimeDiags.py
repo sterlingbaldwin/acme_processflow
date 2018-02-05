@@ -25,6 +25,7 @@ class APrimeDiags(object):
         """
         self.event_list = event_list
         self.inputs = {
+            'simulation_start_year': '',
             'target_host_path': '',
             'ui': '',
             'web_dir': '',
@@ -167,19 +168,13 @@ class APrimeDiags(object):
 
     def execute(self, dryrun=False):
         """
-        Perform the actual work
+        Setup the run script which will symlink in all the required data,
+        and submit that script to resource manager
         """
         # First check if the job has already been completed
         if self.postvalidate():
             self.status = JobStatus.COMPLETED
             return 0
-
-        # create symlinks to the input data
-        setup_status = self.setup_input_directory()
-        if setup_status == 0: # Some data is missing
-            return -1
-        elif setup_status == 2: # an exception took place
-            return False
 
         set_string = '{start:04d}_{end:04d}'.format(
             start=self.config.get('start_year'),
@@ -190,7 +185,7 @@ class APrimeDiags(object):
             os.makedirs(self.config['output_path'])
 
         # render run template
-        template_out = os.path.join(
+        run_aprime_template_out = os.path.join(
             self.output_path,
             'run_aprime.bash')
         variables = {
@@ -205,9 +200,9 @@ class APrimeDiags(object):
         render(
             variables=variables,
             input_path=self.config['template_path'],
-            output_path=template_out)
+            output_path=run_aprime_template_out)
 
-        # copy the tempalte into the run_scripts directory
+        # copy the template into the run_scripts directory
         run_name = '{type}_{start:04d}_{end:04d}'.format(
             start=self.start_year,
             end=self.end_year,
@@ -216,32 +211,52 @@ class APrimeDiags(object):
             self.config.get('run_scripts_path'),
             run_name)
         copyfile(
-            src=template_out,
+            src=run_aprime_template_out,
             dst=template_copy)
-
         # create the slurm run script
         cmd = 'sh {run_aprime}'.format(
-            run_aprime=template_out)
+            run_aprime=run_aprime_template_out)
 
         run_script = os.path.join(
             self.config.get('run_scripts_path'),
             run_name)
         if os.path.exists(run_script):
             os.remove(run_script)
+        
+        # render the submission script, which includes input directory setup
+        input_files = list()
+        types = ['atm', 'ocn', 'ice', 'streams.ocean',
+                 'streams.cice', 'rest', 'mpas-o_in',
+                 'mpas-cice_in', 'meridionalHeatTransport',
+                 'mpascice.rst']
+        for datatype in types:
+            new_files = self.filemanager.get_file_paths_by_year(
+                start_year=self.start_year,
+                end_year=self.end_year,
+                _type=datatype)
+            if new_files is None or len(new_files) == 0:
+                return -1
+            input_files += new_files
+        if self.config['simulation_start_year'] != self.start_year:
+            input_files += self.filemanager.get_file_paths_by_year(
+                start_year=self.config['simulation_start_year'],
+                end_year=self.config['simulation_start_year'] + 1,
+                _type='ocn')
+        variables = {
+            'WORKDIR': self.config.get('aprime_code_path'),
+            'CONSOLE_OUTPUT': '{}.out'.format(run_script),
+            'FILES': input_files,
+            'INPUT_PATH': self.config['input_path'],
+            'EXPERIMENT': self.config['experiment'],
+            'SCRIPT_PATH': run_aprime_template_out
+        }
 
-        self.slurm_args['out_file'] = '-o {out}'.format(
-            out=run_script + '.out')
-        self.slurm_args['working_dir'] = '--workdir {dir}'.format(
-            dir=self.config.get('aprime_code_path'))
-        slurm_args = ['#SBATCH {}'.format(
-            self.slurm_args[s]) for s in self.slurm_args]
-        slurm_prefix = '\n'.join(slurm_args) + '\n'
-
-        with open(run_script, 'w') as batchfile:
-            batchfile.write('#!/bin/bash\n')
-            batchfile.write(slurm_prefix)
-            batchfile.write('export OMP_NUM_THREADS=2\n')
-            batchfile.write(cmd)
+        head, _ = os.path.split(self.config['template_path'])
+        submission_template_path = os.path.join(head, 'aprime_submission_template.sh')
+        render(
+            variables=variables,
+            input_path=submission_template_path,
+            output_path=run_script)
 
         slurm = Slurm()
         msg = 'Submitting to queue {type}: {start:04d}-{end:04d}'.format(
