@@ -14,7 +14,7 @@
         "remap_grid_name",
         "native_grid_name",
         "native_grid_cleanup",
-        "allocation"
+        "account"
     ],
     "e3sm_diags": [
         "host_directory",

@@ -41,6 +41,7 @@ class Timeseries(object):
         self.end_time = None
         self.output_path = None
         self.inputs = {
+            'account': '',
             'ui': '',
             'year_set': '',
             'annual_mode': '',
@@ -73,6 +74,10 @@ class Timeseries(object):
             if i in self.inputs:
                 self.config[i] = config.get(i)
         
+        account = self.config.get('account')
+        if account:
+            self.slurm_args['account'] = '-A {}'.format(account)
+
         # make sure the run_scripts_path is setup
         if not os.path.exists(self.config.get('run_scripts_path')):
             os.makedirs(self.config.get('run_scripts_path'))

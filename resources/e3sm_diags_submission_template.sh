@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH %%ACCOUNT%%
+#SBATCH -A %%ACCOUNT%%
 #SBATCH -N 1
 #SBATCH -o %%CONSOLE_OUTPUT%%
 #SBATCH -n 16
