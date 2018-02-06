@@ -141,7 +141,7 @@ set cntl_filetype   =  monthly_history
 
 set cntl_path_history = /glade/scratch/hannay/archive/$cntl_casename/atm/hist/ 
 set cntl_path_climo   = /glade/scratch/hannay/amwg/climo/$cntl_casename/  
-#set cntl_path_HPSS    = /CCSM/csm/${cntl_casename}/atm/hist/
+#set cntl_path_HPSS    = NONE
 
 #******************************************************************
 
