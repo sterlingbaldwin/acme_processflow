@@ -23,7 +23,8 @@ from jobs.JobStatus import JobStatus, StatusMap, ReverseMap
 
 
 class RunManager(object):
-    def __init__(self, event_list, output_path, caseID, scripts_path, thread_list, event, ui, resource_path):
+    def __init__(self, event_list, output_path, caseID, scripts_path, thread_list, event, ui, resource_path, account):
+        self.account = account
         self.ui = ui
         self.output_path = output_path
         self.slurm = Slurm()
@@ -350,6 +351,7 @@ class RunManager(object):
             return
 
         config = {
+            'account': self.account,
             'ui': self.ui,
             'run_scripts_path': self.scripts_path,
             'start_year': start_year,
@@ -398,6 +400,7 @@ class RunManager(object):
             return
 
         config = {
+            'account': self.account,
             'filemanager': filemanager,
             'ui': self.ui,
             'run_scripts_path': self.scripts_path,
@@ -487,6 +490,7 @@ class RunManager(object):
             return
 
         config = {
+            'account': self.account,
             'simulation_start_year': simulation_start_year,
             'target_host_path': target_host_path,
             'ui': self.ui,
@@ -567,6 +571,7 @@ class RunManager(object):
             return
 
         config = {
+            'account': self.account,
             'ui': self.ui,
             'web_dir': web_directory,
             'host_url': host_url,
@@ -652,6 +657,7 @@ class RunManager(object):
             return
 
         config = {
+            'account': self.account,
             'ui': self.ui,
             'regrid_output_path': regrid_output_path,
             'web_dir': web_directory,
@@ -949,6 +955,12 @@ class RunManager(object):
                     else:
                         msg = 'Unable to find source directory: {}'.format(source)
                         logging.error(msg)
+
+            if not os.path.exists(target_host_dir):
+                msg = "Error hosting aprime output for {start:04d}-{end:04d}".format(
+                    start=job.start_year, end=job.end_year)
+                logging.error(msg)
+                return
 
             if not os.path.exists(os.path.join(target_host_dir, 'index.html')):
                 logging.info(msg)

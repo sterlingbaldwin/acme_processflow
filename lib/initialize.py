@@ -350,6 +350,7 @@ Please add a space and run again.'''.format(num=line_index)
 
     # setup the runmanager
     runmanager = RunManager(
+        account=config['global']['account'],
         resource_path=config['global']['resource_dir'],
         ui=config['global']['ui'],
         event_list=event_list,

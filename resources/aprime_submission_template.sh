@@ -1,4 +1,5 @@
 #!/bin/bash
+#SBATCH %%ACCOUNT%%
 #SBATCH -N 1
 #SBATCH --workdir %%WORKDIR%%
 #SBATCH -n 32
