@@ -182,6 +182,10 @@ Please add a space and run again.'''.format(num=line_index)
     config['global']['pp_path'] = pp_path
     config['global']['diags_path'] = diags_path
 
+    # check if account information is given
+    if not config['global'].get('account'):
+        config['global']['account'] = ''
+
     # Copy the config into the input directory for safe keeping
     input_config_path = os.path.join(
         config['global']['input_path'], 'run.cfg')
@@ -261,17 +265,20 @@ Please add a space and run again.'''.format(num=line_index)
     head, tail = os.path.split(config['global']['source_path'])
     if tail == 'run':
         config['global']['source_path'] = head
+    
+    db_path = os.path.join(config['global']['input_path'], 'processflow.db')
+    if not os.path.exists(config['global']['input_path']):
+        os.makedirs(config['global']['input_path'])
 
     filemanager = FileManager(
         event_list=event_list,
         ui=config['global']['ui'],
-        database=os.path.join(
-            config['global']['project_path'], 'input', 'processflow.db'),
+        database=db_path,
         types=config['global']['file_types'],
         sta=config['global']['short_term_archive'],
         remote_path=config['global']['source_path'],
         remote_endpoint=config['transfer']['source_endpoint'],
-        local_path=os.path.join(config['global']['project_path'], 'input'),
+        local_path=config['global']['input_path'],
         local_endpoint=config['transfer']['destination_endpoint'],
         mutex=mutex)
     filemanager.populate_file_list(
