@@ -1,5 +1,5 @@
 export VERSION="1.0.0"
-export BUILD_NAME="rc2"
+export BUILD_NAME="rc3"
 export CONDA_BLD_PATH=~/conda-bld
 USER="acme"
 PLATFORM="linux-64"
