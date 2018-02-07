@@ -91,7 +91,7 @@ class Climo(object):
             return 0
         self.config['output_directory'] = self.config['regrid_output_directory']
         self.output_path = self.config['regrid_output_directory']
-        self.slurm_args['account'] = self.config['account']
+        self.slurm_args['account'] = self.config.get('account', '')
         if not os.path.exists(self.config.get('run_scripts_path')):
             os.makedirs(self.config.get('run_scripts_path'))
         if self.year_set == 0:

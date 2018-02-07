@@ -79,6 +79,8 @@ class E3SMDiags(object):
 
         valid = True
         for key, val in self.config.items():
+            if key == 'account':
+                continue
             if val == '':
                 valid = False
                 msg = '{0}: {1} is missing or empty'.format(key, val)
@@ -161,7 +163,7 @@ class E3SMDiags(object):
             start_year=self.start_year,
             end_year=self.end_year)
         variables = {
-            'ACCOUNT': self.config['account'],
+            'ACCOUNT': self.config.get('account', ''),
             'SRC_LIST': file_list,
             'SRC_DIR': self.config['regrid_output_path'],
             'DST': self.config['regrided_climo_path'],

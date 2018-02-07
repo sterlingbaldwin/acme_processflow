@@ -189,7 +189,7 @@ did you add ncclimo to this year_set?""".format(start=self.start_year,
             os.remove(run_script)
 
         variables = {
-            'ACCOUNT': self.config['account'],
+            'ACCOUNT': self.config.get('account', ''),
             'SRC_DIR': regrid_path,
             'SRC_LIST': file_list,
             'DST': self.config['test_path_climo'],

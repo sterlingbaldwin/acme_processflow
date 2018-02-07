@@ -242,7 +242,7 @@ class APrimeDiags(object):
                 end_year=self.config['simulation_start_year'] + 1,
                 _type='ocn')
         variables = {
-            'ACCOUNT': self.config['account'],
+            'ACCOUNT': self.config.get('account', ''),
             'WORKDIR': self.config.get('aprime_code_path'),
             'CONSOLE_OUTPUT': '{}.out'.format(run_script),
             'FILES': input_files,

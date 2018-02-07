@@ -73,7 +73,7 @@ class Timeseries(object):
         for i in config:
             if i in self.inputs:
                 self.config[i] = config.get(i)
-        
+
         account = self.config.get('account')
         if account:
             self.slurm_args['account'] = '-A {}'.format(account)
