@@ -20,6 +20,7 @@ class E3SMDiags(object):
     def __init__(self, config, event_list):
         self.event_list = event_list
         self.inputs = {
+            'account': '',
             'ui': '',
             'regrid_base_path': '',
             'regrid_output_path': '',
@@ -40,12 +41,6 @@ class E3SMDiags(object):
             'web_dir': '',
             'host_url': '',
             'output_path': ''
-        }
-        self.slurm_args = {
-            'num_cores': '-n 16',  # 16 cores
-            'run_time': '-t 0-05:00',  # 2 hour max run time
-            'num_machines': '-N 1',  # run on one machine
-            'oversubscribe': '--oversubscribe'
         }
         self.start_time = None
         self.end_time = None
@@ -166,6 +161,7 @@ class E3SMDiags(object):
             start_year=self.start_year,
             end_year=self.end_year)
         variables = {
+            'ACCOUNT': self.config['account'],
             'SRC_LIST': file_list,
             'SRC_DIR': self.config['regrid_output_path'],
             'DST': self.config['regrided_climo_path'],

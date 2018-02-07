@@ -25,6 +25,7 @@ class APrimeDiags(object):
         """
         self.event_list = event_list
         self.inputs = {
+            'account': '',
             'simulation_start_year': '',
             'target_host_path': '',
             'ui': '',
@@ -42,11 +43,6 @@ class APrimeDiags(object):
             'test_mpas_mesh_name': '',
             'aprime_code_path': '',
             'filemanager': ''
-        }
-        self.slurm_args = {
-            'num_cores': '-n 32',  # 32 cores
-            'run_time': '-t 0-05:00',  # 2 hours run time
-            'num_machines': '-N 1',  # run on one node
         }
         self.start_time = None
         self.end_time = None
@@ -175,6 +171,9 @@ class APrimeDiags(object):
         if self.postvalidate():
             self.status = JobStatus.COMPLETED
             return 0
+        
+        # set the job to pending so it doesnt get double started
+        self.status = JobStatus.PENDING
 
         set_string = '{start:04d}_{end:04d}'.format(
             start=self.config.get('start_year'),
@@ -243,6 +242,7 @@ class APrimeDiags(object):
                 end_year=self.config['simulation_start_year'] + 1,
                 _type='ocn')
         variables = {
+            'ACCOUNT': self.config['account'],
             'WORKDIR': self.config.get('aprime_code_path'),
             'CONSOLE_OUTPUT': '{}.out'.format(run_script),
             'FILES': input_files,

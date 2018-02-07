@@ -23,7 +23,8 @@ from jobs.JobStatus import JobStatus, StatusMap, ReverseMap
 
 
 class RunManager(object):
-    def __init__(self, event_list, output_path, caseID, scripts_path, thread_list, event, ui, resource_path):
+    def __init__(self, event_list, output_path, caseID, scripts_path, thread_list, event, ui, resource_path, account):
+        self.account = account
         self.ui = ui
         self.output_path = output_path
         self.slurm = Slurm()
@@ -59,7 +60,6 @@ class RunManager(object):
                 if running_jobs >= self.max_running_jobs:
                     return True
             return False
-
 
     def setup_job_sets(self, set_frequency, sim_start_year, sim_end_year, config, filemanager):
         sim_length = sim_end_year - sim_start_year + 1
@@ -266,7 +266,7 @@ class RunManager(object):
                 config.get('global').get('experiment'),
                 config.get('amwg').get('host_directory'),
                 set_string])
-            
+
             output_path = os.path.join(
                 output_base_path, 'diags',
                 regrid_map_name, 'amwg',
@@ -301,7 +301,7 @@ class RunManager(object):
                 config['global']['experiment'],
                 config['e3sm_diags']['host_directory'],
                 set_string])
-            
+
             output_path = os.path.join(
                 output_base_path, 'diags',
                 regrid_map_name, 'e3sm_diags',
@@ -350,6 +350,7 @@ class RunManager(object):
             return
 
         config = {
+            'account': self.account,
             'ui': self.ui,
             'run_scripts_path': self.scripts_path,
             'start_year': start_year,
@@ -398,6 +399,7 @@ class RunManager(object):
             return
 
         config = {
+            'account': self.account,
             'filemanager': filemanager,
             'ui': self.ui,
             'run_scripts_path': self.scripts_path,
@@ -487,6 +489,7 @@ class RunManager(object):
             return
 
         config = {
+            'account': self.account,
             'simulation_start_year': simulation_start_year,
             'target_host_path': target_host_path,
             'ui': self.ui,
@@ -567,6 +570,7 @@ class RunManager(object):
             return
 
         config = {
+            'account': self.account,
             'ui': self.ui,
             'web_dir': web_directory,
             'host_url': host_url,
@@ -652,6 +656,7 @@ class RunManager(object):
             return
 
         config = {
+            'account': self.account,
             'ui': self.ui,
             'regrid_output_path': regrid_output_path,
             'web_dir': web_directory,
@@ -751,7 +756,8 @@ class RunManager(object):
                             status = job.execute(dryrun=self._dryrun)
                         except Exception as e:
                             # Slurm threw an exception. Reset the job so we can try again
-                            msg = '{job} failed to start execution'.format(job=job.type)
+                            msg = '{job} failed to start execution'.format(
+                                job=job.type)
                             logging.error(msg)
                             msg = repr(e)
                             logging.error(e)
@@ -774,7 +780,8 @@ class RunManager(object):
                         try:
                             slurm.showjob(job.job_id)
                         except:
-                            msg = "Error submitting {job} to queue".format(job=job.type)
+                            msg = "Error submitting {job} to queue".format(
+                                job=job.type)
                             print_line(
                                 ui=self.ui,
                                 line=msg,
@@ -920,9 +927,9 @@ class RunManager(object):
                         sleep(1)
                     else:
                         break
+
             # move the files from the place that aprime auto
             # generates them to where we actually want them to be
-
             # first make sure the parent directory exists
             target_host_dir = job.config['target_host_path']
             head, tail = os.path.split(target_host_dir)
@@ -930,7 +937,7 @@ class RunManager(object):
                 os.makedirs(head)
 
             # next copy over the aprime output
-            if os.path.exists(host_dir):
+            if os.path.exists(host_dir) and not os.path.isdir(host_dir):
                 if os.path.exists(target_host_dir):
                     rmtree(target_host_dir)
                 move(src=host_dir,
@@ -947,8 +954,15 @@ class RunManager(object):
                         copytree(src=source,
                                  dst=target_host_dir)
                     else:
-                        msg = 'Unable to find source directory: {}'.format(source)
+                        msg = 'Unable to find source directory: {}'.format(
+                            source)
                         logging.error(msg)
+
+            if not os.path.exists(target_host_dir):
+                msg = "Error hosting aprime output for {start:04d}-{end:04d}".format(
+                    start=job.start_year, end=job.end_year)
+                logging.error(msg)
+                return
 
             if not os.path.exists(os.path.join(target_host_dir, 'index.html')):
                 logging.info(msg)
@@ -974,7 +988,8 @@ class RunManager(object):
 
             if not os.path.exists(os.path.join(target_host_dir, 'acme-banner_1.jpg')):
                 try:
-                    src = os.path.join(self._resource_path, 'acme-banner_1.jpg')
+                    src = os.path.join(self._resource_path,
+                                       'acme-banner_1.jpg')
                     dst = os.path.join(target_host_dir, 'acme-banner_1.jpg')
                     copy2(
                         src=src,
