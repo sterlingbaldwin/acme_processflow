@@ -23,7 +23,8 @@ from jobs.JobStatus import JobStatus, StatusMap, ReverseMap
 
 
 class RunManager(object):
-    def __init__(self, event_list, output_path, caseID, scripts_path, thread_list, event, ui, resource_path, account):
+    def __init__(self, event_list, output_path, caseID, scripts_path, thread_list, event, ui, resource_path, account, short_name):
+        self.short_name = short_name
         self.account = account
         self.ui = ui
         self.output_path = output_path
@@ -141,8 +142,7 @@ class RunManager(object):
             end=end_year)
 
         atm_path = os.path.join(
-            config['global']['project_path'],
-            'input',
+            config['global']['input_path'],
             'atm')
         output_base_path = config['global']['output_path']
         run_scripts_path = config['global']['run_scripts_path']
@@ -570,6 +570,7 @@ class RunManager(object):
             return
 
         config = {
+            'short_name': self.short_name,
             'account': self.account,
             'ui': self.ui,
             'web_dir': web_directory,
@@ -656,6 +657,7 @@ class RunManager(object):
             return
 
         config = {
+            'short_name': self.short_name,
             'account': self.account,
             'ui': self.ui,
             'regrid_output_path': regrid_output_path,

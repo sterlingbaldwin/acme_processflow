@@ -310,7 +310,7 @@ set tick_marks = 1       # (0=ON,1=OFF)
 set custom_names = 0     # (0=ON,1=OFF)
 
 # if needed set the names
-set test_name = $test_casename                    # test case name 
+set test_name = %%short_name%%            # test case name 
 set cntl_name = cam3_5_cntl               # control case name
 
 #----------------------------------------------------------------

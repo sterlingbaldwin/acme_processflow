@@ -6,6 +6,7 @@
         "simulation_end_year",
         "set_frequency",
         "experiment",
+        "short_name",
         "img_host_server",
         "email",
         "host_directory",

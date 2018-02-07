@@ -265,7 +265,7 @@ Please add a space and run again.'''.format(num=line_index)
     head, tail = os.path.split(config['global']['source_path'])
     if tail == 'run':
         config['global']['source_path'] = head
-    
+
     db_path = os.path.join(config['global']['input_path'], 'processflow.db')
     if not os.path.exists(config['global']['input_path']):
         os.makedirs(config['global']['input_path'])
@@ -341,10 +341,10 @@ Please add a space and run again.'''.format(num=line_index)
 
         line = 'Checking file access on globus transfer nodes'
         print_line(
-                ui=config['global']['ui'],
-                line=line,
-                event_list=event_list,
-                current_state=True)
+            ui=config['global']['ui'],
+            line=line,
+            event_list=event_list,
+            current_state=True)
         setup_success, endpoint = check_globus(
             source_endpoint=config['transfer']['source_endpoint'],
             source_path=config['global']['source_path'],
@@ -357,6 +357,7 @@ Please add a space and run again.'''.format(num=line_index)
 
     # setup the runmanager
     runmanager = RunManager(
+        short_name=config['global']['short_name'],
         account=config['global']['account'],
         resource_path=config['global']['resource_dir'],
         ui=config['global']['ui'],

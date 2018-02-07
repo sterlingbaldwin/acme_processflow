@@ -20,6 +20,7 @@ class E3SMDiags(object):
     def __init__(self, config, event_list):
         self.event_list = event_list
         self.inputs = {
+            'short_name': '',
             'account': '',
             'ui': '',
             'regrid_base_path': '',
@@ -120,12 +121,20 @@ class E3SMDiags(object):
         if self.postvalidate():
             self.status = JobStatus.COMPLETED
             return 0
+
+        # setup the short name
+        self.config['short_name'] = '{name}_{start:04d}_{end:04d}'.format(
+            name=self.config['short_name'],
+            start=self.start_year,
+            end=self.end_year)
+
         # render the parameters file
         self.output_path = self.config['output_path']
         template_out = os.path.join(
             self.output_path,
             'params.py')
         variables = {
+            'short_name': self.config['short_name'],
             'sets': self.config['sets'],
             'backend': self.config['backend'],
             'reference_data_path': self.config['reference_data_path'],
@@ -156,7 +165,7 @@ class E3SMDiags(object):
             run_name)
         if os.path.exists(run_script):
             os.remove(run_script)
-        
+
         # Create directory of regridded climos
         file_list = get_climo_output_files(
             input_path=self.config['regrid_output_path'],
@@ -171,7 +180,8 @@ class E3SMDiags(object):
             'PARAMS_PATH': template_out
         }
         resource_dir, _ = os.path.split(self.config.get('template_path'))
-        submission_template_path = os.path.join(resource_dir, 'e3sm_diags_submission_template.sh')
+        submission_template_path = os.path.join(
+            resource_dir, 'e3sm_diags_submission_template.sh')
         render(
             variables=variables,
             input_path=submission_template_path,
