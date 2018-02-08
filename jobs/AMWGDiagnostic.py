@@ -160,12 +160,6 @@ did you add ncclimo to this year_set?""".format(start=self.start_year,
                 current_state=True)
             os.makedirs(self.config['test_path_climo'])
 
-        # setup the short name
-        self.config['short_name'] = '{name}_{start:04d}_{end:04d}'.format(
-            name=self.config['short_name'],
-            start=self.start_year,
-            end=self.end_year)
-
         # render the csh script into the output directory
         self.output_path = self.config['output_path']
         template_out = os.path.join(

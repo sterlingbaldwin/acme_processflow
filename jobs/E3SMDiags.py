@@ -122,12 +122,6 @@ class E3SMDiags(object):
             self.status = JobStatus.COMPLETED
             return 0
 
-        # setup the short name
-        self.config['short_name'] = '{name}_{start:04d}_{end:04d}'.format(
-            name=self.config['short_name'],
-            start=self.start_year,
-            end=self.end_year)
-
         # render the parameters file
         self.output_path = self.config['output_path']
         template_out = os.path.join(
