@@ -2,11 +2,12 @@ import os
 import shutil
 import unittest
 import threading
-from util import transfer_directory
-from util import path_exists
-from util import cmd_exists
-from util import render
-from events import EventList
+
+from lib.util import transfer_directory
+from lib.util import path_exists
+from lib.util import cmd_exists
+from lib.util import render
+from lib.events import EventList
 
 
 class TestFileManager(unittest.TestCase):

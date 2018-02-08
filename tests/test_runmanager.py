@@ -4,9 +4,10 @@ import unittest
 import shutil
 
 from configobj import ConfigObj
-from runmanager import RunManager
-from filemanager import FileManager
-from events import EventList
+
+from lib.runmanager import RunManager
+from lib.filemanager import FileManager
+from lib.events import EventList
 
 
 class TestRunManager(unittest.TestCase):

@@ -1,15 +1,16 @@
 import os
 import unittest
 import threading
-from initialize import initialize
-from events import EventList
+
 from peewee import *
-from models import DataFile
-from YearSet import YearSet
 from shutil import rmtree
 
-from filemanager import FileManager
-from runmanager import RunManager
+from lib.initialize import initialize
+from lib.events import EventList
+from lib.models import DataFile
+from lib.YearSet import YearSet
+from lib.filemanager import FileManager
+from lib.runmanager import RunManager
 
 
 class TestInitialize(unittest.TestCase):

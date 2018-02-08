@@ -2,9 +2,10 @@ import os
 import threading
 import unittest
 import shutil
-from filemanager import FileManager
-from models import DataFile
-from events import EventList
+
+from lib.filemanager import FileManager
+from lib.models import DataFile
+from lib.events import EventList
 from globus_cli.services.transfer import get_client
 
 

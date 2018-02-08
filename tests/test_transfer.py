@@ -7,8 +7,8 @@ import logging
 from lib.util import transfer_directory
 from lib.events import EventList
 
-from Transfer import Transfer
-from JobStatus import JobStatus
+from jobs.Transfer import Transfer
+from jobs.JobStatus import JobStatus
 
 project_path = os.path.abspath(os.path.join('..', 'testproject_transfer'))
 

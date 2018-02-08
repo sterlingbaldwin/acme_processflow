@@ -1,10 +1,10 @@
 import os
 import unittest
 
-from Timeseries import Timeseries
 from configobj import ConfigObj
-from JobStatus import JobStatus
 
+from jobs.Timeseries import Timeseries
+from jobs.JobStatus import JobStatus
 from lib.events import EventList
 
 

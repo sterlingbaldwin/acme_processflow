@@ -1,5 +1,6 @@
-from YearSet import YearSet, SetStatus
 import unittest
+
+from lib.YearSet import YearSet, SetStatus
 
 
 class TestYearSet(unittest.TestCase):

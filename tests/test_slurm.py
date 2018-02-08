@@ -1,7 +1,7 @@
 import unittest
 import os
 
-from slurm import Slurm
+from lib.slurm import Slurm
 
 
 class TestSlurm(unittest.TestCase):

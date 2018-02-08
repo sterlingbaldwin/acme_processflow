@@ -2,10 +2,10 @@ import os
 import unittest
 import shutil
 
-from AMWGDiagnostic import AMWGDiagnostic
 from configobj import ConfigObj
-from JobStatus import JobStatus
 
+from jobs.JobStatus import JobStatus
+from jobs.AMWGDiagnostic import AMWGDiagnostic
 from lib.events import EventList
 
 

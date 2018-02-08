@@ -5,11 +5,11 @@ SECONDS=0
 BRANCH="$(git name-rev --name-only HEAD)"
 echo "running tests for branch $BRANCH"
 
-tests=("jobs/test_e3sm.py" "lib/test_initialize.py" "lib/test_yearset.py" "lib/test_filemanager.py" "lib/test_util.py" "lib/test_slurm.py" "jobs/test_transfer.py" "lib/test_mailer.py" "jobs/test_ncclimo.py" "jobs/test_timeseries.py" "jobs/test_amwg.py" "lib/test_runmanager.py")
+tests=("tests/test_e3sm.py" "tests/test_initialize.py" "tests/test_yearset.py" "tests/test_filemanager.py" "tests/test_util.py" "tests/test_slurm.py" "tests/test_transfer.py" "tests/test_mailer.py" "tests/test_ncclimo.py" "tests/test_timeseries.py" "tests/test_amwg.py" "tests/test_runmanager.py")
 
 if [ "$1" == "all" ]; then
     echo "Running end to end tests"
-    tests+=("./test_processflow.py")
+    tests+=("tests/test_processflow.py")
 else
     echo "Skipping end to end tests"
 fi
@@ -19,7 +19,7 @@ do
     let "TOTAL+=1"
     tname=$(python -c "name='${test}';tname=name.split('/')[-1].split('.')[0];print tname")
     echo "--- testing ${tname} ---"
-    if COVERAGE_FILE=.coverage_$tname coverage run --source=.,lib,jobs --omit="lib/test*","test*","lib/display.py","jobs/test*","*__init__.py","setup.py" $test; then
+    if COVERAGE_FILE=.coverage_$tname coverage run --source=.,tests --omit="*__init__.py","setup.py" $test; then
         echo "--- ${tname} passed ---"
         let "PASSED+=1"
     else
@@ -38,7 +38,10 @@ fi
 if [ -d /var/www/acme/acme-diags ]; then
     mv htmlcov /var/www/acme/acme-diags/baldwin32
 fi
-rm slurm-*
+
+if [ -d slurm-* ]; then
+    rm slurm-*
+fi 
 
 echo $PASSED "out of" $TOTAL "modules passed their tests"
 duration=$SECONDS

@@ -1,10 +1,10 @@
 import os
 import unittest
 
-from Ncclimo import Climo as Ncclimo
 from configobj import ConfigObj
-from JobStatus import JobStatus
 
+from jobs.Ncclimo import Climo as Ncclimo
+from jobs.JobStatus import JobStatus
 from lib.events import EventList
 
 

@@ -3,7 +3,7 @@ import os
 
 from configobj import ConfigObj
 
-from E3SMDiags import E3SMDiags
+from jobs.E3SMDiags import E3SMDiags
 from lib.events import EventList
 
 

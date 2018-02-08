@@ -1,8 +1,10 @@
 import unittest
 import os
 import shutil
-from processflow import main
+
 from configobj import ConfigObj
+
+from processflow import main
 
 
 class TestProcessflow(unittest.TestCase):
@@ -39,7 +41,6 @@ class TestProcessflow(unittest.TestCase):
     def test_processflow_from_scratch_yes_sta(self):
         config_path = os.path.join(
             os.getcwd(), 'tests', 'test_yes_sta_minimal.cfg')
-
 
         config = ConfigObj(config_path)
         project_path = config['global']['project_path']
