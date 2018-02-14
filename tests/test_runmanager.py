@@ -1,9 +1,13 @@
-import os
+import os, sys
 import threading
 import unittest
 import shutil
+import inspect
 
 from configobj import ConfigObj
+
+if sys.path[0] != '.':
+    sys.path.insert(0, os.path.abspath('.'))
 
 from lib.runmanager import RunManager
 from lib.filemanager import FileManager
@@ -18,6 +22,7 @@ class TestRunManager(unittest.TestCase):
         self.config = ConfigObj(config_path)
         self.project_path = os.path.join(os.getcwd(), '..', 'testproject')
         self.output_path = os.path.join(self.project_path, 'output')
+        self.input_path = os.path.join(self.project_path, 'input')
         self.run_scripts_path = os.path.join(
             self.project_path, 'output', 'run_scripts')
         self.mutex = threading.Lock()
@@ -25,20 +30,33 @@ class TestRunManager(unittest.TestCase):
         self.remote_path = '/global/homes/r/renata/ACME_simulations/20171011.beta2_FCT2-icedeep_branch.A_WCYCL1850S.ne30_oECv3_ICG.edison/'
         self.local_endpoint = 'a871c6de-2acd-11e7-bc7c-22000b9a448b'
         self.config['global']['output_path'] = self.output_path
+        self.config['global']['input_path'] = self.input_path
         self.config['global']['run_scripts_path'] = self.run_scripts_path
         self.config['global']['resource_dir'] = os.path.abspath('./resources')
 
     def test_runmanager_setup(self):
+        print '---- Starting Test: {} ----'.format(inspect.stack()[0][3])
+        db_path = os.path.join(self.project_path, 'test.db')
+        if os.path.exists(db_path):
+            os.remove(db_path)
+        if os.path.exists(self.project_path):
+            shutil.rmtree(self.project_path)
+        os.makedirs(self.project_path)
         filemanager = FileManager(
+            ui=False,
             event_list=EventList(),
-            database=os.path.join(self.project_path, 'test.db'),
+            database=db_path,
             types=['atm'],
             sta=False,
             mutex=self.mutex,
             remote_endpoint=self.remote_endpoint,
             remote_path=self.remote_path,
-            local_endpoint=self.local_endpoint)
+            local_endpoint=self.local_endpoint,
+            local_path=self.project_path)
         runmanager = RunManager(
+            short_name='testname',
+            account='',
+            resource_path='',
             ui=False,
             event_list=EventList(),
             output_path=self.output_path,
@@ -79,16 +97,28 @@ class TestRunManager(unittest.TestCase):
                 self.assertTrue('e3sm_diags' in job_names)
 
     def test_runmanager_write(self):
+        print '---- Starting Test: {} ----'.format(inspect.stack()[0][3])
+        db_path = os.path.join(self.project_path, 'test.db')
+        if os.path.exists(db_path):
+            os.remove(db_path)
+        # if os.path.exists(self.project_path):
+        #     shutil.rmtree(self.project_path)
+        # os.makedirs(self.project_path)
         filemanager = FileManager(
+            ui=False,
             event_list=EventList(),
-            database=os.path.join(self.project_path, 'test.db'),
+            database=db_path,
             types=['atm'],
             sta=False,
             mutex=self.mutex,
             remote_endpoint=self.remote_endpoint,
             remote_path=self.remote_path,
-            local_endpoint=self.local_endpoint)
+            local_endpoint=self.local_endpoint,
+            local_path=self.project_path)
         runmanager = RunManager(
+            short_name='testname',
+            account='',
+            resource_path='',
             ui=False,
             event_list=EventList(),
             output_path=self.output_path,

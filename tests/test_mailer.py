@@ -1,6 +1,11 @@
+import os, sys
 import unittest
 
+if sys.path[0] != '.':
+    sys.path.insert(0, os.path.abspath('.'))
+
 from lib.mailer import Mailer
+
 
 
 class TestMailer(unittest.TestCase):

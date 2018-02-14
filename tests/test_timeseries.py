@@ -1,7 +1,10 @@
-import os
+import os, sys
 import unittest
-
+import inspect
 from configobj import ConfigObj
+
+if sys.path[0] != '.':
+    sys.path.insert(0, os.path.abspath('.'))
 
 from jobs.Timeseries import Timeseries
 from jobs.JobStatus import JobStatus
@@ -17,7 +20,10 @@ class TestTimeseries(unittest.TestCase):
         self.project_path = os.path.join(os.getcwd(), '..', 'testproject')
 
     def test_timeseries_setup(self):
+        print '---- Starting Test: {} ----'.format(inspect.stack()[0][3])
         timeseries = Timeseries({
+            'regrid_output_directory': os.getcwd(),
+            'filemanager': None,
             'year_set': 1,
             'annual_mode': 'sdd',
             'start_year': 50,

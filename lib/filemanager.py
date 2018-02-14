@@ -343,8 +343,11 @@ class FileManager(object):
             self.remote_endpoint, if_expires_in=2880)
         if result['code'] == "AutoActivationFailed":
             return False
+
+        # First handle the short term archive case
         if self.sta:
             for _type in self.types:
+                # if the type is restart, handle the special cases
                 if _type == 'rest':
                     if not self.updated_rest:
                         self.mutex.acquire()

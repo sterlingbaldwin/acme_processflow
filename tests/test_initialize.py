@@ -1,9 +1,14 @@
 import os
+import sys
 import unittest
 import threading
+import inspect
 
 from peewee import *
 from shutil import rmtree
+
+if sys.path[0] != '.':
+    sys.path.insert(0, os.path.abspath('.'))
 
 from lib.initialize import initialize
 from lib.events import EventList
@@ -20,7 +25,16 @@ class TestInitialize(unittest.TestCase):
     These tests should be run from the main project directory
     """
 
+    def config_compare(self, configA, configB):
+        for key, value in configB.items():
+            for k2, v2 in value.items():
+                if configA[key].get(k2) is None or configB[key].get(k2) is None or configA[key][k2] != configB[key][k2]:
+                    print key, k2, configA[key].get(k2), configB[key].get(k2)
+                self.assertEqual(configA[key][k2], configB[key][k2])
+
     def test_expected_config(self):
+        print '---- Starting Test: {} ----'.format(inspect.stack()[0][3])
+
         base_path = os.getcwd()
         resource_path = os.path.join(base_path, 'resources')
         project_path = os.path.abspath(os.path.join('..', 'testproject'))
@@ -37,6 +51,11 @@ class TestInitialize(unittest.TestCase):
             thread_list=thread_list,
             kill_event=thread_kill_event,
             mutex=mutex)
+        self.assertTrue(isinstance(config, dict))
+        self.assertFalse(isinstance(filemanager, int))
+        self.assertFalse(isinstance(filemanager, bool))
+        self.assertFalse(isinstance(runmanager, int))
+        self.assertFalse(isinstance(runmanager, bool))
         if not os.environ.get('JENKINS_URL'):
             config['global']['project_path'] = project_path
             config['global']['resource_dir'] = resource_path
@@ -55,6 +74,13 @@ class TestInitialize(unittest.TestCase):
 
         expected_config = {
             'global': {
+                'account': '',
+                'pp_path': '/export/baldwin32/jenkins/workspace/testproject/output/pp',
+                'diags_path': '/export/baldwin32/jenkins/workspace/testproject/output/diags',
+                'short_name': 'beta2_FCT2-icedeep_branch',
+                'native_grid_cleanup': '0',
+                'native_grid_name': 'ne30',
+                'remap_grid_name': 'fv129x256',
                 'project_path': project_path,
                 'source_path': '/global/homes/r/renata/ACME_simulations/20171011.beta2_FCT2-icedeep_branch.A_WCYCL1850S.ne30_oECv3_ICG.edison/',
                 'simulation_start_year': 51,
@@ -104,11 +130,11 @@ class TestInitialize(unittest.TestCase):
                 'test_atm_res': 'ne30',
                 'test_mpas_mesh_name': 'oEC60to30v3'}}
 
-        for key, value in config.items():
-            for k2, v2 in value.items():
-                self.assertEqual(expected_config[key][k2], config[key][k2])
+        self.config_compare(expected_config, config)
 
     def test_expected_config_no_ui(self):
+        print '---- Starting Test: {} ----'.format(inspect.stack()[0][3])
+
         base_path = os.getcwd()
         resource_path = os.path.join(base_path, 'resources')
         args = ['-c', os.path.join(base_path, 'tests',
@@ -124,6 +150,11 @@ class TestInitialize(unittest.TestCase):
             thread_list=thread_list,
             kill_event=thread_kill_event,
             mutex=mutex)
+        self.assertTrue(isinstance(config, dict))
+        self.assertFalse(isinstance(filemanager, int))
+        self.assertFalse(isinstance(filemanager, bool))
+        self.assertFalse(isinstance(runmanager, int))
+        self.assertFalse(isinstance(runmanager, bool))
         if not os.environ.get('JENKINS_URL'):
             config['global']['project_path'] = project_path
             config['global']['resource_dir'] = resource_path
@@ -142,6 +173,13 @@ class TestInitialize(unittest.TestCase):
 
         expected_config = {
             'global': {
+                'account': '',
+                'pp_path': '/export/baldwin32/jenkins/workspace/testproject/output/pp',
+                'diags_path': '/export/baldwin32/jenkins/workspace/testproject/output/diags',
+                'short_name': 'beta2_FCT2-icedeep_branch',
+                'native_grid_cleanup': '0',
+                'native_grid_name': 'ne30',
+                'remap_grid_name': 'fv129x256',
                 'project_path': project_path,
                 'source_path': '/global/homes/r/renata/ACME_simulations/20171011.beta2_FCT2-icedeep_branch.A_WCYCL1850S.ne30_oECv3_ICG.edison/',
                 'simulation_start_year': 51,
@@ -191,13 +229,11 @@ class TestInitialize(unittest.TestCase):
                 'test_atm_res': 'ne30',
                 'test_mpas_mesh_name': 'oEC60to30v3'}}
 
-        for key, value in config.items():
-            for k2, v2 in value.items():
-                if expected_config[key][k2] != config[key][k2]:
-                    print key, k2, expected_config[key][k2], config[key][k2]
-                self.assertEqual(expected_config[key][k2], config[key][k2])
+        self.config_compare(expected_config, config)
 
     def test_config_no_white_space(self):
+        print '---- Starting Test: {} ----'.format(inspect.stack()[0][3])
+
         base_path = os.getcwd()
         resource_path = os.path.join(base_path, 'resources')
         project_path = os.path.abspath(os.path.join('..', 'testproject'))
@@ -219,6 +255,8 @@ class TestInitialize(unittest.TestCase):
         self.assertFalse(runmanager)
 
     def test_config_extra_white_space(self):
+        print '---- Starting Test: {} ----'.format(inspect.stack()[0][3])
+
         base_path = os.getcwd()
         resource_path = os.path.join(base_path, 'resources')
         project_path = os.path.abspath(os.path.join('..', 'testproject'))
@@ -241,6 +279,8 @@ class TestInitialize(unittest.TestCase):
                          '/global/homes/r/renata/ACME_simulations/20171011.beta2_FCT2-icedeep_branch.A_WCYCL1850S.ne30_oECv3_ICG.edison/')
 
     def test_config_bad_destination_endpoint(self):
+        print '---- Starting Test: {} ----'.format(inspect.stack()[0][3])
+
         base_path = os.getcwd()
         resource_path = os.path.join(base_path, 'resources')
         project_path = os.path.abspath(os.path.join('..', 'testproject'))
@@ -262,6 +302,8 @@ class TestInitialize(unittest.TestCase):
         self.assertFalse(runmanager)
 
     def test_config_bad_source_path(self):
+        print '---- Starting Test: {} ----'.format(inspect.stack()[0][3])
+
         base_path = os.getcwd()
         resource_path = os.path.join(base_path, 'resources')
         project_path = os.path.abspath(os.path.join('..', 'testproject'))
@@ -283,6 +325,8 @@ class TestInitialize(unittest.TestCase):
         self.assertFalse(runmanager)
 
     def test_config_config_doesnt_exist(self):
+        print '---- Starting Test: {} ----'.format(inspect.stack()[0][3])
+
         base_path = os.getcwd()
         resource_path = os.path.join(base_path, 'resources')
         project_path = os.path.abspath(os.path.join('..', 'testproject'))
@@ -304,6 +348,8 @@ class TestInitialize(unittest.TestCase):
         self.assertFalse(runmanager)
 
     def test_config_invalid_config(self):
+        print '---- Starting Test: {} ----'.format(inspect.stack()[0][3])
+
         base_path = os.getcwd()
         resource_path = os.path.join(base_path, 'resources')
         project_path = os.path.abspath(os.path.join('..', 'testproject'))
@@ -325,6 +371,8 @@ class TestInitialize(unittest.TestCase):
         self.assertFalse(runmanager)
 
     def test_config_no_config(self):
+        print '---- Starting Test: {} ----'.format(inspect.stack()[0][3])
+
         base_path = os.getcwd()
         resource_path = os.path.join(base_path, 'resources')
         project_path = os.path.abspath(os.path.join('..', 'testproject'))
@@ -345,6 +393,8 @@ class TestInitialize(unittest.TestCase):
         self.assertFalse(runmanager)
 
     def test_bad_config_key(self):
+        print '---- Starting Test: {} ----'.format(inspect.stack()[0][3])
+
         base_path = os.getcwd()
         resource_path = os.path.join(base_path, 'resources')
         project_path = os.path.abspath(os.path.join('..', 'testproject'))
@@ -366,6 +416,8 @@ class TestInitialize(unittest.TestCase):
         self.assertFalse(runmanager)
 
     def test_no_global(self):
+        print '---- Starting Test: {} ----'.format(inspect.stack()[0][3])
+
         base_path = os.getcwd()
         resource_path = os.path.join(base_path, 'resources')
         project_path = os.path.abspath(os.path.join('..', 'testproject'))

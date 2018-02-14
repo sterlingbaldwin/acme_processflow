@@ -1,7 +1,11 @@
-import os
+import os, sys
 import shutil
 import unittest
 import threading
+import inspect
+
+if sys.path[0] != '.':
+    sys.path.insert(0, os.path.abspath('.'))
 
 from lib.util import transfer_directory
 from lib.util import path_exists
@@ -12,24 +16,8 @@ from lib.events import EventList
 
 class TestFileManager(unittest.TestCase):
 
-    def test_transfer_directory(self):
-        project_path = os.path.abspath(
-            os.path.join('..', 'testproject_transfer'))
-        transfer_directory(
-            source_endpoint='9d6d994a-6d04-11e5-ba46-22000b92c6ec',
-            destination_endpoint='a871c6de-2acd-11e7-bc7c-22000b9a448b',
-            src_path='/global/homes/s/sbaldwin/test_directory',
-            dst_path=project_path,
-            event_list=EventList(),
-            event=threading.Event())
-
-        self.assertTrue(os.path.exists(project_path))
-        contents = os.listdir(project_path)
-        for item in ['a', 'b', 'c', 'd']:
-            self.assertTrue(item in contents)
-        shutil.rmtree(project_path)
-
     def test_path_exists_valid(self):
+        print '---- Starting Test: {} ----'.format(inspect.stack()[0][3])
         project_path = os.path.abspath(os.path.join('..', 'testproject'))
         config = {
             'global': {
@@ -85,6 +73,7 @@ class TestFileManager(unittest.TestCase):
         self.assertTrue(status)
 
     def test_path_exists_invalid(self):
+        print '---- Starting Test: {} ----'.format(inspect.stack()[0][3])
         project_path = os.path.abspath(os.path.join('..', 'testproject'))
         config = {
             'global': {
@@ -140,12 +129,15 @@ class TestFileManager(unittest.TestCase):
         self.assertFalse(status)
 
     def test_cmd_exists_valid(self):
+        print '---- Starting Test: {} ----'.format(inspect.stack()[0][3])
         self.assertTrue(cmd_exists('ncclimo'))
 
     def test_cmd_exists_invalid(self):
+        print '---- Starting Test: {} ----'.format(inspect.stack()[0][3])
         self.assertFalse(cmd_exists('not_a_cmd'))
 
     def test_render(self):
+        print '---- Starting Test: {} ----'.format(inspect.stack()[0][3])
         render_target = os.path.join(
             os.getcwd(), 'tests', 'test_render_target.txt')
         render_reference = os.path.join(
@@ -167,11 +159,13 @@ class TestFileManager(unittest.TestCase):
             self.assertTrue(fp.readline() in reference)
 
     def test_render_bad_input_file(self):
+        print '---- Starting Test: {} ----'.format(inspect.stack()[0][3])
         render_target = os.path.join(os.getcwd(), 'tests', 'DOES_NOT_EXIST')
         render_output = os.path.join(os.getcwd(), 'tests', 'render_output.txt')
         self.assertFalse(render({}, render_target, render_output))
 
     def test_render_bad_outout_file(self):
+        print '---- Starting Test: {} ----'.format(inspect.stack()[0][3])
         render_target = os.path.join(
             os.getcwd(), 'tests', 'test_render_target.txt')
         render_output = '/usr/local/NO_PERMISSIONS'

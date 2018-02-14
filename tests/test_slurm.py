@@ -1,5 +1,9 @@
 import unittest
-import os
+import os, sys
+import inspect
+
+if sys.path[0] != '.':
+    sys.path.insert(0, os.path.abspath('.'))
 
 from lib.slurm import Slurm
 
@@ -7,6 +11,7 @@ from lib.slurm import Slurm
 class TestSlurm(unittest.TestCase):
 
     def test_batch(self):
+        print '---- Starting Test: {} ----'.format(inspect.stack()[0][3])
         slurm = Slurm()
         command = os.path.join('tests', 'test_slurm_batch.sh')
         job_id = slurm.batch(command, '-n 1 -N 1')
@@ -28,6 +33,7 @@ class TestSlurm(unittest.TestCase):
         slurm.cancel(job_id)
 
     def test_shownode(self):
+        print '---- Starting Test: {} ----'.format(inspect.stack()[0][3])
         slurm = Slurm()
         node = 'acme1'
         node_info = slurm.shownode(node)

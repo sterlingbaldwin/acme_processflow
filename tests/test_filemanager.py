@@ -1,7 +1,11 @@
-import os
+import os, sys
 import threading
 import unittest
 import shutil
+import inspect
+
+if sys.path[0] != '.':
+    sys.path.insert(0, os.path.abspath('.'))
 
 from lib.filemanager import FileManager
 from lib.models import DataFile
@@ -21,6 +25,8 @@ class TestFileManager(unittest.TestCase):
         self.local_endpoint = 'a871c6de-2acd-11e7-bc7c-22000b9a448b'
 
     def test_filemanager_setup_no_sta(self):
+        print '---- Starting Test: {} ----'.format(inspect.stack()[0][3])
+
         sta = False
         types = ['atm', 'ice', 'ocn', 'rest', 'streams.cice', 'streams.ocean']
         database = 'test.db'
@@ -44,6 +50,8 @@ class TestFileManager(unittest.TestCase):
         os.remove(database)
 
     def test_filemanager_setup_with_sta(self):
+        print '---- Starting Test: {} ----'.format(inspect.stack()[0][3])
+
         sta = True
         types = ['atm', 'ice', 'ocn', 'rest', 'streams.cice', 'streams.ocean']
         database = 'test.db'
@@ -64,6 +72,8 @@ class TestFileManager(unittest.TestCase):
         os.remove(database)
 
     def test_filemanager_populate(self):
+        print '---- Starting Test: {} ----'.format(inspect.stack()[0][3])
+
         sta = False
         types = ['atm', 'ice', 'ocn', 'rest', 'streams.cice', 'streams.ocean']
         database = 'test.db'
@@ -99,6 +109,8 @@ class TestFileManager(unittest.TestCase):
                 self.assertTrue(name in atm_file_names)
 
     def test_filemanager_update_local(self):
+        print '---- Starting Test: {} ----'.format(inspect.stack()[0][3])
+
         sta = False
         types = ['atm', 'ice', 'ocn', 'rest', 'streams.cice', 'streams.ocean']
         database = 'test.db'
@@ -136,8 +148,10 @@ class TestFileManager(unittest.TestCase):
         self.assertTrue(df.local_size > 0)
 
     def test_filemanager_update_remote_no_sta(self):
+        print '---- Starting Test: {} ----'.format(inspect.stack()[0][3])
+
         sta = False
-        types = ['atm', 'ice', 'ocn', 'rest', 'streams.cice', 'streams.ocean']
+        types = ['atm', 'ice', 'ocn', 'rest', 'streams.cice', 'streams.ocean', 'mpascice.rst']
         database = 'test.db'
         simstart = 51
         simend = 60
@@ -160,12 +174,16 @@ class TestFileManager(unittest.TestCase):
         filemanager.update_remote_status(client)
         self.mutex.acquire()
         for datafile in DataFile.select():
+            if datafile.remote_status != 0:
+                print datafile.name, datafile.remote_path, datafile.remote_status, datafile.datatype
             self.assertEqual(datafile.remote_status, 0)
         if self.mutex.locked():
             self.mutex.release()
         self.assertTrue(filemanager.all_data_remote())
 
     def test_filemanager_update_remote_yes_sta(self):
+        print '---- Starting Test: {} ----'.format(inspect.stack()[0][3])
+
         sta = True
         types = ['atm', 'ice', 'ocn', 'streams.cice', 'streams.ocean']
         database = 'test.db'
@@ -199,6 +217,8 @@ class TestFileManager(unittest.TestCase):
         self.assertTrue(filemanager.all_data_remote())
 
     def test_filemanager_all_data_local(self):
+        print '---- Starting Test: {} ----'.format(inspect.stack()[0][3])
+
         sta = True
         types = ['atm', 'ice', 'ocn', 'rest', 'streams.cice', 'streams.ocean']
         database = 'test.db'
