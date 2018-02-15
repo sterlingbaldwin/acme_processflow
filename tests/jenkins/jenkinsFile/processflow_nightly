@@ -1,7 +1,8 @@
-def processflow_dir = "/p/user_pub/e3sm/jenkins/processflow/acme_processflow"
+def processflow_dir = "/p/user_pub/e3sm/jenkins/processflow"
+def repo_dir = "${processflow_dir}/acme_processflow"
 def workdir = "${processflow_dir}/testdir/${env.JOB_NAME}/test_${env.BUILD_NUMBER}"
 
-def scripts_dir = "${processflow_dir}/tests/jenkins/python"
+def scripts_dir = "${repo_dir}/tests/jenkins/python"
 def install_conda = "${scripts_dir}/install_conda.py"
 def install_processflow = "${scripts_dir}/install_processflow.py"
 
@@ -12,7 +13,7 @@ try {
        node('master') {
           // for now clone from jenkins branch
           // sh "git clone -b jenkins ${url} ${processflow_dir}"
-          sh "cd ${processflow_dir}; git pull -u"
+          sh "cd ${repo_dir}; git pull -u"
        }
     }
     stage('conda') {

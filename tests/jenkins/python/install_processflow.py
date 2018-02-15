@@ -1,3 +1,7 @@
+#
+# This script installes processflow 'nightly' or 'latest' version.
+#
+
 import sys
 import os
 import argparse
@@ -67,7 +71,6 @@ if os.path.isdir(env_dir) == True:
 # get env.yml
 env_url = 'https://raw.githubusercontent.com/ACME-Climate/acme_processflow/master/env.yml'
 cmd = 'wget ' + env_url + ' -O ' + workdir + '/env.yml'
-print("xxx CMD: " + cmd)
 
 ret_code = run_cmd(cmd, True, False, True)
 if ret_code != SUCCESS:

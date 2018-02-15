@@ -1,3 +1,7 @@
+#
+# This script installes miniconda2 under the specified <workdir>
+# If <workdir>/miniconda2/bin already exists, it will just return.
+#
 
 import sys
 import os
@@ -13,9 +17,6 @@ parser.add_argument("-w", "--workdir",
 
 args = parser.parse_args()
 workdir = args.workdir
-#current_time = time.localtime(time.time())
-#time_str = time.strftime("%b.%d.%Y.%H.%M.%S", current_time)
-#workdir = top_workdir + '/workdir.' + time_str 
 
 # create a unique dir
 if os.path.isdir(workdir) == True:
@@ -29,7 +30,6 @@ os.makedirs(workdir)
 # get miniconda
 source_url = 'https://repo.continuum.io/miniconda/Miniconda2-latest-Linux-x86_64.sh'
 cmd = 'wget --no-check ' + source_url + ' -O ' + workdir + '/miniconda2.sh'
-print("xxx CMD: " + cmd)
 ret_code = run_cmd(cmd, True, False, True)
 if ret_code != SUCCESS:
     sys.exit(FAILURE)
