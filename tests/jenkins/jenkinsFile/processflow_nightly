@@ -1,0 +1,39 @@
+def error = null
+currentBuild.result = "SUCCESS"
+
+def processflow_dir = "/p/user_pub/e3sm/jenkins/processflow"
+def workdir = "${processflow_dir}/testdir/${env.JOB_NAME}/test_${env.BUILD_NUMBER}"
+
+def scripts_dir = "${processflow_dir}/acme_processflow/tests/jenkins/python"
+def install_conda = "${scripts_dir}/install_conda.py"
+def install_processflow = "${scripts_dir}/install_processflow.py"
+
+def url = 'https://github.com/ACME-Climate/acme_processflow'
+
+try {
+    stage('git_clone') {
+       node('master') {
+       // for now clone from jenkins branch
+          sh "git clone -b jenkins ${url} ${processflow_dir}"
+       }
+    }
+    stage('conda') {
+       node('master') {
+          sh "python ${install_conda} -w ${workdir}"
+       }
+
+    }
+    stage('install_nightly') {
+       node('master') {
+          sh "python ${install_processflow} -w ${workdir} -v 'nightly'"
+       }
+    }
+
+} catch (caughtException) {
+    error = caughtException
+    currentBuild.result = "FAILURE"
+}
+
+
+
+    
