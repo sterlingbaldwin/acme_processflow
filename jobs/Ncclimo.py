@@ -98,10 +98,12 @@ class Climo(object):
             self.status = JobStatus.INVALID
         return 0
 
-    def execute(self):
+    def execute(self, **kwargs):
         """
         Calls ncclimo in a subprocess
         """
+
+        dryrun = kwargs.get('dryrun', False)
 
         # check if the output already exists and the job actually needs to run
         if self.postvalidate():
@@ -143,6 +145,10 @@ class Climo(object):
             batchfile.write('#!/bin/bash\n')
             batchfile.write(slurm_prefix)
             batchfile.write(slurm_command)
+
+        if dryrun:
+            self.status = JobStatus.COMPLETED
+            return 0
 
         slurm = Slurm()
         msg = 'Submitting to queue {type}: {start:04d}-{end:04d}'.format(
