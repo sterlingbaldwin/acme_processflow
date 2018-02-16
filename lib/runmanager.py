@@ -36,7 +36,6 @@ class RunManager(object):
         self.monitor_thread = None
         self.thread_list = thread_list
         self.kill_event = event
-        self._dryrun = False
         self.scripts_path = scripts_path
         self._resource_path = resource_path
         self.max_running_jobs = self.slurm.get_node_number() * 6
@@ -755,7 +754,7 @@ class RunManager(object):
                             current_state=True,
                             ignore_text=True)
                         try:
-                            status = job.execute(dryrun=self._dryrun)
+                            status = job.execute()
                         except Exception as e:
                             # Slurm threw an exception. Reset the job so we can try again
                             msg = '{job} failed to start execution'.format(
@@ -1119,20 +1118,12 @@ class RunManager(object):
         """
 
         # First check for pending jobs
+        #  if any of the sets havent finished yet, we must still be running
         for job_set in self.job_sets:
-            if job_set.status != SetStatus.COMPLETED \
-                    and job_set.status != SetStatus.FAILED:
+            if job_set.status not in [SetStatus.COMPLETED, SetStatus.FAILED]:
                 return -1
         # all job sets are either complete or failed
         for job_set in self.job_sets:
             if job_set.status != SetStatus.COMPLETED:
                 return 0
         return 1
-
-    @property
-    def dryrun(self):
-        return self._dryrun
-
-    @dryrun.setter
-    def dryrun(self, _dryrun):
-        self._dryrun = _dryrun

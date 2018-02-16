@@ -124,7 +124,7 @@ class AMWGDiagnostic(object):
         else:
             return False
 
-    def execute(self, dryrun=False):
+    def execute(self):
         """
         Perform the actual work
         """
@@ -204,10 +204,6 @@ did you add ncclimo to this year_set?""".format(start=self.start_year,
             variables=variables,
             input_path=submission_template_path,
             output_path=run_script)
-
-        if dryrun:
-            self.status = JobStatus.COMPLETED
-            return 0
 
         slurm = Slurm()
         msg = 'submitting to queue {type}: {start:04d}-{end:04d}'.format(

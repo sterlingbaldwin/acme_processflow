@@ -63,7 +63,6 @@ def transfer_directory(**kwargs):
         src_path (str) the path to the source directory to copy
         dst_path (str) the path on the destination directory
     """
-    dry_run = kwargs.get('dry_run')
     src_path = kwargs['src_path']
     event_list = kwargs['event_list']
     event = kwargs['event']
@@ -109,8 +108,7 @@ def transfer_directory(**kwargs):
             break
         else:
             sleep(5)
-        if dry_run is not None and dry_run:
-            event.set()
+
     print_line(
         ui=False,
         line=msg,

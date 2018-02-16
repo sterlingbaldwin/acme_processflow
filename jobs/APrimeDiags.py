@@ -162,7 +162,7 @@ class APrimeDiags(object):
             return 2
         return True
 
-    def execute(self, dryrun=False):
+    def execute(self):
         """
         Setup the run script which will symlink in all the required data,
         and submit that script to resource manager

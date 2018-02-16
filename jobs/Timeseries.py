@@ -107,7 +107,7 @@ class Timeseries(object):
             'year_set': self.year_set
         }, sort_keys=True, indent=4)
 
-    def execute(self, dryrun=False):
+    def execute(self):
         """
         Submits ncclimo to slurm after checking if it had been previously run
         """

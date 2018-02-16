@@ -137,29 +137,6 @@ def main(test=False, **kwargs):
         filemanager.update_remote_status(client)
         all_data_remote = filemanager.all_data_remote()
 
-    dryrun = config['global'].get('dry_run')
-    if dryrun:
-        runmanager.dryrun(True)
-        msg = 'Running in dry-run mode'
-        print_line(
-            ui=config['global']['ui'],
-            line=msg,
-            event_list=event_list,
-            current_state=True)
-        write_human_state(
-            event_list=event_list,
-            job_sets=runmanager.job_sets,
-            state_path=state_path,
-            print_file_list=config['global'].get('print_file_list'),
-            mutex=mutex)
-        if config['global'].get('ui'):
-            sleep(50)
-            display_event.set()
-            for t in thread_list:
-                thread_kill_event.set()
-                t.join(timeout=1.0)
-            return -1
-
     # check if the case_scripts directory is present
     # if its not, transfer it over
     case_scripts_dir = os.path.join(
@@ -290,7 +267,11 @@ def main(test=False, **kwargs):
                 state_path=state_path,
                 print_file_list=config.get('global').get('print_file_list'),
                 mutex=mutex)
+            
             status = runmanager.is_all_done()
+            # return -1 if still running
+            # return 0 if a jobset failed
+            # return 1 if all complete
             if status >= 0:
                 first_print = True
                 while not filemanager.all_data_local():
