@@ -129,8 +129,8 @@ class Timeseries(object):
             '-s', str(self.config['start_year']),
             '-e', str(self.config['end_year']),
             '--ypf={}'.format(self.end_year - self.start_year + 1),
-            '-o', self.config['regrid_output_directory'],
-            '-O', self.config['native_output_directory'],
+            '-O', self.config['regrid_output_directory'],
+            '-o', self.config['native_output_directory'],
             '--map={}'.format(self.config.get('regrid_map_path')),
             list_string
         ])
