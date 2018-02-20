@@ -46,6 +46,11 @@ def parse_args(argv=None, print_help=None):
         help='Don\'t run the remote monitor or move any files over globus.',
         action='store_true')
     parser.add_argument(
+        '-s',
+        '--no-scripts',
+        help='Don\'t copy the case_scripts directory from the remote machine.',
+        action='store_true')
+    parser.add_argument(
         '-f',
         '--file-list',
         help='Turn on debug output of the internal file_list so you can see what the current state of the model files are',
@@ -140,6 +145,7 @@ Please add a space and run again.'''.format(num=line_index)
     config['global']['no_cleanup'] = True if args.no_cleanup else False
     config['global']['no_monitor'] = True if args.no_monitor else False
     config['global']['print_file_list'] = True if args.file_list else False
+    config['global']['no_scripts'] = True if args.no_scripts else False
 
     template_path = os.path.join(
         config['global']['resource_dir'],

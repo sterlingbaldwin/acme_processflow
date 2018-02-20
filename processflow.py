@@ -134,45 +134,54 @@ def main(test=False, **kwargs):
             "Updating remote file status",
             event_list,
             current_state=False)
-        filemanager.update_remote_status(client)
-        all_data_remote = filemanager.all_data_remote()
+        if not config.get('global').get('no_monitor', False):
+            filemanager.update_remote_status(client)
+            all_data_remote = filemanager.all_data_remote()
+        else:
+            all_data_remote = True
 
     # check if the case_scripts directory is present
     # if its not, transfer it over
-    case_scripts_dir = os.path.join(
-        config['global']['input_path'],
-        'case_scripts')
-
-    if not os.path.exists(case_scripts_dir) \
-       and not config['global']['no_monitor']:
+    if config['global']['no_scripts'] or config['global']['no_monitor']:
+        msg = 'Not transfering case_scripts'
+        print_line(
+            ui=config['global']['ui'],
+            line=msg,
+            event_list=event_list)
+    else:
         msg = 'case_scripts not local, transfering remote copy'
         print_line(
             ui=config['global']['ui'],
             line=msg,
             event_list=event_list)
-        logging.info(msg)
-        src_path = os.path.join(
-            config['global']['source_path'], 'case_scripts')
-        while True:
-            try:
-                args = {
-                    'source_endpoint': config['transfer']['source_endpoint'],
-                    'destination_endpoint': config['transfer']['destination_endpoint'],
-                    'src_path': src_path,
-                    'dst_path': case_scripts_dir,
-                    'event_list': event_list,
-                    'event': thread_kill_event
-                }
-                thread = threading.Thread(
-                    target=transfer_directory,
-                    name='transfer_directory',
-                    kwargs=args)
-            except:
-                sleep(1)
-            else:
-                thread_list.append(thread)
-                thread.start()
-                break
+        case_scripts_dir = os.path.join(
+            config['global']['input_path'],
+            'case_scripts')
+
+        if not os.path.exists(case_scripts_dir):
+            logging.info(msg)
+            src_path = os.path.join(
+                config['global']['source_path'], 'case_scripts')
+            while True:
+                try:
+                    args = {
+                        'source_endpoint': config['transfer']['source_endpoint'],
+                        'destination_endpoint': config['transfer']['destination_endpoint'],
+                        'src_path': src_path,
+                        'dst_path': case_scripts_dir,
+                        'event_list': event_list,
+                        'event': thread_kill_event
+                    }
+                    thread = threading.Thread(
+                        target=transfer_directory,
+                        name='transfer_directory',
+                        kwargs=args)
+                except:
+                    sleep(1)
+                else:
+                    thread_list.append(thread)
+                    thread.start()
+                    break
 
     # Main loop
     remote_check_delay = 60
