@@ -541,9 +541,10 @@ class FileManager(object):
 
         self.mutex.acquire()
         try:
-            datafiles = DataFile.select().where(
-                DataFile.local_status == filestatus['NOT_EXIST']).execute()
-            for datafile in datafiles:
+            query = (DataFile
+                            .select()
+                            .where(DataFile.local_status == filestatus['NOT_EXIST']))
+            for datafile in query.execute():
                 should_save = False
                 if os.path.exists(datafile.local_path):
                     local_size = os.path.getsize(datafile.local_path)
@@ -613,7 +614,7 @@ class FileManager(object):
                 (DataFile.local_status != filestatus['IN_TRANSIT']) &
                 ((DataFile.local_status == filestatus['NOT_EXIST']) |
                  (DataFile.local_size != DataFile.remote_size))
-            )]
+            ).execute()]
             if len(required_files) == 0:
                 return False
             target_files = []
@@ -721,7 +722,10 @@ class FileManager(object):
         try:
             self.mutex.acquire()
             names = [x['name'] for x in transfer.file_list]
-            for datafile in DataFile.select().where(DataFile.name << names):
+            query = (DataFile
+                        .select()
+                        .where(DataFile.name << names))
+            for datafile in query.execute():
                 if os.path.exists(datafile.local_path) \
                         and os.path.getsize(datafile.local_path) == datafile.remote_size:
                     datafile.local_status = filestatus['EXISTS']
@@ -776,11 +780,17 @@ class FileManager(object):
 
         self.mutex.acquire()
         try:
-            datafiles = DataFile.select().where(
-                (DataFile.datatype == 'atm') &
-                (DataFile.year >= start_year) &
-                (DataFile.year <= end_year))
-            for datafile in datafiles:
+            # datafiles = DataFile.select().where(
+            #     (DataFile.datatype == 'atm') &
+            #     (DataFile.year >= start_year) &
+            #     (DataFile.year <= end_year))
+            query = (DataFile
+                        .select()
+                        .where(
+                            (DataFile.datatype == 'atm') &
+                            (DataFile.year >= start_year) &
+                            (DataFile.year <= end_year)))
+            for datafile in query.execute():
                 if datafile.local_status in [filestatus['NOT_EXIST'], filestatus['IN_TRANSIT']]:
                     data_ready = False
                 else:
@@ -803,15 +813,20 @@ class FileManager(object):
         self.mutex.acquire()
         try:
             if _type not in monthly:
-                datafiles = DataFile.select().where(
-                    (DataFile.datatype == _type) &
-                    (DataFile.local_status == filestatus['EXISTS']))
+                query = (DataFile
+                            .select()
+                            .where(
+                                (DataFile.datatype == _type) &
+                                (DataFile.local_status == filestatus['EXISTS'])))
             else:
-                datafiles = DataFile.select().where(
-                    (DataFile.datatype == _type) &
-                    (DataFile.year >= start_year) &
-                    (DataFile.year <= end_year) &
-                    (DataFile.local_status == filestatus['EXISTS']))
+                query = (DataFile
+                            .select()
+                            .where(
+                                (DataFile.datatype == _type) &
+                                (DataFile.year >= start_year) &
+                                (DataFile.year <= end_year) &
+                                (DataFile.local_status == filestatus['EXISTS'])))
+            datafiles = query.execute()
             if datafiles is None or len(datafiles) == 0:
                 files = []
             else:
