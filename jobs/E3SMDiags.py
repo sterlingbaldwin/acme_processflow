@@ -29,7 +29,7 @@ class E3SMDiags(object):
             'reference_data_path': '',
             'test_data_path': '',
             'test_name': '',
-            'seasons': '',
+            # 'seasons': '',
             'backend': '',
             'sets': '',
             'results_dir': '',
@@ -90,8 +90,8 @@ class E3SMDiags(object):
 
         if not os.path.exists(self.config.get('run_scripts_path')):
             os.makedirs(self.config.get('run_scripts_path'))
-        if isinstance(self.config['seasons'], str):
-            self.config['seasons'] = [self.config['seasons']]
+        # if isinstance(self.config['seasons'], str):
+        #     self.config['seasons'] = [self.config['seasons']]
         if self.year_set == 0:
             self.messages.append('invalid year_set')
             self.status = JobStatus.INVALID
@@ -134,7 +134,7 @@ class E3SMDiags(object):
             'reference_data_path': self.config['reference_data_path'],
             'test_data_path': self.config['regrided_climo_path'],
             'test_name': self.config['test_name'],
-            'seasons': self.config['seasons'],
+            # 'seasons': self.config['seasons'],
             'results_dir': self.config['results_dir']
         }
         render(

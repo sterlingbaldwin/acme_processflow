@@ -19,7 +19,6 @@
     "e3sm_diags": [
         "host_directory",
         "backend",
-        "seasons",
         "reference_data_path",
         "sets"
     ],

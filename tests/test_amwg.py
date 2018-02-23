@@ -4,6 +4,9 @@ import shutil
 
 from configobj import ConfigObj
 
+if sys.path[0] != '.':
+    sys.path.insert(0, os.path.abspath('.'))
+
 from jobs.JobStatus import JobStatus
 from jobs.AMWGDiagnostic import AMWGDiagnostic
 from lib.events import EventList

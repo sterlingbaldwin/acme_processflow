@@ -77,6 +77,7 @@ class TestInitialize(unittest.TestCase):
                 'account': '',
                 'pp_path': '/export/baldwin32/jenkins/workspace/testproject/output/pp',
                 'diags_path': '/export/baldwin32/jenkins/workspace/testproject/output/diags',
+                'no_scripts': False,
                 'short_name': 'beta2_FCT2-icedeep_branch',
                 'native_grid_cleanup': '0',
                 'native_grid_name': 'ne30',
@@ -112,7 +113,7 @@ class TestInitialize(unittest.TestCase):
             'e3sm_diags': {
                 'host_directory': 'e3sm-diags',
                 'backend': 'mpl',
-                'seasons': ['DJF', 'MAM', 'JJA', 'SON', 'ANN'],
+                # 'seasons': ['DJF', 'MAM', 'JJA', 'SON', 'ANN'],
                 'reference_data_path': '/p/cscratch/acme/data/obs_for_acme_diags',
                 'sets': ['3', '4', '5', '7', '13']},
             'transfer': {
@@ -178,6 +179,7 @@ class TestInitialize(unittest.TestCase):
                 'diags_path': '/export/baldwin32/jenkins/workspace/testproject/output/diags',
                 'short_name': 'beta2_FCT2-icedeep_branch',
                 'native_grid_cleanup': '0',
+                'no_scripts': False,
                 'native_grid_name': 'ne30',
                 'remap_grid_name': 'fv129x256',
                 'project_path': project_path,
@@ -211,7 +213,7 @@ class TestInitialize(unittest.TestCase):
             'e3sm_diags': {
                 'host_directory': 'e3sm-diags',
                 'backend': 'mpl',
-                'seasons': ['DJF', 'MAM', 'JJA', 'SON', 'ANN'],
+                # 'seasons': ['DJF', 'MAM', 'JJA', 'SON', 'ANN'],
                 'reference_data_path': '/p/cscratch/acme/data/obs_for_acme_diags',
                 'sets': ['3', '4', '5', '7', '13']},
             'transfer': {

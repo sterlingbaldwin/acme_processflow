@@ -320,7 +320,7 @@ class RunManager(object):
                 host_url=host_url,
                 reference_data_path=config['e3sm_diags']['reference_data_path'],
                 output_path=output_path,
-                seasons=config['e3sm_diags']['seasons'],
+                # seasons=config['e3sm_diags']['seasons'],
                 backend=config['e3sm_diags']['backend'],
                 sets=config['e3sm_diags']['sets'])
 
@@ -617,7 +617,7 @@ class RunManager(object):
         web_directory = kwargs['web_directory']
         host_url = kwargs['host_url']
         reference_data_path = kwargs['reference_data_path']
-        seasons = kwargs['seasons']
+        # seasons = kwargs['seasons']
         backend = kwargs['backend']
         sets = kwargs['sets']
         resource_path = kwargs['resource_path']
@@ -666,7 +666,7 @@ class RunManager(object):
             'regrided_climo_path': temp_path,
             'reference_data_path': reference_data_path,
             'test_name': self.caseID,
-            'seasons': seasons,
+            # 'seasons': seasons,
             'backend': backend,
             'sets': sets,
             'results_dir': output_path,

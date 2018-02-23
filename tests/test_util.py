@@ -52,7 +52,7 @@ class TestFileManager(unittest.TestCase):
             'e3sm_diags': {
                 'host_directory': 'e3sm-diags',
                 'backend': 'mpl',
-                'seasons': ['DJF', 'MAM', 'JJA', 'SON', 'ANN'],
+                # 'seasons': ['DJF', 'MAM', 'JJA', 'SON', 'ANN'],
                 'reference_data_path': '/p/cscratch/acme/data/obs_for_acme_diags',
                 'sets': ['3', '4', '5', '7', '13']},
             'transfer': {
@@ -108,7 +108,7 @@ class TestFileManager(unittest.TestCase):
             'e3sm_diags': {
                 'host_directory': 'e3sm-diags',
                 'backend': 'mpl',
-                'seasons': ['DJF', 'MAM', 'JJA', 'SON', 'ANN'],
+                # 'seasons': ['DJF', 'MAM', 'JJA', 'SON', 'ANN'],
                 'reference_data_path': '/p/cscratch/acme/data/obs_for_acme_diags',
                 'sets': ['3', '4', '5', '7', '13']},
             'transfer': {

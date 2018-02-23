@@ -1,11 +1,14 @@
 import unittest
-import os
+import os, sys
 
 from configobj import ConfigObj
 
+if sys.path[0] != '.':
+    sys.path.insert(0, os.path.abspath('.'))
+
 from jobs.E3SMDiags import E3SMDiags
 from lib.events import EventList
-
+from jobs.JobStatus import JobStatus
 
 class TestE3SM(unittest.TestCase):
 
@@ -16,7 +19,7 @@ class TestE3SM(unittest.TestCase):
         self.caseID = self.config['global']['experiment']
         self.event_list = EventList()
 
-    def test_prevalidate_seasons_as_str(self):
+    def test_prevalidate(self):
         start_year = 51
         end_year = 55
         year_set_string = '{start:04d}-{end:04d}'.format(
@@ -59,7 +62,7 @@ class TestE3SM(unittest.TestCase):
             'tmp',
             'e3sm_diags',
             year_set_string)
-        seasons = 'ANN'
+        # seasons = 'ANN'
         backend = 'mpl'
         sets = '5'
         config = {
@@ -70,7 +73,7 @@ class TestE3SM(unittest.TestCase):
             'regrided_climo_path': temp_path,
             'reference_data_path': self.config['e3sm_diags']['reference_data_path'],
             'test_name': self.caseID,
-            'seasons': seasons,
+            # 'seasons': seasons,
             'backend': backend,
             'sets': sets,
             'results_dir': output_path,
@@ -84,7 +87,7 @@ class TestE3SM(unittest.TestCase):
         e3sm_diag = E3SMDiags(
             config=config,
             event_list=self.event_list)
-        self.assertTrue(isinstance(e3sm_diag.config['seasons'], list))
+        self.assertEqual(e3sm_diag.status, JobStatus.VALID)
 
 
 if __name__ == '__main__':

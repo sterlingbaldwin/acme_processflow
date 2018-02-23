@@ -2,7 +2,6 @@ reference_data_path = '%%reference_data_path%%/'
 test_data_path = '%%test_data_path%%/'
 test_name = '%%test_name%%'
 short_test_name = '%%short_name%%'
-seasons = %%seasons%%
 backend = '%%backend%%'
 sets = %%sets%%
 results_dir = '%%results_dir%%/'
