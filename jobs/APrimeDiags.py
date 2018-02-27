@@ -167,6 +167,8 @@ class APrimeDiags(object):
         Setup the run script which will symlink in all the required data,
         and submit that script to resource manager
         """
+        msg = 'Aprime-{}-{} starting execute'.format(self.start_year, self.end_year)
+        logging.info(msg)
         # First check if the job has already been completed
         if self.postvalidate():
             self.status = JobStatus.COMPLETED
@@ -181,6 +183,8 @@ class APrimeDiags(object):
 
         # Setup output directory
         if not os.path.exists(self.config['output_path']):
+            msg = 'Aprime-{}-{} setting up output directory'.format(self.start_year, self.end_year)
+            logging.info(msg)
             os.makedirs(self.config['output_path'])
 
         # render run template
@@ -260,7 +264,6 @@ class APrimeDiags(object):
             input_path=submission_template_path,
             output_path=run_script)
 
-        slurm = Slurm()
         msg = 'Submitting to queue {type}: {start:04d}-{end:04d}'.format(
             type=self.type,
             start=self.start_year,
@@ -270,6 +273,7 @@ class APrimeDiags(object):
             line=msg,
             event_list=self.event_list,
             current_state=True)
+        slurm = Slurm()
         self.job_id = slurm.batch(run_script)
         status = slurm.showjob(self.job_id)
         self.status = StatusMap[status.get('JobState')]
