@@ -22,7 +22,7 @@ class TestProcessflow(unittest.TestCase):
         project_path = config['global']['project_path']
         if os.path.exists(os.path.join(project_path, 'input')):
             print 'testing with inplace data'
-            testargs = ['-c', config_path, '-n', '-f', '-r', './resources']
+            testargs = ['-c', config_path, '-n', '-f', '-r', './resources', '-s']
             ret = main(test=True, testargs=testargs)
             self.assertEqual(ret, 0)
         else:
@@ -39,7 +39,7 @@ class TestProcessflow(unittest.TestCase):
             print "removing previous project directory {}".format(project_path)
             shutil.rmtree(project_path, ignore_errors=True)
             print "project cleanup complete"
-        testargs = ['-c', config_path, '-n', '-f', '-r', './resources']
+        testargs = ['-c', config_path, '-n', '-f', '-r', './resources', '-s']
         ret = main(test=True, testargs=testargs)
         self.assertEqual(ret, 0)
 
