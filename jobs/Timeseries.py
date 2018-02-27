@@ -185,7 +185,8 @@ class Timeseries(object):
         """
         found_all = True
         missing_list = list()
-        for path in [self.config.get('native_output_directory'), self.config.get('regrid_output_directory')]:
+        # self.config.get('native_output_directory'), 
+        for path in [self.config.get('regrid_output_directory')]:
             for var in self.config['var_list']:
                 file_name = "{var}_{start:04d}01_{end:04d}12.nc".format(
                     var=var, start=self.start_year, end=self.end_year)
