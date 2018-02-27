@@ -179,7 +179,9 @@ class Climo(object):
             input_path=climo_dir,
             start_year=set_start_year,
             end_year=set_end_year)
-        if len(file_list) < 12:
+        if len(file_list) < 12: # number of months in a year
+            msg = 'ncclimo-{}-{}: not enough native grid climos found'.format(set_start_year, set_end_year)
+            logging.info(msg)
             return False
 
         # Second check the regrid directory
@@ -189,7 +191,9 @@ class Climo(object):
             input_path=regrid_dir,
             start_year=set_start_year,
             end_year=set_end_year)
-        if len(file_list) < 12:
+        if len(file_list) < 17: # number of months plus seasons and annual
+            msg = 'ncclimo-{}-{}: not enough target grid climos found'.format(set_start_year, set_end_year)
+            logging.info(msg)
             return False
 
         return True
