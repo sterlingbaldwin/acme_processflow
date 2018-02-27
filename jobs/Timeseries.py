@@ -183,17 +183,20 @@ class Timeseries(object):
         """
         Post execution validation
         """
+        found_all = True
+        missing_list = list()
         for path in [self.config.get('native_output_directory'), self.config.get('regrid_output_directory')]:
-            contents = os.listdir(path)
-            
-            # Loop through each variable and make sure its been put into the output directory
-            for var in self.config.get('var_list'):
-                pattern = '{var}_{start:04d}01_{end:04d}12'.format(
+            for var in self.config['var_list']:
+                file_name = "{var}_{start:04d}01_{end:04d}12.nc".format(
                     var=var, start=self.start_year, end=self.end_year)
-                file_list = [x for x in contents if re.search(string=x, pattern=pattern)]
-                if not file_list:
-                    return False
-        return True
+                file_path = os.path.join(path, file_name)
+                if not os.path.exists(file_path):
+                    found_all = False
+                    missing_list.append(file_path)
+        if not found_all:
+            msg = 'missing timeseries output files: {}'.format(json.dumps(missing_list))
+            logging.error(msg)
+        return found_all
 
     @property
     def type(self):
