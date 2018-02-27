@@ -71,7 +71,6 @@ def main(test=False, **kwargs):
         print "Error in setup, exiting"
         return -1
     logging.info('Config setup complete')
-    logging.info(str(config))
 
     # check that all netCDF files exist
     path_exists(config)
