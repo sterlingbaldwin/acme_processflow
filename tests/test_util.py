@@ -40,7 +40,7 @@ class TestFileManager(unittest.TestCase):
                 'tmp_path': os.path.join(project_path, 'output', 'tmp'),
                 'error_path': os.path.join(project_path, 'output', 'workflow.error'),
                 'ui': True,
-                'no_cleanup': False,
+                'no_host': False,
                 'no_monitor': False,
                 'print_file_list': True,
                 'set_jobs': {
@@ -96,7 +96,7 @@ class TestFileManager(unittest.TestCase):
                 'tmp_path': os.path.join(project_path, 'output', 'tmp'),
                 'error_path': os.path.join(project_path, 'output', 'workflow.error'),
                 'ui': True,
-                'no_cleanup': False,
+                'no_host': False,
                 'no_monitor': False,
                 'print_file_list': True,
                 'set_jobs': {

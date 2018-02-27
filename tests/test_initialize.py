@@ -101,7 +101,7 @@ class TestInitialize(unittest.TestCase):
                 'tmp_path': os.path.join(project_path, 'output', 'tmp'),
                 'error_path': os.path.join(project_path, 'output', 'workflow.error'),
                 'ui': False,
-                'no_cleanup': False,
+                'no_host': False,
                 'no_monitor': False,
                 'print_file_list': True,
                 'set_jobs': {
@@ -201,7 +201,7 @@ class TestInitialize(unittest.TestCase):
                 'tmp_path': os.path.join(project_path, 'output', 'tmp'),
                 'error_path': os.path.join(project_path, 'output', 'workflow.error'),
                 'ui': False,
-                'no_cleanup': False,
+                'no_host': False,
                 'no_monitor': False,
                 'print_file_list': True,
                 'set_jobs': {
