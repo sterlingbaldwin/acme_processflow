@@ -253,6 +253,8 @@ class APrimeDiags(object):
 
         head, _ = os.path.split(self.config['template_path'])
         submission_template_path = os.path.join(head, 'aprime_submission_template.sh')
+        logging.info('Rendering submision script for aprime')
+        logging.info(json.dumps({'variables': variables, 'input_path': input_path, 'output_path': output_path}))
         render(
             variables=variables,
             input_path=submission_template_path,
