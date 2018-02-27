@@ -23,7 +23,7 @@ from jobs.JobStatus import JobStatus, StatusMap, ReverseMap
 
 
 class RunManager(object):
-    def __init__(self, event_list, output_path, caseID, scripts_path, thread_list, event, ui, resource_path, account, short_name):
+    def __init__(self, event_list, output_path, caseID, scripts_path, thread_list, event, ui, resource_path, account, short_name, no_host=False):
         self.short_name = short_name
         self.account = account
         self.ui = ui
@@ -39,6 +39,7 @@ class RunManager(object):
         self.scripts_path = scripts_path
         self._resource_path = resource_path
         self.max_running_jobs = self.slurm.get_node_number() * 6
+        self.no_host = no_host
         if not os.path.exists(self.scripts_path):
             os.makedirs(self.scripts_path)
 
@@ -909,6 +910,14 @@ class RunManager(object):
         if done:
             job_set.status = SetStatus.COMPLETED
 
+        if self.no_host:
+            msg = 'Skipping hosting output for {}-{}-{}'.format(job.type, job.start_year, job.end_year)
+            print_line(
+                ui=self.ui,
+                line=msg,
+                event_list=self.event_list)
+            return
+
         # Finally host the files
         if job.type == 'aprime_diags':
 
@@ -938,7 +947,7 @@ class RunManager(object):
                 os.makedirs(head)
 
             # next copy over the aprime output
-            if os.path.exists(host_dir) and not os.path.isdir(host_dir):
+            if os.path.exists(host_dir) and os.path.isdir(host_dir):
                 if os.path.exists(target_host_dir):
                     rmtree(target_host_dir)
                 move(src=host_dir,
@@ -952,8 +961,8 @@ class RunManager(object):
                         '{exp}_years{start}-{end}_vs_obs'.format(
                             exp=job.config['experiment'], start=job.start_year, end=job.end_year))
                     if os.path.exists(source):
-                        copytree(src=source,
-                                 dst=target_host_dir)
+                        move(src=source,
+                             dst=target_host_dir)
                     else:
                         msg = 'Unable to find source directory: {}'.format(
                             source)
@@ -1008,6 +1017,16 @@ class RunManager(object):
                 line=msg,
                 event_list=self.event_list)
             logging.info(msg)
+            while True:
+                try:
+                    p = Popen(['chmod', '-R', '0755', host_dir])
+                except:
+                    sleep(1)
+                else:
+                    break
+            out, err = p.communicate()
+            head, _ = os.path.split(host_dir)
+            os.chmod(head, 0755)
 
         elif job.type == 'amwg':
             img_dir = '{start:04d}-{end:04d}{casename}-obs'.format(

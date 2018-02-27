@@ -37,8 +37,8 @@ def parse_args(argv=None, print_help=None):
         help='Path to logging output file.')
     parser.add_argument(
         '-n',
-        '--no-cleanup',
-        help='Don\'t perform post run cleanup. This will leave all files in place.',
+        '--no-host',
+        help='Don\'t move output plots into the web host directory.',
         action='store_true')
     parser.add_argument(
         '-m',
@@ -142,10 +142,17 @@ Please add a space and run again.'''.format(num=line_index)
 
     # Setup boolean config flags
     config['global']['ui'] = True if args.ui else False
-    config['global']['no_cleanup'] = True if args.no_cleanup else False
+    config['global']['no_host'] = True if args.no_host else False
     config['global']['no_monitor'] = True if args.no_monitor else False
     config['global']['print_file_list'] = True if args.file_list else False
     config['global']['no_scripts'] = True if args.no_scripts else False
+
+    if args.no_host:
+        print_line(
+        ui=False,
+        line='Not hosting web output',
+        event_list=event_list,
+        current_state=True)
 
     template_path = os.path.join(
         config['global']['resource_dir'],
@@ -207,11 +214,13 @@ Please add a space and run again.'''.format(num=line_index)
         log_path = os.path.join(
             config.get('global').get('output_path'),
             'processflow.log')
-    # print_line(
-    #     ui=config['global']['ui'],
-    #     line='Log saved to {}'.format(log_path),
-    #     event_list=event_list,
-    #     current_state=True)
+    print_line(
+        ui=config['global']['ui'],
+        line='Log saved to {}'.format(log_path),
+        event_list=event_list,
+        current_state=True)
+    from imp import reload
+    reload(logging)
     config['global']['log_path'] = log_path
     logging.basicConfig(
         format='%(asctime)s:%(levelname)s: %(message)s',
@@ -219,8 +228,6 @@ Please add a space and run again.'''.format(num=line_index)
         filename=log_path,
         filemode='w',
         level=logging.DEBUG)
-    logging.getLogger('globus_sdk').setLevel(logging.ERROR)
-    logging.getLogger('globus_cli').setLevel(logging.ERROR)
 
     # Make sure the set_frequency is a list of ints
     set_frequency = config['global']['set_frequency']
@@ -372,7 +379,8 @@ Please add a space and run again.'''.format(num=line_index)
         caseID=config['global']['experiment'],
         scripts_path=run_script_path,
         thread_list=thread_list,
-        event=event)
+        event=event,
+        no_host=config['global']['no_host'])
     runmanager.setup_job_sets(
         set_frequency=config['global']['set_frequency'],
         sim_start_year=sim_start_year,
