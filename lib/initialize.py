@@ -228,6 +228,8 @@ Please add a space and run again.'''.format(num=line_index)
         filename=log_path,
         filemode='w',
         level=logging.DEBUG)
+    logging.getLogger('globus_sdk').setLevel(logging.ERROR)
+    logging.getLogger('globus_cli').setLevel(logging.ERROR)
 
     # Make sure the set_frequency is a list of ints
     set_frequency = config['global']['set_frequency']
