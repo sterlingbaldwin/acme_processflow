@@ -743,7 +743,6 @@ class RunManager(object):
                     if job.status == JobStatus.VALID:
                         if self.check_max_running_jobs():
                             return
-                        slurm = Slurm()
                         msg = "Submitting {job}-{start:04d}-{end:04d}".format(
                             job=job.type,
                             start=job.start_year,
@@ -766,6 +765,8 @@ class RunManager(object):
                             job.status = JobStatus.VALID
                             continue
                         if status == -1:
+                            msg = '{job} requires additional data'.format(job=job.type)
+                            logging.info(msg)
                             job.status = JobStatus.VALID
                             continue
                         if job.job_id == 0:
@@ -781,6 +782,7 @@ class RunManager(object):
                             self.handle_completed_job(job)
                             continue
                         try:
+                            slurm = Slurm()
                             slurm.showjob(job.job_id)
                         except:
                             msg = "Error submitting {job} to queue".format(
