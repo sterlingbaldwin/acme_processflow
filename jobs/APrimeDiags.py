@@ -161,12 +161,32 @@ class APrimeDiags(object):
             print_debug(e)
             return 2
         return True
+    
+    def ready_check(self):
+        input_files = list()
+        types = ['atm', 'ocn', 'ice', 'streams.ocean',
+                 'streams.cice', 'rest', 'mpas-o_in',
+                 'mpas-cice_in', 'meridionalHeatTransport',
+                 'mpascice.rst']
+        for datatype in types:
+            new_files = self.filemanager.get_file_paths_by_year(
+                start_year=self.start_year,
+                end_year=self.end_year,
+                _type=datatype)
+            if new_files is None or len(new_files) == 0:
+                return False
+        return True
 
     def execute(self):
         """
         Setup the run script which will symlink in all the required data,
         and submit that script to resource manager
         """
+        if not self.ready_check():
+            msg = 'Aprime-{}-{} missing data'.format(self.start_year, self.end_year)
+            logging.info(msg)
+            return -1
+
         msg = 'Aprime-{}-{} starting execute'.format(self.start_year, self.end_year)
         logging.info(msg)
         # First check if the job has already been completed
@@ -258,7 +278,7 @@ class APrimeDiags(object):
         head, _ = os.path.split(self.config['template_path'])
         submission_template_path = os.path.join(head, 'aprime_submission_template.sh')
         logging.info('Rendering submision script for aprime')
-        logging.info(json.dumps({'variables': variables, 'input_path': input_path, 'output_path': output_path}))
+        logging.info(json.dumps({'variables': variables, 'input_path': submission_template_path, 'output_path': run_script}))
         render(
             variables=variables,
             input_path=submission_template_path,
