@@ -163,7 +163,8 @@ class APrimeDiags(object):
         return True
     
     def ready_check(self):
-        input_files = list()
+        missing_files = list()
+        monthly_files = 12 * (self.end_year - self.start_year + 1)
         types = ['atm', 'ocn', 'ice', 'streams.ocean',
                  'streams.cice', 'rest', 'mpas-o_in',
                  'mpas-cice_in', 'meridionalHeatTransport',
@@ -174,7 +175,15 @@ class APrimeDiags(object):
                 end_year=self.end_year,
                 _type=datatype)
             if new_files is None or len(new_files) == 0:
-                return False
+                missing_files.append(datatype)
+                continue
+            if datatype in ['atm', 'ocn', 'ice']:
+                if len(new_files) < monthly_files:
+                    missing_files.append(datatype)
+        if missing_files:
+            msg = 'Aprime-{}-{} missing data: {}'.format(self.start_year, self.end_year, missing_files)
+            logging.info(msg)
+            return False
         return True
 
     def execute(self):
@@ -183,12 +192,8 @@ class APrimeDiags(object):
         and submit that script to resource manager
         """
         if not self.ready_check():
-            msg = 'Aprime-{}-{} missing data'.format(self.start_year, self.end_year)
-            logging.info(msg)
             return -1
-
-        msg = 'Aprime-{}-{} starting execute'.format(self.start_year, self.end_year)
-        logging.info(msg)
+        
         # First check if the job has already been completed
         if self.postvalidate():
             self.status = JobStatus.COMPLETED
