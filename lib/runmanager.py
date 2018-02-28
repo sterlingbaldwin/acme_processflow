@@ -766,6 +766,7 @@ class RunManager(object):
                             job.status = JobStatus.VALID
                             continue
                         if status == -1:
+                            job.status = JobStatus.VALID
                             continue
                         if job.job_id == 0:
                             msg = '{job}-{start:04d}-{end:04d} precomputed, skipping'.format(
