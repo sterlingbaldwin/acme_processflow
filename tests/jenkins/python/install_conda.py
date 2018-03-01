@@ -50,7 +50,7 @@ if ret_code != SUCCESS:
 
 # check conda command
 conda_cmd = os.path.join(conda_path, 'bin', 'conda')
-cmd = "ls -l {conda_cmd}".format(conda_cmd, conda_cmd)
+cmd = "ls -l {conda_cmd}".format(conda_cmd=conda_cmd)
 ret_code = run_cmd(cmd, True, False, True)
 
 if ret_code == SUCCESS:

@@ -2,6 +2,7 @@ import sys
 import os
 import time
 import argparse
+import shutil
 from Util import *
 
 parser = argparse.ArgumentParser(description="install conda",
@@ -23,14 +24,15 @@ if os.path.isdir(testdir) == False:
     print('ERROR, test dir ' + testdir + ' does not exist')
     sys.exit(FAILURE)
 
-#seconds = ndays * 24 * 3600
-seconds = ndays * 3600
+seconds = ndays * 24 * 3600
 
 now = time.time()
 for a_file in os.listdir(testdir):
     the_file = os.path.join(testdir, a_file)
     if os.stat(the_file).st_mtime < (now - seconds):
-        print("FOUND...file: " + the_file)
+        print("FOUND...: {}".format(the_file))
+        print("Removing {}".format(the_file))
+        shutil.rmtree(the_file)
         # os.unlink(the_file)
 
     
