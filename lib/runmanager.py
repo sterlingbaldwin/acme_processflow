@@ -25,7 +25,8 @@ from jobs.JobStatus import JobStatus, StatusMap, ReverseMap
 class RunManager(object):
     def __init__(self, event_list, output_path, caseID, scripts_path, thread_list, event, ui, resource_path, account, short_name, no_host=False):
         self.short_name = short_name
-        self.account = account
+        # self.account = account
+        self.account = ''
         self.ui = ui
         self.output_path = output_path
         self.slurm = Slurm()
@@ -707,7 +708,7 @@ class RunManager(object):
         """
         Iterates over the job sets checking for ready ready jobs, and starts them
         """
-
+        all_data_needed = True
         for job_set in self.job_sets:
             # if the job state is ready, but hasnt started yet
             if job_set.status in [SetStatus.DATA_READY, SetStatus.RUNNING, SetStatus.FAILED]:
@@ -768,6 +769,7 @@ class RunManager(object):
                             msg = '{job} requires additional data'.format(job=job.type)
                             logging.info(msg)
                             job.status = JobStatus.VALID
+                            all_data_needed = False
                             continue
                         if job.job_id == 0:
                             msg = '{job}-{start:04d}-{end:04d} precomputed, skipping'.format(
@@ -792,10 +794,11 @@ class RunManager(object):
                                 line=msg,
                                 event_list=self.event_list)
                             job.status = JobStatus.VALID
-                            return
+                            return all_data_needed
                         else:
                             self.running_jobs.append(job)
                             self.monitor_running_jobs()
+        return all_data_needed
 
     def monitor_running_jobs(self):
         msg = 'Updating job list'
