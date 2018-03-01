@@ -23,13 +23,14 @@ if os.path.isdir(testdir) == False:
     print('ERROR, test dir ' + testdir + ' does not exist')
     sys.exit(FAILURE)
 
+#seconds = ndays * 24 * 3600
 seconds = ndays * 3600
 
 now = time.time()
 for a_file in os.listdir(testdir):
     the_file = os.path.join(testdir, a_file)
     if os.stat(the_file).st_mtime < (now - seconds):
-        print("FOUND...directory: " + the_file)
-        #os.system("rm -rf " + the_file)
+        print("FOUND...file: " + the_file)
+        # os.unlink(the_file)
 
     

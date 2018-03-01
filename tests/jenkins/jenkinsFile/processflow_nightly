@@ -1,3 +1,6 @@
+def error = null
+currentBuild.result = "SUCCESS"
+
 def processflow_dir = "/p/user_pub/e3sm/jenkins/processflow"
 def repo_dir = "${processflow_dir}/acme_processflow"
 def workdir = "${processflow_dir}/testdir/${env.JOB_NAME}/test_${env.BUILD_NUMBER}"
@@ -12,7 +15,7 @@ try {
     stage('git_clone') {
        node('master') {
           // for now clone from jenkins branch
-          // sh "git clone -b jenkins ${url} ${processflow_dir}"
+          // sh "git clone -b jenkins ${url} ${repo_dir}"
           sh "cd ${repo_dir}; git pull -u"
        }
     }
@@ -33,4 +36,4 @@ try {
     currentBuild.result = "FAILURE"
 }
 
-
+    

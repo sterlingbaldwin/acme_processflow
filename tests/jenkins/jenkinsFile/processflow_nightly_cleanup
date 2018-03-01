@@ -2,12 +2,10 @@ def error = null
 currentBuild.result = "SUCCESS"
 echo "Running ${env.BUILD_ID}"
 
-def processflow_dir = "/p/user_pub/e3sm/jenkins/processflow"
-def repo_dir = "${processflow_dir}/acme_processflow"
+def processflow_dir = "/p/user_pub/e3sm/jenkins/processflow_tmp"
+def scripts_dir = "${processflow_dir}/acme_processflow/tests/jenkins/python"
 
-def scripts_dir = "${repo_dir}/tests/jenkins/python"
-
-def testdir = "${processflow_dir}/testdir/processflow_nightly"
+def testdir = "/p/user_pub/e3sm/jenkins/processflow/testdir/processflow_nightly"
 def cleanup_script = "${scripts_dir}/clean_testdir.py"
 
 try {
