@@ -259,7 +259,22 @@ def main(test=False, **kwargs):
                 current_state=True,
                 ignore_text=True)
             sleep(0.5)
-            runmanager.start_ready_job_sets()
+            if not runmanager.start_ready_job_sets():
+                msg = "Additional data needed"
+                print_line(
+                    ui=config['global']['ui'],
+                    line=msg,
+                    event_list=event_list,
+                    current_state=True,
+                    ignore_text=True)
+                filemanager.transfer_needed(
+                    event_list=event_list,
+                    event=thread_kill_event,
+                    remote_endpoint=config['transfer']['source_endpoint'],
+                    ui=config['global']['ui'],
+                    display_event=display_event,
+                    emailaddr=config['global']['email'],
+                    thread_list=thread_list)
             msg = "Checking running job status"
             print_line(
                 ui=config['global']['ui'],
