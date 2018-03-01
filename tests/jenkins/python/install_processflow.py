@@ -47,7 +47,7 @@ def check_version(version):
         ret_code = SUCCESS
     else:
         print("version: {}, output: {}, they do not match!!!".format(version_str,
-                                                                     output[0])
+                                                                     output[0]))
         ret_code = FAILURE
     return(ret_code)
  
