@@ -67,7 +67,7 @@ def run_in_conda_env(conda_path, env, cmds_list):
                                                                   deact=deactivate_cmd)
     print("DEBUG DEBUG CMD: " + cmd)
 
-    print("CMD: {}".format(cmd))
+#    print("CMD: {c}".format(c=cmd))
     ret_code = os.system(cmd)
     print(ret_code)
     return(ret_code)
