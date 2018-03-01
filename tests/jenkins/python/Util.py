@@ -53,17 +53,19 @@ def run_in_conda_env(conda_path, env, cmds_list):
     activate_cmd = "source activate {env}".format(env=env)
     cmds = None
     for a_cmd in cmds_list:
-        if cmds == None:
+        if cmds is None:
             cmds = a_cmd
         else:
             cmds = "{existing}; {new_cmd}".format(existing=cmds, new_cmd=a_cmd)
 
+    print("xxx cmds: " + cmds)
     deactivate_cmd = 'source deactivate'
 
     cmd = "bash -c \"{add_path}; {act}; {cmds}; {deact}\"".format(add_path=add_path_cmd,
                                                                   act=activate_cmd,
                                                                   cmds=cmds,
                                                                   deact=deactivate_cmd)
+    print("DEBUG DEBUG CMD: " + cmd)
 
     print("CMD: {}".format(cmd))
     ret_code = os.system(cmd)

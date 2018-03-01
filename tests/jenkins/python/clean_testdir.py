@@ -30,9 +30,10 @@ now = time.time()
 for a_file in os.listdir(testdir):
     the_file = os.path.join(testdir, a_file)
     if os.stat(the_file).st_mtime < (now - seconds):
+        print("xxx FOUND: " + the_file)
         print("FOUND...: {}".format(the_file))
         print("Removing {}".format(the_file))
-        shutil.rmtree(the_file)
+        #shutil.rmtree(the_file)
         # os.unlink(the_file)
 
     
