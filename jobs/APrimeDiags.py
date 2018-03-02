@@ -122,45 +122,6 @@ class APrimeDiags(object):
         output_total = sum([len(files)
                             for r, d, files in os.walk(self.output_path)])
         return bool(output_total >= 600)
-
-    def setup_input_directory(self):
-        """
-        Creates a directory full of symlinks to the input data
-
-        Parameters:
-            None
-        Returns:
-            True if successful
-            False if missing input data
-            2 if error
-        """
-        types = ['atm', 'ocn', 'ice', 'streams.ocean',
-                 'streams.cice', 'rest', 'mpas-o_in',
-                 'mpas-cice_in', 'meridionalHeatTransport',
-                 'mpascice.rst']
-        test_archive_path = os.path.join(
-            self.config['input_path'],
-            self.config['experiment'],
-            'run')
-        if not os.path.exists(test_archive_path):
-            os.makedirs(test_archive_path)
-        try:
-            for datatype in types:
-                input_files = self.filemanager.get_file_paths_by_year(
-                    start_year=self.start_year,
-                    end_year=self.end_year,
-                    _type=datatype)
-                for file in input_files:
-                    if not os.path.exists(file):
-                        return False
-                    head, tail = os.path.split(file)
-                    dst = os.path.join(test_archive_path, tail)
-                    if not os.path.exists(dst):
-                        os.symlink(file, dst)
-        except Exception as e:
-            print_debug(e)
-            return 2
-        return True
     
     def ready_check(self):
         missing_files = list()
@@ -262,8 +223,6 @@ class APrimeDiags(object):
                 start_year=self.start_year,
                 end_year=self.end_year,
                 _type=datatype)
-            if new_files is None or len(new_files) == 0:
-                return -1
             input_files += new_files
         if self.config['simulation_start_year'] != self.start_year:
             input_files += self.filemanager.get_file_paths_by_year(

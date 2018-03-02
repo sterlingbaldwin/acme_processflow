@@ -719,8 +719,13 @@ class RunManager(object):
                             job=job.type,
                             start=job_set.start_year,
                             end=job_set.end_year)
-                        self.event_list.push(message=msg)
-                        logging.error('INVALID JOB')
+                        print_line(
+                            ui=self.ui,
+                            line=msg,
+                            event_list=self.event_list,
+                            current_state=False,
+                            ignore_text=False)
+                        logging.error(msg)
                         logging.error(str(job))
                         continue
                     # If the job has any dependencies
@@ -829,15 +834,7 @@ class RunManager(object):
                         line=line,
                         event_list=self.event_list)
                 continue
-            status = job_info.get('JobState')
-            if not status:
-                msg = 'No status yet for {}'.format(job.type)
-                print_line(
-                    ui=self.ui,
-                    line=msg,
-                    event_list=self.event_list)
-                continue
-            status = StatusMap[status]
+            status = StatusMap[job_info.get('JobState')]
             if status != job.status:
                 msg = '{job}-{start:04d}-{end:04d}:{id} changed from {s1} to {s2}'.format(
                     job=job.type,
