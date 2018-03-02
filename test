@@ -52,8 +52,8 @@ if [ "$PASSED" != "$TOTAL" ]; then
 else
     if [ -d /var/www/acme/acme-diags/baldwin32/htmlcov ]; then
         rm -rf /var/www/acme/acme-diags/baldwin32/htmlcov
-        mv htmlcov /var/www/acme/acme-diags/baldwin32
     fi
+    mv htmlcov /var/www/acme/acme-diags/baldwin32
     echo "tests done"
     echo "report available at https://acme-viewer.llnl.gov/baldwin32/htmlcov/"
 fi
