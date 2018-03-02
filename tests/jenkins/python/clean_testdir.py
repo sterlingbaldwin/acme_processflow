@@ -20,8 +20,8 @@ args = parser.parse_args()
 testdir = args.testdir
 ndays = args.ndays
 
-if os.path.isdir(testdir) == False:
-    print('ERROR, test dir ' + testdir + ' does not exist')
+if not os.path.isdir(testdir):
+    print 'ERROR, test dir {testdir} does not exist'.format(testdir=testdir)
     sys.exit(FAILURE)
 
 seconds = ndays * 24 * 3600

@@ -14,8 +14,6 @@ def url = 'https://github.com/ACME-Climate/acme_processflow'
 try {
     stage('git_clone') {
        node('master') {
-          // for now clone from jenkins branch
-          // sh "git clone -b jenkins ${url} ${repo_dir}"
           sh "cd ${repo_dir}; git pull -u"
        }
     }

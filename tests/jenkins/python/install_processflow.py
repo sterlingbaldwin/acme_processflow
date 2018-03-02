@@ -14,7 +14,7 @@ parser.add_argument("-v", "--version",
 args = parser.parse_args()
 workdir = args.workdir
 
-if os.path.isdir(workdir) != True:
+if not os.path.isdir(workdir):
     print("FAIL: {d} directory where conda should have been installed".format(d=workdir))
     sys.exit(FAILURE)
 
@@ -54,57 +54,57 @@ def check_version(version):
 #
 # main
 #
+def main():
+    env_dir = os.path.join(workdir, 'miniconda2', 'envs', 'processflow')
+    if os.path.isdir(env_dir) == True:
+        print("INFO: {e} already exists".format(e=env_dir))
+        print('INFO: please cleanup if you want to recreate the env')
+        sys.exit(FAILURE)
 
-env_dir = os.path.join(workdir, 'miniconda2', 'envs', 'processflow')
-if os.path.isdir(env_dir) == True:
-    print("INFO: {e} already exists".format(e=env_dir))
-    print('INFO: please cleanup if you want to recreate the env')
-    sys.exit(FAILURE)
+    # get env.yml
+    env_url = 'https://raw.githubusercontent.com/ACME-Climate/acme_processflow/master/env.yml'
+    env_yml = os.path.join(workdir, 'env.yml')
+    cmd = "wget {url} -O {env_file}".format(url=env_url, env_file=env_yml)
+    ret_code = run_cmd(cmd, True, False, True)
+    if ret_code != SUCCESS:
+        sys.exit(FAILURE)
 
-# get env.yml
-env_url = 'https://raw.githubusercontent.com/ACME-Climate/acme_processflow/master/env.yml'
-env_yml = os.path.join(workdir, 'env.yml')
-cmd = "wget {url} -O {env_file}".format(url=env_url, env_file=env_yml)
-ret_code = run_cmd(cmd, True, False, True)
-if ret_code != SUCCESS:
-    sys.exit(FAILURE)
+    # create processflow env from the env file
+    conda_path = os.path.join(workdir, 'miniconda2', 'bin')
+    conda_cmd = os.path.join(conda_path, 'conda')
+    env = 'processflow'
 
-# create processflow env from the env file
-conda_path = os.path.join(workdir, 'miniconda2', 'bin')
-conda_cmd = os.path.join(conda_path, 'conda')
-env = 'processflow'
+    cmd = "{conda} create --name {env} --file {yml}".format(conda=conda_cmd,
+                                                            env=env,
+                                                            yml=env_yml)
 
-cmd = "{conda} create --name {env} --file {yml}".format(conda=conda_cmd,
-                                                        env=env,
-                                                        yml=env_yml)
+    ret_code = run_cmd(cmd, True, False, True)
+    if ret_code != SUCCESS:
+        sys.exit(FAILURE)
 
-ret_code = run_cmd(cmd, True, False, True)
-if ret_code != SUCCESS:
-    sys.exit(FAILURE)
+    # update to version -- 'nightly' or 'latest'
+    cmds_list = []
+    cmd = 'conda config --set always_yes yes'
+    cmds_list.append(cmd)
+    if args.version == 'nightly':
+        cmd = 'conda update -c acme/label/nightly -c acme -c conda-forge -c uvcdat processflow'
+    else:
+        cmd = 'conda update -c acme -c conda-forge -c uvcdat processflow'
+    cmds_list.append(cmd)
+    ret_code = run_in_conda_env(conda_path, env, cmds_list)
 
-# update to version -- 'nightly' or 'latest'
-cmds_list = []
-cmd = 'conda config --set always_yes yes'
-cmds_list.append(cmd)
-if args.version == 'nightly':
-    cmd = 'conda update -c acme/label/nightly -c acme -c conda-forge -c uvcdat processflow'
-else:
-    cmd = 'conda update -c acme -c conda-forge -c uvcdat processflow'
-cmds_list.append(cmd)
-ret_code = run_in_conda_env(conda_path, env, cmds_list)
+    # check that we can activate processflow env
+    cmd = 'conda list processflow'
+    cmds_list = []
+    cmds_list.append(cmd)
+    ret_code = run_in_conda_env(conda_path, env, cmds_list)
 
-# check that we can activate processflow env
-cmd = 'conda list processflow'
-cmds_list = []
-cmds_list.append(cmd)
-ret_code = run_in_conda_env(conda_path, env, cmds_list)
+    # check version of processflow
+    ret_code = check_version(args.version)
+    sys.exit(ret_code)
 
-# check version of processflow
-ret_code = check_version(args.version)
-sys.exit(ret_code)
-
-
-
+if __name__ == '__main__':
+    main()
 
 
 
