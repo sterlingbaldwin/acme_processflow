@@ -330,6 +330,26 @@ class FileManager(object):
                 'local_path': df.local_path,
                 'remote_path': df.remote_path
             }
+    
+    def _get_names(self, res, _type):
+        names = list()
+        names_res = [x['name'] for x in res]
+        names_not_found = list()
+        names_tmp = [x.name for x in DataFile.select().where(
+                     DataFile.datatype == _type)]
+        for name in names_tmp:
+            if name in names_res:
+                names.append(name)
+            else:
+                names_not_found.append(name)
+        if names_not_found:
+            msg = 'WARNING: {} remote files not found'.format(len(names_not_found))
+            print_line(
+                ui=self.ui,
+                line=msg,
+                event_list=self.event_list,
+                current_state=True)
+        return names            
 
     def update_remote_status(self, client):
         """
@@ -415,8 +435,7 @@ class FileManager(object):
 
                     self.mutex.acquire()
                     try:
-                        names = [x.name for x in DataFile.select().where(
-                            DataFile.datatype == _type)]
+                        names = self._get_names(res, _type)
                         step = 100
                         for idx in range(0, len(names), step):
                             batch_names = names[idx: idx + step]
@@ -453,8 +472,7 @@ class FileManager(object):
             self.mutex.acquire()
             try:
                 for _type in self.types:
-                    names = [x.name for x in DataFile.select().where(
-                        DataFile.datatype == _type)]
+                    names = self._get_names(res, _type)
                     step = 100
                     for idx in range(0, len(names), step):
                         batch_names = names[idx: idx + step]
