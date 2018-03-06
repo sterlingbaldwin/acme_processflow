@@ -37,4 +37,4 @@ requirements:
     - six >=1.10
     - libcf
     - hdf5
-    - scipy ==0.19.1
+    - scipy ==0.19.1=np113py27_0
