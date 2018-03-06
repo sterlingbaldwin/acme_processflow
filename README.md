@@ -5,6 +5,11 @@ diagnostics on model data.
 
 [Documentation can be found here](https://acme-climate.github.io/acme_processflow/docs/html/index.html)
 
+## Installation<a name="installation"></a>
+
+```
+conda create --name <YOUR_NEW_ENVIRONMENT> -c acme -c conda-forge -c uvcdat processflow
+```
 
 # Usage<a name="usage"></a>
 
