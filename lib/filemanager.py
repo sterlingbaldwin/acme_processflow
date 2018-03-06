@@ -622,6 +622,8 @@ class FileManager(object):
             event (threadding.event): the thread event to trigger a cancel
         """
         if self.active_transfers >= 2:
+            msg = 'Currently have {} transfers active, not starting any new ones'.format(self.active_transfers)
+            logging.info(msg)
             return False
         # required files dont exist locally, do exist remotely
         # or if they do exist locally have a different local and remote size
@@ -634,6 +636,8 @@ class FileManager(object):
                  (DataFile.local_size != DataFile.remote_size))
             ).execute()]
             if len(required_files) == 0:
+                msg = 'No new files needed'
+                logging.info(msg)
                 return False
             target_files = []
             transfer_names = []
@@ -719,9 +723,10 @@ class FileManager(object):
         return True
 
     def _handle_transfer(self, transfer, event, event_list):
-        self.active_transfers += 1
         # this is to stop the simultanious print issue
         sleep(random.uniform(0.01, 0.1))
+        
+        self.active_transfers += 1
         transfer.execute(event)
         self.active_transfers -= 1
 
