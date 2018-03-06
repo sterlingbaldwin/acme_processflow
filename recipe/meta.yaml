@@ -26,8 +26,8 @@ requirements:
     - setuptools
     - sqlite
     - configobj
-    - globus-sdk
-    - globus-cli
+    - globus-sdk ==1.1.1
+    - globus-cli ==1.1.2
     - jmespath
     - six
     - libcf
