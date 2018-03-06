@@ -21,7 +21,7 @@ requirements:
   
   run:
     - peewee
-    - acme_diags
+    - acme_diags >=1.2.1
     - markupsafe
     - matplotlib
     - nco
