@@ -122,9 +122,10 @@ class TestNcclimo(unittest.TestCase):
     def test_ncclimo_execute_completed(self):
         print '---- Starting Test: {} ----'.format(inspect.stack()[0][3])
         start_year = 1
-        end_year = 5
-        self.config['global']['project_path'] = '/p/cscratch/acme/baldwin32/test_2018-1-31'
-        self.config['global']['exeriment'] = '20171122.beta3rc10_1850.ne30_oECv3_ICG.edison'
+        end_year = 20
+        # REAL DATA
+        self.config['global']['project_path'] = '/p/user_pub/e3sm/baldwin32/ACME_simulations/20180129.DECKv1b_piControl.ne30_oEC.edison'
+        self.config['global']['exeriment'] = '20180129.DECKv1b_piControl.ne30_oEC.edison'
         year_set_string = '{start:04d}-{end:04d}'.format(
             start=start_year,
             end=end_year)
