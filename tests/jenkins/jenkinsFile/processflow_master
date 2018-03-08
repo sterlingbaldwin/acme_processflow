@@ -1,0 +1,15 @@
+export MODULESHOME=/usr/share/Modules
+export PATH=/export/baldwin32/anaconda2/bin:$PATH
+if [ ! -d /p/user_pub/e3sm/jenkins/acme_processflow/testdir/processflow_master ]; then
+	conda create -c acme -c conda-forge -c uvcdat processflow --yes -p /p/user_pub/e3sm/jenkins/acme_processflow/testdir/processflow_master
+    source activate /p/user_pub/e3sm/jenkins/acme_processflow/testdir/processflow_master
+    conda install coverage
+else
+	source activate /p/user_pub/e3sm/jenkins/acme_processflow/testdir/processflow_master
+	conda update -c acme -c conda-forge -c uvcdat processflow
+fi
+
+echo "running tests from directory" $PWD
+echo "running tests from environment" $CONDA_PREFIX
+
+sh ./test all
