@@ -124,8 +124,7 @@ class TestNcclimo(unittest.TestCase):
         start_year = 1
         end_year = 20
         # REAL DATA
-        self.config['global']['project_path'] = '/p/user_pub/e3sm/baldwin32/ACME_simulations/20180129.DECKv1b_piControl.ne30_oEC.edison'
-        self.config['global']['exeriment'] = '20180129.DECKv1b_piControl.ne30_oEC.edison'
+        project_path = '/p/user_pub/e3sm/baldwin32/ACME_simulations/20180129.DECKv1b_piControl.ne30_oEC.edison'
         year_set_string = '{start:04d}-{end:04d}'.format(
             start=start_year,
             end=end_year)
@@ -134,14 +133,14 @@ class TestNcclimo(unittest.TestCase):
             'year_set': 1,
             'start_year': start_year,
             'end_year': end_year,
-            'caseId': self.config['global']['experiment'],
+            'caseId': '20180129.DECKv1b_piControl.ne30_oEC.edison',
             'annual_mode': 'sdd',
-            'input_directory': os.path.join(self.config['global']['project_path'], 'input', 'atm'),
-            'climo_output_directory': os.path.join(self.config['global']['project_path'], 'output', 'pp', 'ne30', 'climo', '5yr'),
-            'regrid_output_directory': os.path.join(self.config['global']['project_path'], 'output', 'pp', 'fv129x256', 'climo', '5yr'),
+            'input_directory': os.path.join(project_path, 'input', 'atm'),
+            'climo_output_directory': os.path.join(project_path, 'output', 'pp', 'ne30', 'climo', '20yr'),
+            'regrid_output_directory': os.path.join(project_path, 'output', 'pp', 'fv129x256', 'climo', '20yr'),
             'regrid_map_path': self.config['ncclimo']['regrid_map_path'],
             'year_set': 1,
-            'run_scripts_path': os.path.join(self.config['global']['project_path'], 'output', 'run_scripts')
+            'run_scripts_path': os.path.join(project_path, 'output', 'run_scripts')
         }
         ncclimo = Ncclimo(
             config=config,
