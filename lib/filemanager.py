@@ -560,18 +560,16 @@ class FileManager(object):
         self.mutex.acquire()
         try:
             query = (DataFile
-                            .select()
-                            .where(DataFile.local_status == filestatus['NOT_EXIST']))
+                        .select()
+                        .where(
+                            (DataFile.local_status == filestatus['NOT_EXIST']) |
+                            (DataFile.local_status == filestatus['IN_TRANSIT'])))
             for datafile in query.execute():
                 should_save = False
                 if os.path.exists(datafile.local_path):
                     local_size = os.path.getsize(datafile.local_path)
                     if local_size == datafile.remote_size:
                         datafile.local_status = filestatus['EXISTS']
-                        datafile.local_size = local_size
-                        should_save = True
-                    if local_size != datafile.local_size \
-                            or should_save:
                         datafile.local_size = local_size
                         datafile.save()
         except OperationalError as operror:
@@ -588,9 +586,14 @@ class FileManager(object):
     def all_data_local(self):
         self.mutex.acquire()
         try:
-            for data in DataFile.select():
-                if data.local_status != filestatus['EXISTS']:
-                    return False
+            query = (DataFile
+                        .select()
+                        .where(
+                            DataFile.local_status == filestatus['NOT_EXIST']))
+            missing_data = query.execute()
+            # if any of the data is missing, not all data is local
+            if missing_data is None or len(missing_data) != 0:
+                return False
         except Exception as e:
             print_debug(e)
         finally:
@@ -780,11 +783,9 @@ class FileManager(object):
                 line=line,
                 event_list=self.event_list)
             logging.error(line)
-        try:
-            if self.mutex.locked():
-                self.mutex.release()
-        except:
-            pass
+        if self.mutex.locked():
+            self.mutex.release()
+
 
     def years_ready(self, start_year, end_year):
         """
@@ -803,10 +804,6 @@ class FileManager(object):
 
         self.mutex.acquire()
         try:
-            # datafiles = DataFile.select().where(
-            #     (DataFile.datatype == 'atm') &
-            #     (DataFile.year >= start_year) &
-            #     (DataFile.year <= end_year))
             query = (DataFile
                         .select()
                         .where(
@@ -814,7 +811,7 @@ class FileManager(object):
                             (DataFile.year >= start_year) &
                             (DataFile.year <= end_year)))
             for datafile in query.execute():
-                if datafile.local_status in [filestatus['NOT_EXIST'], filestatus['IN_TRANSIT']]:
+                if datafile.local_status != filestatus['EXISTS']:
                     data_ready = False
                 else:
                     non_zero_data = True
