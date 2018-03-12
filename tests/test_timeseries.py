@@ -1,4 +1,5 @@
-import os, sys
+import os
+import sys
 import unittest
 import inspect
 from configobj import ConfigObj
@@ -15,7 +16,8 @@ class TestTimeseries(unittest.TestCase):
 
     def __init__(self, *args, **kwargs):
         super(TestTimeseries, self).__init__(*args, **kwargs)
-        config_path = os.path.join(os.getcwd(), 'tests', 'test_run_no_sta.cfg')
+        config_path = os.path.join(
+            os.getcwd(), 'tests', 'test_configs', 'test_run_no_sta.cfg')
         self.config = ConfigObj(config_path)
         self.project_path = os.path.join(os.getcwd(), '..', 'testproject')
 

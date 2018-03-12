@@ -22,11 +22,11 @@ class TestFileManager(unittest.TestCase):
         config = {
             'global': {
                 'project_path': project_path,
-                'source_path': '/global/homes/r/renata/ACME_simulations/20171011.beta2_FCT2-icedeep_branch.A_WCYCL1850S.ne30_oECv3_ICG.edison/',
+                'source_path': '/global/homes/r/renata/ACME_simulations/20170926.FCT2.A_WCYCL1850S.ne30_oECv3.anvil',
                 'simulation_start_year': 51,
                 'simulation_end_year': 60,
                 'set_frequency': [5, 10],
-                'experiment': '20171011.beta2_FCT2-icedeep_branch.A_WCYCL1850S.ne30_oECv3_ICG.edison',
+                'experiment': '20170926.FCT2.A_WCYCL1850S.ne30_oECv3.anvil',
                 'email': 'baldwin32@llnl.gov',
                 'short_term_archive': 0,
                 'img_host_server': 'https://acme-viewer.llnl.gov',
@@ -78,11 +78,11 @@ class TestFileManager(unittest.TestCase):
         config = {
             'global': {
                 'project_path': project_path,
-                'source_path': '/global/homes/r/renata/ACME_simulations/20171011.beta2_FCT2-icedeep_branch.A_WCYCL1850S.ne30_oECv3_ICG.edison/',
+                'source_path': '/global/homes/r/renata/ACME_simulations/20170926.FCT2.A_WCYCL1850S.ne30_oECv3.anvil',
                 'simulation_start_year': 51,
                 'simulation_end_year': 60,
                 'set_frequency': [5, 10],
-                'experiment': '20171011.beta2_FCT2-icedeep_branch.A_WCYCL1850S.ne30_oECv3_ICG.edison',
+                'experiment': '20170926.FCT2.A_WCYCL1850S.ne30_oECv3.anvil',
                 'email': 'baldwin32@llnl.gov',
                 'short_term_archive': 0,
                 'img_host_server': 'https://acme-viewer.llnl.gov',

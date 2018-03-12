@@ -14,7 +14,7 @@ class TestE3SM(unittest.TestCase):
 
     def __init__(self, *args, **kwargs):
         super(TestE3SM, self).__init__(*args, **kwargs)
-        config_path = os.path.join(os.getcwd(), 'tests', 'test_run_no_sta.cfg')
+        config_path = os.path.join(os.getcwd(), 'tests', 'test_configs', 'test_run_no_sta.cfg')
         self.config = ConfigObj(config_path)
         self.caseID = self.config['global']['experiment']
         self.event_list = EventList()

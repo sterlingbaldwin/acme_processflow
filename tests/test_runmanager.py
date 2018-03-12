@@ -1,4 +1,5 @@
-import os, sys
+import os
+import sys
 import threading
 import unittest
 import shutil
@@ -18,7 +19,8 @@ class TestRunManager(unittest.TestCase):
 
     def __init__(self, *args, **kwargs):
         super(TestRunManager, self).__init__(*args, **kwargs)
-        config_path = os.path.join(os.getcwd(), 'tests', 'test_run_no_sta.cfg')
+        config_path = os.path.join(
+            os.getcwd(), 'tests', 'test_configs', 'test_run_no_sta.cfg')
         self.config = ConfigObj(config_path)
         self.project_path = os.path.join(os.getcwd(), '..', 'testproject')
         self.output_path = os.path.join(self.project_path, 'output')
@@ -27,7 +29,7 @@ class TestRunManager(unittest.TestCase):
             self.project_path, 'output', 'run_scripts')
         self.mutex = threading.Lock()
         self.remote_endpoint = '9d6d994a-6d04-11e5-ba46-22000b92c6ec'
-        self.remote_path = '/global/homes/r/renata/ACME_simulations/20171011.beta2_FCT2-icedeep_branch.A_WCYCL1850S.ne30_oECv3_ICG.edison/'
+        self.remote_path = '/global/homes/r/renata/ACME_simulations/20170926.FCT2.A_WCYCL1850S.ne30_oECv3.anvil'
         self.local_endpoint = 'a871c6de-2acd-11e7-bc7c-22000b9a448b'
         self.config['global']['output_path'] = self.output_path
         self.config['global']['input_path'] = self.input_path
