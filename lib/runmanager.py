@@ -779,7 +779,8 @@ class RunManager(object):
                         continue
                     else:
                         if status == -1:
-                            msg = '{job} requires additional data'.format(job=job.type)
+                            msg = '{job} requires additional data'.format(
+                                job=job.type)
                             logging.info(msg)
                             job.status = JobStatus.WAITING_ON_INPUT
                             all_data_needed = False
@@ -797,7 +798,7 @@ class RunManager(object):
                         logging.info(msg)
                         self.handle_completed_job(job)
                         continue
-                    
+
                     # Check that the job was actually submitted to the queue
                     try:
                         slurm = Slurm()
@@ -927,7 +928,8 @@ class RunManager(object):
             job_set.status = SetStatus.COMPLETED
 
         if self.no_host:
-            msg = 'Skipping hosting output for {}-{}-{}'.format(job.type, job.start_year, job.end_year)
+            msg = 'Skipping hosting output for {}-{}-{}'.format(
+                job.type, job.start_year, job.end_year)
             print_line(
                 ui=self.ui,
                 line=msg,
@@ -939,20 +941,6 @@ class RunManager(object):
 
             # aprime handles its own hosting
             host_dir = job.config['web_dir']
-            if os.path.exists(host_dir):
-                try:
-                    head, _ = os.path.split(host_dir)
-                    os.chmod(head, 0755)
-                except:
-                    pass
-                while True:
-                    try:
-                        p = Popen(['chmod', '-R', '0755', host_dir])
-                        out, err = p.communicate()
-                    except:
-                        sleep(1)
-                    else:
-                        break
 
             # move the files from the place that aprime auto
             # generates them to where we actually want them to be
@@ -964,25 +952,34 @@ class RunManager(object):
 
             # next copy over the aprime output
             if os.path.exists(host_dir) and os.path.isdir(host_dir):
+                # if the web hosting in aprime worked correctly
                 if os.path.exists(target_host_dir):
                     rmtree(target_host_dir)
                 move(src=host_dir,
                      dst=target_host_dir)
-            elif os.path.exists(job.config['output_path']):
-                if not os.path.exists(target_host_dir):
-                    source = os.path.join(
-                        job.config['output_path'],
-                        'coupled_diagnostics',
-                        '{exp}_vs_obs'.format(exp=job.config['experiment']),
-                        '{exp}_years{start}-{end}_vs_obs'.format(
-                            exp=job.config['experiment'], start=job.start_year, end=job.end_year))
-                    if os.path.exists(source):
-                        move(src=source,
-                             dst=target_host_dir)
-                    else:
-                        msg = 'Unable to find source directory: {}'.format(
-                            source)
-                        logging.error(msg)
+            else:
+                msg = 'aprime-{}-{}: native aprime webhosting failed, attempting to compensate'.format(
+                    job.start_year, job.end_year)
+                logging.error(msg)
+                # aprimes' webhosting failed, have to compensate
+                if os.path.exists(target_host_dir):
+                    msg = 'aprime-{}-{}: removing previous output'.format(
+                        job.start_year, job.end_year)
+                    logging.info(msg)
+                    rmtree(target_host_dir)
+                source = os.path.join(
+                    job.config['output_path'],
+                    'coupled_diagnostics',
+                    '{exp}_vs_obs'.format(exp=job.config['experiment']),
+                    '{exp}_years{start}-{end}_vs_obs'.format(
+                        exp=job.config['experiment'], start=job.start_year, end=job.end_year))
+                if os.path.exists(source):
+                    copy2(src=source,
+                          dst=target_host_dir)
+                else:
+                    msg = 'Unable to find source directory: {}'.format(
+                        source)
+                    logging.error(msg)
 
             if not os.path.exists(target_host_dir):
                 msg = "Error hosting aprime output for {start:04d}-{end:04d}".format(
@@ -1032,7 +1029,7 @@ class RunManager(object):
                 ui=self.ui,
                 line=msg,
                 event_list=self.event_list)
-            
+
             msg = 'Fixing permissions for {}'.format(target_host_dir)
             print_line(
                 ui=self.ui,

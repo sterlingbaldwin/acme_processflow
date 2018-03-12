@@ -565,22 +565,25 @@ def render(variables, input_path, output_path, delimiter='%%'):
         rendered_string = ''
         match = re.search(delimiter + '[a-zA-Z_0-9]*' + delimiter, line)
         if match:
-            delim_index = [m.start() for m in re.finditer(delimiter, line)]
-            if len(delim_index) < 2:
-                continue
-
-            template_string = line[delim_index[0] +
-                                   len(delimiter): delim_index[1]]
-            for item in variables:
-                if item == template_string:
-                    rendered_start = line[:delim_index[0]]
-                    rendered_middle = variables[item]
-                    rendered_end = line[delim_index[0] +
-                                        len(delimiter) + len(item) + len(delimiter):]
-                    rendered_string += str(rendered_start) + \
-                        str(rendered_middle) + str(rendered_end)
-                else:
+            while match:
+                delim_index = [m.start() for m in re.finditer(delimiter, line)]
+                if len(delim_index) < 2:
                     continue
+
+                template_string = line[delim_index[0] +
+                                    len(delimiter): delim_index[1]]
+                for item in variables:
+                    if item == template_string:
+                        rendered_start = line[:delim_index[0]]
+                        rendered_middle = variables[item]
+                        rendered_end = line[delim_index[0] +
+                                            len(delimiter) + len(item) + len(delimiter):]
+                        line_tmp = str(rendered_start) + \
+                            str(rendered_middle) + str(rendered_end)
+                    else:
+                        continue
+                match = re.search(delimiter + '[a-zA-Z_0-9]*' + delimiter, line_tmp)
+            rendered_string += line_tmp
         else:
             rendered_string = line
         outfile.write(rendered_string)
