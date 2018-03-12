@@ -171,16 +171,24 @@ class APrimeDiags(object):
                     missing_pages.append(link.attrs['href'])
 
         if missing_pages:
-            msg = 'aprime-{start:04d}-{end:04d} is missing the following pages'.format(
-                start=self.start_year, end=self.end_year)
-            logging.error(msg)
-            msg = json.dumps(missing_pages)
-            logging.error(msg)
+            msg = 'aprime-{start:04d}-{end:04d}: missing plots: {plots}'.format(
+                start=self.start_year,
+                end=self.end_year,
+                plots=missing_pages)
+            print_line(
+                ui=self.config.get('ui', False),
+                line=msg,
+                event_list=self.event_list,
+                current_state=False)
             return False
 
         msg = 'All links found for aprime-{start:04d}-{end:04d}'.format(
             start=self.start_year, end=self.end_year)
-        logging.info(msg)
+        print_line(
+            ui=self.config.get('ui', False),
+            line=msg,
+            event_list=self.event_list,
+            current_state=True)
         return True
 
     def ready_check(self):
