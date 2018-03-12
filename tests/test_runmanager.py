@@ -77,21 +77,21 @@ class TestRunManager(unittest.TestCase):
         for job_set in runmanager.job_sets:
             if job_set.set_number == 1:
                 self.assertEqual(job_set.length, 5)
-                self.assertEqual(job_set.set_start_year, 51)
-                self.assertEqual(job_set.set_end_year, 55)
+                self.assertEqual(job_set.set_start_year, 1)
+                self.assertEqual(job_set.set_end_year, 5)
                 job_names = job_set.get_job_names()
                 self.assertTrue('ncclimo' in job_names)
                 self.assertTrue('amwg' in job_names)
             if job_set.set_number == 2:
-                self.assertEqual(job_set.set_start_year, 56)
-                self.assertEqual(job_set.set_end_year, 60)
+                self.assertEqual(job_set.set_start_year, 6)
+                self.assertEqual(job_set.set_end_year, 10)
                 self.assertEqual(job_set.length, 5)
                 job_names = job_set.get_job_names()
                 self.assertTrue('ncclimo' in job_names)
                 self.assertTrue('amwg' in job_names)
             if job_set.set_number == 3:
-                self.assertEqual(job_set.set_start_year, 51)
-                self.assertEqual(job_set.set_end_year, 60)
+                self.assertEqual(job_set.set_start_year, 1)
+                self.assertEqual(job_set.set_end_year, 10)
                 self.assertEqual(job_set.length, 10)
                 job_names = job_set.get_job_names()
                 self.assertTrue('ncclimo' in job_names)
