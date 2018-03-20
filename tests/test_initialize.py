@@ -38,7 +38,7 @@ class TestInitialize(unittest.TestCase):
         base_path = os.getcwd()
         resource_path = os.path.join(base_path, 'resources')
         project_path = os.path.abspath(os.path.join('..', 'testproject'))
-        args = ['-c', os.path.join(base_path, 'tests',
+        args = ['-c', os.path.join(base_path, 'tests', 'test_configs',
                                    'test_run_no_sta.cfg'), '-f', '-r', resource_path]
         display_event = threading.Event()
         thread_kill_event = threading.Event()
@@ -83,11 +83,11 @@ class TestInitialize(unittest.TestCase):
                 'native_grid_name': 'ne30',
                 'remap_grid_name': 'fv129x256',
                 'project_path': project_path,
-                'source_path': '/global/homes/r/renata/ACME_simulations/20171011.beta2_FCT2-icedeep_branch.A_WCYCL1850S.ne30_oECv3_ICG.edison/',
-                'simulation_start_year': 51,
-                'simulation_end_year': 60,
+                'source_path': '/global/homes/r/renata/ACME_simulations/20170926.FCT2.A_WCYCL1850S.ne30_oECv3.anvil',
+                'simulation_start_year': 1,
+                'simulation_end_year': 10,
                 'set_frequency': [5, 10],
-                'experiment': '20171011.beta2_FCT2-icedeep_branch.A_WCYCL1850S.ne30_oECv3_ICG.edison',
+                'experiment': '20170926.FCT2.A_WCYCL1850S.ne30_oECv3.anvil',
                 'email': 'baldwin32@llnl.gov',
                 'short_term_archive': 0,
                 'img_host_server': 'https://acme-viewer.llnl.gov',
@@ -138,7 +138,7 @@ class TestInitialize(unittest.TestCase):
 
         base_path = os.getcwd()
         resource_path = os.path.join(base_path, 'resources')
-        args = ['-c', os.path.join(base_path, 'tests',
+        args = ['-c', os.path.join(base_path, 'tests', 'test_configs',
                                    'test_run_no_sta.cfg'), '-f', '-r', resource_path]
         display_event = threading.Event()
         thread_kill_event = threading.Event()
@@ -183,11 +183,11 @@ class TestInitialize(unittest.TestCase):
                 'native_grid_name': 'ne30',
                 'remap_grid_name': 'fv129x256',
                 'project_path': project_path,
-                'source_path': '/global/homes/r/renata/ACME_simulations/20171011.beta2_FCT2-icedeep_branch.A_WCYCL1850S.ne30_oECv3_ICG.edison/',
-                'simulation_start_year': 51,
-                'simulation_end_year': 60,
+                'source_path': '/global/homes/r/renata/ACME_simulations/20170926.FCT2.A_WCYCL1850S.ne30_oECv3.anvil',
+                'simulation_start_year': 1,
+                'simulation_end_year': 10,
                 'set_frequency': [5, 10],
-                'experiment': '20171011.beta2_FCT2-icedeep_branch.A_WCYCL1850S.ne30_oECv3_ICG.edison',
+                'experiment': '20170926.FCT2.A_WCYCL1850S.ne30_oECv3.anvil',
                 'email': 'baldwin32@llnl.gov',
                 'short_term_archive': 0,
                 'img_host_server': 'https://acme-viewer.llnl.gov',
@@ -239,7 +239,7 @@ class TestInitialize(unittest.TestCase):
         base_path = os.getcwd()
         resource_path = os.path.join(base_path, 'resources')
         project_path = os.path.abspath(os.path.join('..', 'testproject'))
-        args = ['-c', os.path.join(base_path, 'tests',
+        args = ['-c', os.path.join(base_path, 'tests', 'test_configs',
                                    'test_run_no_white_space.cfg'), '-f', '-n', '-r', resource_path]
         display_event = threading.Event()
         thread_kill_event = threading.Event()
@@ -262,7 +262,7 @@ class TestInitialize(unittest.TestCase):
         base_path = os.getcwd()
         resource_path = os.path.join(base_path, 'resources')
         project_path = os.path.abspath(os.path.join('..', 'testproject'))
-        args = ['-c', os.path.join(base_path, 'tests',
+        args = ['-c', os.path.join(base_path, 'tests', 'test_configs',
                                    'test_run_no_sta_whitespace.cfg'), '-f', '-n', '-r', resource_path]
         display_event = threading.Event()
         thread_kill_event = threading.Event()
@@ -276,9 +276,12 @@ class TestInitialize(unittest.TestCase):
             kill_event=thread_kill_event,
             mutex=mutex)
 
+        if not isinstance(config, dict):
+            print 'config:', config
+
         self.assertTrue(isinstance(config, dict))
         self.assertEqual(config['global']['source_path'],
-                         '/global/homes/r/renata/ACME_simulations/20171011.beta2_FCT2-icedeep_branch.A_WCYCL1850S.ne30_oECv3_ICG.edison/')
+                         '/global/homes/r/renata/ACME_simulations/20170926.FCT2.A_WCYCL1850S.ne30_oECv3.anvil')
 
     def test_config_bad_destination_endpoint(self):
         print '---- Starting Test: {} ----'.format(inspect.stack()[0][3])
@@ -286,7 +289,7 @@ class TestInitialize(unittest.TestCase):
         base_path = os.getcwd()
         resource_path = os.path.join(base_path, 'resources')
         project_path = os.path.abspath(os.path.join('..', 'testproject'))
-        args = ['-c', os.path.join(base_path, 'tests',
+        args = ['-c', os.path.join(base_path, 'tests', 'test_configs',
                                    'test_run_bad_destination_endpoint.cfg'), '-f', '-n', '-r', resource_path]
         display_event = threading.Event()
         thread_kill_event = threading.Event()
@@ -309,7 +312,7 @@ class TestInitialize(unittest.TestCase):
         base_path = os.getcwd()
         resource_path = os.path.join(base_path, 'resources')
         project_path = os.path.abspath(os.path.join('..', 'testproject'))
-        args = ['-c', os.path.join(base_path, 'tests',
+        args = ['-c', os.path.join(base_path, 'tests', 'test_configs',
                                    'test_run_bad_source_path.cfg'), '-f', '-n', '-r', resource_path]
         display_event = threading.Event()
         thread_kill_event = threading.Event()
@@ -332,7 +335,7 @@ class TestInitialize(unittest.TestCase):
         base_path = os.getcwd()
         resource_path = os.path.join(base_path, 'resources')
         project_path = os.path.abspath(os.path.join('..', 'testproject'))
-        args = ['-c', os.path.join(base_path, 'tests',
+        args = ['-c', os.path.join(base_path, 'tests', 'test_configs',
                                    'DOES_NOT_EXIST.cfg'), '-f', '-n', '-r', resource_path]
         display_event = threading.Event()
         thread_kill_event = threading.Event()
@@ -355,7 +358,7 @@ class TestInitialize(unittest.TestCase):
         base_path = os.getcwd()
         resource_path = os.path.join(base_path, 'resources')
         project_path = os.path.abspath(os.path.join('..', 'testproject'))
-        args = ['-c', os.path.join(base_path, 'tests',
+        args = ['-c', os.path.join(base_path, 'tests', 'test_configs',
                                    'invalid.cfg'), '-f', '-n']
         display_event = threading.Event()
         thread_kill_event = threading.Event()
@@ -400,7 +403,7 @@ class TestInitialize(unittest.TestCase):
         base_path = os.getcwd()
         resource_path = os.path.join(base_path, 'resources')
         project_path = os.path.abspath(os.path.join('..', 'testproject'))
-        args = ['-c', os.path.join(base_path, 'tests',
+        args = ['-c', os.path.join(base_path, 'tests', 'test_configs',
                                    'test_run_invalid_key.cfg'), '-f', '-n']
         display_event = threading.Event()
         thread_kill_event = threading.Event()
@@ -423,7 +426,7 @@ class TestInitialize(unittest.TestCase):
         base_path = os.getcwd()
         resource_path = os.path.join(base_path, 'resources')
         project_path = os.path.abspath(os.path.join('..', 'testproject'))
-        args = ['-c', os.path.join(base_path, 'tests',
+        args = ['-c', os.path.join(base_path, 'tests', 'test_configs',
                                    'test_run_no_global.cfg'), '-f', '-n']
         display_event = threading.Event()
         thread_kill_event = threading.Event()

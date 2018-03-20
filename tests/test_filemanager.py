@@ -21,7 +21,7 @@ class TestFileManager(unittest.TestCase):
         self.local_path = os.path.abspath(
             os.path.join('..', '..', 'testproject'))
         self.remote_endpoint = '9d6d994a-6d04-11e5-ba46-22000b92c6ec'
-        self.remote_path = '/global/homes/r/renata/ACME_simulations/20171011.beta2_FCT2-icedeep_branch.A_WCYCL1850S.ne30_oECv3_ICG.edison/'
+        self.remote_path = '/global/homes/r/renata/ACME_simulations/20170926.FCT2.A_WCYCL1850S.ne30_oECv3.anvil'
         self.local_endpoint = 'a871c6de-2acd-11e7-bc7c-22000b9a448b'
 
     def test_filemanager_setup_no_sta(self):
@@ -31,7 +31,7 @@ class TestFileManager(unittest.TestCase):
         types = ['atm', 'ice', 'ocn', 'rest', 'streams.cice', 'streams.ocean']
         database = 'test.db'
         remote_endpoint = '9d6d994a-6d04-11e5-ba46-22000b92c6ec'
-        remote_path = '/global/homes/r/renata/ACME_simulations/20171011.beta2_FCT2-icedeep_branch.A_WCYCL1850S.ne30_oECv3_ICG.edison/'
+        remote_path = '/global/homes/r/renata/ACME_simulations/20170926.FCT2.A_WCYCL1850S.ne30_oECv3.anvil'
         local_endpoint = 'a871c6de-2acd-11e7-bc7c-22000b9a448b'
         filemanager = FileManager(
             mutex=self.mutex,
@@ -79,7 +79,7 @@ class TestFileManager(unittest.TestCase):
         database = 'test.db'
         simstart = 51
         simend = 60
-        experiment = '20171011.beta2_FCT2-icedeep_branch.A_WCYCL1850S.ne30_oECv3_ICG.edison'
+        experiment = '20170926.FCT2.A_WCYCL1850S.ne30_oECv3.anvil'
         filemanager = FileManager(
             event_list=EventList(),
             mutex=self.mutex,
@@ -116,7 +116,7 @@ class TestFileManager(unittest.TestCase):
         database = 'test.db'
         simstart = 51
         simend = 60
-        experiment = '20171011.beta2_FCT2-icedeep_branch.A_WCYCL1850S.ne30_oECv3_ICG.edison'
+        experiment = '20170926.FCT2.A_WCYCL1850S.ne30_oECv3.anvil'
         filemanager = FileManager(
             event_list=EventList(),
             mutex=self.mutex,
@@ -151,15 +151,15 @@ class TestFileManager(unittest.TestCase):
         print '---- Starting Test: {} ----'.format(inspect.stack()[0][3])
 
         sta = False
-        types = ['atm', 'ice', 'ocn', 'rest', 'streams.cice', 'streams.ocean', 'mpascice.rst']
+        types = ['atm']
         database = 'test.db'
         simstart = 51
         simend = 60
-        experiment = '20171011.beta2_FCT2-icedeep_branch.A_WCYCL1850S.ne30_oECv3_ICG.edison'
+        experiment = '20170926.FCT2.A_WCYCL1850S.ne30_oECv3.anvil'
         filemanager = FileManager(
             event_list=EventList(),
             mutex=self.mutex,
-            sta=sta,
+            sta=False,
             types=types,
             database=database,
             remote_endpoint=self.remote_endpoint,
@@ -185,12 +185,12 @@ class TestFileManager(unittest.TestCase):
         print '---- Starting Test: {} ----'.format(inspect.stack()[0][3])
 
         sta = True
-        types = ['atm', 'ice', 'ocn', 'streams.cice', 'streams.ocean']
+        types = ['atm', 'ice', 'ocn', 'rest', 'streams.ocean', 'streams.cice', 'mpas-o_in', 'mpas-cice_in', 'meridionalHeatTransport']
         database = 'test.db'
         simstart = 51
-        source_path = '/global/cscratch1/sd/golaz/ACME_simulations/20170915.beta2.A_WCYCL1850S.ne30_oECv3_ICG.edison'
+        source_path = '/global/cscratch1/sd/golaz/ACME_simulations/20180215.DECKv1b_1pctCO2.ne30_oEC.edison'
         simend = 60
-        experiment = '20170915.beta2.A_WCYCL1850S.ne30_oECv3_ICG.edison'
+        experiment = '20180215.DECKv1b_1pctCO2.ne30_oEC.edison'
         filemanager = FileManager(
             event_list=EventList(),
             mutex=self.mutex,
@@ -225,7 +225,7 @@ class TestFileManager(unittest.TestCase):
         simstart = 51
         simend = 60
         event_list = EventList()
-        experiment = '20171011.beta2_FCT2-icedeep_branch.A_WCYCL1850S.ne30_oECv3_ICG.edison'
+        experiment = '20170926.FCT2.A_WCYCL1850S.ne30_oECv3.anvil'
         if os.path.exists(self.local_path):
             shutil.rmtree(self.local_path)
         filemanager = FileManager(

@@ -1,5 +1,6 @@
 import unittest
-import os, sys
+import os
+import sys
 import shutil
 import inspect
 
@@ -16,8 +17,9 @@ class TestProcessflow(unittest.TestCase):
     def test_processflow_with_inplace_data(self):
         print '---- Starting Test: {} ----'.format(inspect.stack()[0][3])
         config_path = os.path.join(
-            os.getcwd(), 'tests', 'test_no_sta_minimal.cfg')
-        output_path = os.path.join('/export/baldwin32/jenkins/workspace/', inspect.stack()[0][3])
+            os.getcwd(), 'tests', 'test_configs', 'test_no_sta_minimal.cfg')
+        output_path = os.path.join(
+            '/export/baldwin32/jenkins/workspace/', inspect.stack()[0][3])
         if os.path.exists(output_path):
             shutil.rmtree(output_path)
 
@@ -25,7 +27,8 @@ class TestProcessflow(unittest.TestCase):
         project_path = config['global']['project_path']
         if os.path.exists(os.path.join(project_path, 'input')):
             print 'testing with inplace data'
-            testargs = ['-c', config_path, '-f', '-r', './resources', '-s', '-o', output_path]
+            testargs = ['-c', config_path, '-f', '-r',
+                        './resources', '-s', '-o', output_path]
             ret = main(test=True, testargs=testargs)
             self.assertEqual(ret, 0)
         else:
@@ -34,8 +37,9 @@ class TestProcessflow(unittest.TestCase):
     def test_processflow_from_scratch_no_sta(self):
         print '---- Starting Test: {} ----'.format(inspect.stack()[0][3])
         config_path = os.path.join(
-            os.getcwd(), 'tests', 'test_no_sta_minimal.cfg')
-        output_path = os.path.join('/export/baldwin32/jenkins/workspace/', inspect.stack()[0][3])
+            os.getcwd(), 'tests', 'test_configs',  'test_no_sta_minimal.cfg')
+        output_path = os.path.join(
+            '/export/baldwin32/jenkins/workspace/', inspect.stack()[0][3])
         if os.path.exists(output_path):
             shutil.rmtree(output_path)
 
@@ -46,15 +50,17 @@ class TestProcessflow(unittest.TestCase):
             shutil.rmtree(project_path, ignore_errors=True)
             print "project cleanup complete"
 
-        testargs = ['-c', config_path, '-n', '-f', '-r', './resources', '-s', '-o', output_path]
+        testargs = ['-c', config_path, '-n', '-f', '-r',
+                    './resources', '-s', '-o', output_path]
         ret = main(test=True, testargs=testargs)
         self.assertEqual(ret, 0)
 
     def test_processflow_from_scratch_yes_sta(self):
         print '---- Starting Test: {} ----'.format(inspect.stack()[0][3])
         config_path = os.path.join(
-            os.getcwd(), 'tests', 'test_yes_sta_minimal.cfg')
-        output_path = os.path.join('/export/baldwin32/jenkins/workspace/', inspect.stack()[0][3])
+            os.getcwd(), 'tests', 'test_configs', 'test_yes_sta_minimal.cfg')
+        output_path = os.path.join(
+            '/export/baldwin32/jenkins/workspace/', inspect.stack()[0][3])
         if os.path.exists(output_path):
             shutil.rmtree(output_path)
 
@@ -64,15 +70,17 @@ class TestProcessflow(unittest.TestCase):
             print "removing previous project directory"
             shutil.rmtree(project_path, ignore_errors=True)
             print "project cleanup complete"
-        testargs = ['-c', config_path, '-n', '-f', '-r', './resources', '-o', output_path]
+        testargs = ['-c', config_path, '-n', '-f',
+                    '-r', './resources', '-o', output_path]
         ret = main(test=True, testargs=testargs)
         self.assertEqual(ret, 0)
-    
+
     def test_processflow_from_minimal_comprehensive(self):
         print '---- Starting Test: {} ----'.format(inspect.stack()[0][3])
         config_path = os.path.join(
-            os.getcwd(), 'tests', 'test_minimal_comprehensive.cfg')
-        output_path = os.path.join('/export/baldwin32/jenkins/workspace/', inspect.stack()[0][3])
+            os.getcwd(), 'tests', 'test_configs', 'test_minimal_comprehensive.cfg')
+        output_path = os.path.join(
+            '/export/baldwin32/jenkins/workspace/', inspect.stack()[0][3])
         if os.path.exists(output_path):
             shutil.rmtree(output_path)
 
@@ -82,13 +90,15 @@ class TestProcessflow(unittest.TestCase):
             print "removing previous project directory"
             shutil.rmtree(project_path, ignore_errors=True)
             print "project cleanup complete"
-        testargs = ['-c', config_path, '-f', '-r', './resources', '-o', output_path]
+        testargs = ['-c', config_path, '-f', '-r',
+                    './resources', '-o', output_path]
         ret = main(test=True, testargs=testargs)
         self.assertEqual(ret, 0)
 
         print "Starting completed run over again"
         ret = main(test=True, testargs=testargs)
         self.assertEqual(ret, 0)
+
 
 if __name__ == '__main__':
     unittest.main()

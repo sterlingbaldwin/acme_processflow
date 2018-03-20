@@ -37,6 +37,6 @@ ReverseMap = {
     JobStatus.FAILED: "Failed",
     JobStatus.SUBMITTED: "Submitted",
     JobStatus.PENDING: "Pending",
-    JobStatus.WAITING_ON_INPUT: "Waiting on additional input",
+    JobStatus.WAITING_ON_INPUT: "Waiting on additional files",
     JobStatus.CANCELLED: "Canceled"
 }

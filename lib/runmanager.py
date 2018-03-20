@@ -728,10 +728,11 @@ class RunManager(object):
                         logging.error(msg)
                         logging.error(str(job))
                         continue
+
                     # If the job has any dependencies
                     # iterate through the list to see if they're done
                     ready = True
-                    if job.depends_on and len(job.depends_on) > 0:
+                    if job.depends_on is not None and len(job.depends_on) > 0:
                         for dependancy in job.depends_on:
                             for dependent_job in job_set.jobs:
                                 if dependent_job.type == dependancy:
@@ -745,64 +746,77 @@ class RunManager(object):
                     # If the job isnt ready, skip it
                     if not ready:
                         continue
-                    # If the job is valid, start it
-                    if job.status == JobStatus.VALID:
-                        if self.check_max_running_jobs():
-                            return
-                        msg = "Submitting {job}-{start:04d}-{end:04d}".format(
+                    # If the job isnt valid, skip it and move on
+                    if job.status not in [JobStatus.VALID, JobStatus.WAITING_ON_INPUT]:
+                        continue
+
+                    if self.check_max_running_jobs():
+                        msg = 'Too many jobs are running, waiting for the queue to shrink before submitting'
+                        logging.info(msg)
+                        return
+                    msg = "Submitting {job}-{start:04d}-{end:04d}".format(
+                        job=job.type,
+                        start=job.start_year,
+                        end=job.end_year)
+                    print_line(
+                        ui=self.ui,
+                        line=msg,
+                        event_list=self.event_list,
+                        current_state=True,
+                        ignore_text=True)
+
+                    try:
+                        # status will be the job id if it started, or -1 if the job needs additional data
+                        status = job.execute()
+                    except Exception as e:
+                        # Slurm threw an exception. Reset the job so we can try again
+                        msg = '{job} failed to start execution'.format(
+                            job=job.type)
+                        logging.error(msg)
+                        msg = repr(e)
+                        logging.error(e)
+                        job.status = JobStatus.VALID
+                        continue
+                    else:
+                        if status == -1:
+                            msg = '{job} requires additional data'.format(
+                                job=job.type)
+                            logging.info(msg)
+                            job.status = JobStatus.WAITING_ON_INPUT
+                            all_data_needed = False
+                            continue
+
+                    if job.job_id == 0:
+                        msg = '{job}-{start:04d}-{end:04d} precomputed, skipping'.format(
                             job=job.type,
                             start=job.start_year,
                             end=job.end_year)
                         print_line(
                             ui=self.ui,
                             line=msg,
-                            event_list=self.event_list,
-                            current_state=True,
-                            ignore_text=True)
-                        try:
-                            status = job.execute()
-                        except Exception as e:
-                            # Slurm threw an exception. Reset the job so we can try again
-                            msg = '{job} failed to start execution'.format(
-                                job=job.type)
-                            logging.error(msg)
-                            msg = repr(e)
-                            logging.error(e)
-                            job.status = JobStatus.VALID
-                            continue
-                        if status == -1:
-                            msg = '{job} requires additional data'.format(job=job.type)
-                            logging.info(msg)
-                            job.status = JobStatus.VALID
-                            all_data_needed = False
-                            continue
-                        if job.job_id == 0:
-                            msg = '{job}-{start:04d}-{end:04d} precomputed, skipping'.format(
-                                job=job.type,
-                                start=job.start_year,
-                                end=job.end_year)
-                            print_line(
-                                ui=self.ui,
-                                line=msg,
-                                event_list=self.event_list)
-                            logging.info(msg)
-                            self.handle_completed_job(job)
-                            continue
-                        try:
-                            slurm = Slurm()
-                            slurm.showjob(job.job_id)
-                        except:
-                            msg = "Error submitting {job} to queue".format(
-                                job=job.type)
-                            print_line(
-                                ui=self.ui,
-                                line=msg,
-                                event_list=self.event_list)
-                            job.status = JobStatus.VALID
-                            return all_data_needed
-                        else:
-                            self.running_jobs.append(job)
-                            self.monitor_running_jobs()
+                            event_list=self.event_list)
+                        logging.info(msg)
+                        self.handle_completed_job(job)
+                        continue
+
+                    # Check that the job was actually submitted to the queue
+                    try:
+                        slurm = Slurm()
+                        slurm.showjob(job.job_id)
+                    except:
+                        msg = "Error submitting {job} to queue".format(
+                            job=job.type)
+                        print_line(
+                            ui=self.ui,
+                            line=msg,
+                            event_list=self.event_list)
+                        job.status = JobStatus.VALID
+                        return all_data_needed
+                    else:
+                        self.running_jobs.append(job)
+                        self.monitor_running_jobs()
+            if job_set.status in [SetStatus.NO_DATA, SetStatus.PARTIAL_DATA]:
+                all_data_needed = False
         return all_data_needed
 
     def monitor_running_jobs(self):
@@ -914,7 +928,8 @@ class RunManager(object):
             job_set.status = SetStatus.COMPLETED
 
         if self.no_host:
-            msg = 'Skipping hosting output for {}-{}-{}'.format(job.type, job.start_year, job.end_year)
+            msg = 'Skipping hosting output for {}-{}-{}'.format(
+                job.type, job.start_year, job.end_year)
             print_line(
                 ui=self.ui,
                 line=msg,
@@ -926,20 +941,6 @@ class RunManager(object):
 
             # aprime handles its own hosting
             host_dir = job.config['web_dir']
-            if os.path.exists(host_dir):
-                try:
-                    head, _ = os.path.split(host_dir)
-                    os.chmod(head, 0755)
-                except:
-                    pass
-                while True:
-                    try:
-                        p = Popen(['chmod', '-R', '0755', host_dir])
-                        out, err = p.communicate()
-                    except:
-                        sleep(1)
-                    else:
-                        break
 
             # move the files from the place that aprime auto
             # generates them to where we actually want them to be
@@ -951,25 +952,34 @@ class RunManager(object):
 
             # next copy over the aprime output
             if os.path.exists(host_dir) and os.path.isdir(host_dir):
+                # if the web hosting in aprime worked correctly
                 if os.path.exists(target_host_dir):
                     rmtree(target_host_dir)
                 move(src=host_dir,
                      dst=target_host_dir)
-            elif os.path.exists(job.config['output_path']):
-                if not os.path.exists(target_host_dir):
-                    source = os.path.join(
-                        job.config['output_path'],
-                        'coupled_diagnostics',
-                        '{exp}_vs_obs'.format(exp=job.config['experiment']),
-                        '{exp}_years{start}-{end}_vs_obs'.format(
-                            exp=job.config['experiment'], start=job.start_year, end=job.end_year))
-                    if os.path.exists(source):
-                        move(src=source,
-                             dst=target_host_dir)
-                    else:
-                        msg = 'Unable to find source directory: {}'.format(
-                            source)
-                        logging.error(msg)
+            else:
+                msg = 'aprime-{}-{}: native aprime webhosting failed, attempting to compensate'.format(
+                    job.start_year, job.end_year)
+                logging.error(msg)
+                # aprimes' webhosting failed, have to compensate
+                if os.path.exists(target_host_dir):
+                    msg = 'aprime-{}-{}: removing previous output'.format(
+                        job.start_year, job.end_year)
+                    logging.info(msg)
+                    rmtree(target_host_dir)
+                source = os.path.join(
+                    job.config['output_path'],
+                    'coupled_diagnostics',
+                    '{exp}_vs_obs'.format(exp=job.config['experiment']),
+                    '{exp}_years{start}-{end}_vs_obs'.format(
+                        exp=job.config['experiment'], start=job.start_year, end=job.end_year))
+                if os.path.exists(source):
+                    copy2(src=source,
+                          dst=target_host_dir)
+                else:
+                    msg = 'Unable to find source directory: {}'.format(
+                        source)
+                    logging.error(msg)
 
             if not os.path.exists(target_host_dir):
                 msg = "Error hosting aprime output for {start:04d}-{end:04d}".format(
@@ -1019,16 +1029,21 @@ class RunManager(object):
                 ui=self.ui,
                 line=msg,
                 event_list=self.event_list)
-            logging.info(msg)
+
+            msg = 'Fixing permissions for {}'.format(target_host_dir)
+            print_line(
+                ui=self.ui,
+                line=msg,
+                event_list=self.event_list)
             while True:
                 try:
-                    p = Popen(['chmod', '-R', '0755', host_dir])
+                    p = Popen(['chmod', '-R', '0755', target_host_dir])
                 except:
                     sleep(1)
                 else:
                     break
             out, err = p.communicate()
-            head, _ = os.path.split(host_dir)
+            head, _ = os.path.split(target_host_dir)
             os.chmod(head, 0755)
 
         elif job.type == 'amwg':
