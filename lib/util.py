@@ -560,6 +560,9 @@ def render(variables, input_path, output_path, delimiter='%%'):
         print 'unable to open output file: {}'.format(output_path)
         print_debug(e)
         return False
+    
+    import pdb
+    pdb.set_trace()
 
     for line in infile.readlines():
         rendered_string = ''
@@ -580,6 +583,7 @@ def render(variables, input_path, output_path, delimiter='%%'):
                                             len(delimiter) + len(item) + len(delimiter):]
                         line_tmp = str(rendered_start) + \
                             str(rendered_middle) + str(rendered_end)
+                        line = line_tmp
                     else:
                         continue
                 match = re.search(delimiter + '[a-zA-Z_0-9]*' + delimiter, line_tmp)
