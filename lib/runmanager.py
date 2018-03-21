@@ -955,7 +955,7 @@ class RunManager(object):
                 # if the web hosting in aprime worked correctly
                 if os.path.exists(target_host_dir):
                     rmtree(target_host_dir)
-                move(src=host_dir,
+                copy2(src=host_dir,
                      dst=target_host_dir)
             else:
                 msg = 'aprime-{}-{}: native aprime webhosting failed, attempting to compensate'.format(
@@ -991,8 +991,8 @@ class RunManager(object):
                 logging.info(msg)
                 variables = {
                     'experiment': job.config['experiment'],
-                    'start_year': job.start_year,
-                    'end_year': job.end_year
+                    'start_year': '{:04d}'.format(job.start_year),
+                    'end_year': '{:04d}'.format(job.end_year)
                 }
                 resource_path = os.path.join(
                     self._resource_path,

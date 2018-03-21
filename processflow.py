@@ -23,6 +23,9 @@ from lib.util import (print_line,
                       print_debug,
                       transfer_directory)
 
+__version__ = '1.0.1'
+__branch__ = 'nightly'
+
 # check for NCL
 if not os.environ.get('NCARG_ROOT'):
     ncar_path = '/usr/local/src/NCL-6.3.0'
@@ -70,6 +73,9 @@ def main(test=False, **kwargs):
     if isinstance(config, int):
         print "Error in setup, exiting"
         return -1
+    
+    msg = 'processflow version {} branch {}'.format(__version__, __branch__)
+    logging.info(msg)
     logging.info('Config setup complete')
 
     # check that all netCDF files exist
