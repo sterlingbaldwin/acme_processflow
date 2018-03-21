@@ -560,9 +560,6 @@ def render(variables, input_path, output_path, delimiter='%%'):
         print 'unable to open output file: {}'.format(output_path)
         print_debug(e)
         return False
-    
-    import pdb
-    pdb.set_trace()
 
     for line in infile.readlines():
         rendered_string = ''

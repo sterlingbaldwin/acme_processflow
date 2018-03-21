@@ -248,6 +248,7 @@ class APrimeDiags(object):
             self.output_path,
             'run_aprime.bash')
         variables = {
+            'www_dir': self.config['web_dir'],
             'output_base_dir': self.output_path,
             'test_casename': self.config['experiment'],
             'test_archive_dir': self.config['input_path'],
