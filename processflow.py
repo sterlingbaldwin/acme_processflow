@@ -23,8 +23,8 @@ from lib.util import (print_line,
                       print_debug,
                       transfer_directory)
 
-__version__ = '1.0.1'
-__branch__ = 'nightly'
+__version__ = '1.0.3'
+__branch__ = 'master'
 
 # check for NCL
 if not os.environ.get('NCARG_ROOT'):
