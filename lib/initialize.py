@@ -25,7 +25,15 @@ from util import (setup_globus,
 
 def parse_args(argv=None, print_help=None):
     parser = argparse.ArgumentParser()
-    parser.add_argument('-c', '--config', help='Path to configuration file.')
+    parser.add_argument(
+        '-c',
+        '--config',
+        help='Path to configuration file.')
+    parser.add_argument(
+        '-v',
+        '--version',
+        help='Print version informat and exit.',
+        action='store_true')
     parser.add_argument(
         '-u',
         '--ui',
@@ -83,9 +91,15 @@ def initialize(argv, **kwargs):
         thread_list (list): the main list of all running threads
         mutex (threading.Lock): A mutex to handle db access
         kill_event (threading.Event): An event used to kill all running threads
+        version (str): the current version number for processflow
+        branch (str): the branch this version was built from
     """
     # Setup the parser
     args = parse_args(argv=argv)
+    if args.version:
+        msg = 'Processflow version {}'.format(kwargs['version'])
+        print msg
+        sys.exit()
     if not args.config:
         parse_args(print_help=True)
         return False, False, False
@@ -230,6 +244,11 @@ Please add a space and run again.'''.format(num=line_index)
         level=logging.DEBUG)
     logging.getLogger('globus_sdk').setLevel(logging.ERROR)
     logging.getLogger('globus_cli').setLevel(logging.ERROR)
+
+    msg = 'processflow version {} branch {}'.format(
+        kwargs['version'],
+        kwargs['branch'])
+    logging.info(msg)
 
     # Make sure the set_frequency is a list of ints
     set_frequency = config['global']['set_frequency']

@@ -65,6 +65,8 @@ def main(test=False, **kwargs):
     args = kwargs['testargs'] if test else sys.argv[1:]
     config, filemanager, runmanager = initialize(
         argv=args,
+        version=__version__,
+        branch=__branch__,
         event_list=event_list,
         thread_list=thread_list,
         kill_event=thread_kill_event,
@@ -74,14 +76,12 @@ def main(test=False, **kwargs):
         print "Error in setup, exiting"
         return -1
     
-    msg = 'processflow version {} branch {}'.format(__version__, __branch__)
-    logging.info(msg)
     logging.info('Config setup complete')
 
     # check that all netCDF files exist
     path_exists(config)
+
     # cleanup any temp directories from previous runs
-    # cleanup(config)
     if not os.path.exists(config['global']['run_scripts_path']):
         os.makedirs(config['global']['run_scripts_path'])
     if not os.path.exists(config['global']['tmp_path']):
