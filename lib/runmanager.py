@@ -11,7 +11,8 @@ from lib.slurm import Slurm
 from lib.util import (get_climo_output_files,
                       create_symlink_dir,
                       print_line,
-                      render)
+                      render,
+                      format_debug)
 
 from lib.YearSet import YearSet, SetStatus
 from jobs.Ncclimo import Climo
@@ -216,10 +217,7 @@ class RunManager(object):
                 'a-prime', '{start:04d}-{end:04d}'.format(
                     start=year_set.set_start_year,
                     end=year_set.set_end_year)])
-            web_directory = os.path.join(
-                config['global']['host_directory'],
-                os.environ['USER'],
-                host_directory)
+
             target_host_path = os.path.join(
                 config['global']['host_directory'],
                 os.environ['USER'],
@@ -241,7 +239,7 @@ class RunManager(object):
                 simulation_start_year=config['global']['simulation_start_year'],
                 target_host_path=target_host_path,
                 output_path=output_path,
-                web_directory=web_directory,
+                web_directory=config['global']['host_directory'],
                 host_url=host_url,
                 start_year=year_set.set_start_year,
                 end_year=year_set.set_end_year,
@@ -440,6 +438,7 @@ class RunManager(object):
             aprime_code_path (str): the path to the aprime code
             target_host_path (str): the real hosting directory
             sim_start_year (int): the simulation start year
+            resource_path (str): path to processflow resource files
         """
         target_host_path = kwargs['target_host_path']
         web_directory = kwargs['web_directory']
@@ -455,6 +454,7 @@ class RunManager(object):
         aprime_code_path = kwargs['aprime_code_path']
         filemanager = kwargs['filemanager']
         simulation_start_year = kwargs['simulation_start_year']
+        resource_path = kwargs['resource_path']
 
         if not self._precheck(year_set, 'aprime_diags'):
             return
@@ -773,7 +773,7 @@ class RunManager(object):
                         msg = '{job} failed to start execution'.format(
                             job=job.type)
                         logging.error(msg)
-                        msg = repr(e)
+                        msg = format_debug(e)
                         logging.error(e)
                         job.status = JobStatus.VALID
                         continue
@@ -940,7 +940,15 @@ class RunManager(object):
         if job.type == 'aprime_diags':
 
             # aprime handles its own hosting
-            host_dir = job.config['web_dir']
+            host_directory = "{experiment}_years{start}-{end}_vs_obs".format(
+                experiment=job.config['experiment'],
+                start=job.start_year,
+                end=job.end_year)
+
+            host_dir = os.path.join(
+                job.config['web_dir'],
+                os.environ['USER'],
+                host_directory)
 
             # move the files from the place that aprime auto
             # generates them to where we actually want them to be
@@ -953,10 +961,25 @@ class RunManager(object):
             # next copy over the aprime output
             if os.path.exists(host_dir) and os.path.isdir(host_dir):
                 # if the web hosting in aprime worked correctly
+                msg = 'aprime-{}-{}: copying native host directory from {} to {}'.format(
+                    job.start_year, job.end_year, host_dir, target_host_dir)
+                logging.info(msg)
                 if os.path.exists(target_host_dir):
                     rmtree(target_host_dir)
-                copy2(src=host_dir,
-                     dst=target_host_dir)
+                try:
+                    copytree(
+                        src=host_dir,
+                        dst=target_host_dir)
+                except:
+                    msg = 'aprime-{}-{}: failed to copy directory from {} to {}'.format(
+                        job.start_year, job.end_year, host_dir, target_host_dir)
+                    logging.info(msg)
+                    return
+                else:
+                    msg = 'aprime-{}-{}: removing native host directory {}'.format(
+                        job.start_year, job.end_year, host_dir)
+                    logging.info(msg)
+                    rmtree(host_dir)
             else:
                 msg = 'aprime-{}-{}: native aprime webhosting failed, attempting to compensate'.format(
                     job.start_year, job.end_year)
@@ -974,8 +997,9 @@ class RunManager(object):
                     '{exp}_years{start}-{end}_vs_obs'.format(
                         exp=job.config['experiment'], start=job.start_year, end=job.end_year))
                 if os.path.exists(source):
-                    copy2(src=source,
-                          dst=target_host_dir)
+                    copytree(
+                        src=source,
+                        dst=target_host_dir)
                 else:
                     msg = 'Unable to find source directory: {}'.format(
                         source)
@@ -988,6 +1012,8 @@ class RunManager(object):
                 return
 
             if not os.path.exists(os.path.join(target_host_dir, 'index.html')):
+                msg = 'aprime-{}-{}: native index generation failed, rendering from resource'.format(
+                    job.start_year, job.end_year)
                 logging.info(msg)
                 variables = {
                     'experiment': job.config['experiment'],
