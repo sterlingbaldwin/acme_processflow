@@ -75,6 +75,11 @@ def parse_args(argv=None, print_help=None):
         '-o',
         '--output-path',
         help='Custom output path')
+    parser.add_argument(
+        '-a',
+        '--always-copy',
+        help='Always copy diagnostic output, even if the output already exists in the host directory. This is much slower but ensures old output will be overwritten',
+        action='store_true')
     if print_help:
         parser.print_help()
         return
@@ -160,6 +165,7 @@ Please add a space and run again.'''.format(num=line_index)
     config['global']['no_monitor'] = True if args.no_monitor else False
     config['global']['print_file_list'] = True if args.file_list else False
     config['global']['no_scripts'] = True if args.no_scripts else False
+    config['global']['always_copy'] = True if args.always_copy else False
 
     if args.no_host:
         print_line(
@@ -249,6 +255,16 @@ Please add a space and run again.'''.format(num=line_index)
         kwargs['version'],
         kwargs['branch'])
     logging.info(msg)
+
+    if config['global']['always_copy']:
+        msg = 'Running in forced-copy mode, all previous diagnostic output will be overwritten'
+    else:
+        msg = 'Running without forced-copy, previous diagnostic output will be preserved'
+    print_line(
+            ui=config['global']['ui'],
+            line=msg,
+            event_list=event_list,
+            current_state=True)
 
     # Make sure the set_frequency is a list of ints
     set_frequency = config['global']['set_frequency']
@@ -401,7 +417,9 @@ Please add a space and run again.'''.format(num=line_index)
         scripts_path=run_script_path,
         thread_list=thread_list,
         event=event,
-        no_host=config['global']['no_host'])
+        no_host=config['global']['no_host'],
+        url_prefix=config['global']['url_prefix'],
+        always_copy=config['global']['always_copy'])
     runmanager.setup_job_sets(
         set_frequency=config['global']['set_frequency'],
         sim_start_year=sim_start_year,
@@ -409,7 +427,7 @@ Please add a space and run again.'''.format(num=line_index)
         config=config,
         filemanager=filemanager)
 
-    logging.info('Starting run with config')
+    logging.info('Starting run with config:')
     logging.info(json.dumps(config, indent=4, sort_keys=True))
     return config, filemanager, runmanager
 
