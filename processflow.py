@@ -6,8 +6,8 @@ import sys
 import os
 import threading
 import logging
-from time import sleep
 
+from time import sleep
 from globus_cli.services.transfer import get_client
 
 from lib.events import EventList
@@ -77,7 +77,6 @@ def main(test=False, **kwargs):
         return -1
     
     logging.info('Config setup complete')
-
     # check that all netCDF files exist
     path_exists(config)
 
@@ -341,7 +340,8 @@ def main(test=False, **kwargs):
                     status=status,
                     display_event=display_event,
                     thread_list=thread_list,
-                    kill_event=thread_kill_event)
+                    kill_event=thread_kill_event,
+                    runmanager=runmanager)
                 # SUCCESS EXIT
                 return 0
             print_line(
