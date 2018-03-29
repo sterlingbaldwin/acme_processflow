@@ -8,7 +8,7 @@ import json
 from pprint import pformat
 from time import sleep
 from datetime import datetime
-from shutil import copyfile, copy2, rmtree
+from shutil import copyfile, copy2, copytree, rmtree
 from bs4 import BeautifulSoup
 
 from lib.events import EventList
@@ -16,7 +16,8 @@ from lib.slurm import Slurm
 from JobStatus import JobStatus, StatusMap
 from lib.util import (render,
                       print_debug,
-                      print_line)
+                      print_line,
+                      format_debug)
 
 
 class APrimeDiags(object):
@@ -139,7 +140,13 @@ class APrimeDiags(object):
             logging.error(msg)
 
             # create host directory and copy in output
-            return self._copy_output_to_host_location()
+            try:
+                ret = self._copy_output_to_host_location()
+            except Exception as e:
+                msg = format_debug(e)
+                logging.error(msg)
+                return False
+            return ret
 
         return True
     
@@ -165,12 +172,16 @@ class APrimeDiags(object):
 
         if os.path.exists(self.config['target_host_path']):
             rmtree(self.config['target_host_path'])
-        copy2(
-            src=output_path,
-            dst=self.config['target_host_path'])
+        try:
+            copytree(
+                src=output_path,
+                dst=self.config['target_host_path'])
+        except Exception as e:
+            print_debug(e)
+            return False
         
-        msg = 'aprime-{}-{}: native index generation failed, rendering from resource'.format(
-            job.start_year, job.end_year)
+        msg = 'aprime-{start:04d}-{end:04d}: native index generation failed, rendering from resource'.format(
+            start=self.start_year, end=self.end_year)
         logging.info(msg)
         variables = {
             'experiment': self.config['experiment'],
@@ -181,7 +192,7 @@ class APrimeDiags(object):
             self.config['resource_path'],
             'aprime_index.html')
         output_path = os.path.join(
-            self.config['target_host_dir'],
+            self.config['target_host_path'],
             'index.html')
         try:
             render(
@@ -189,8 +200,8 @@ class APrimeDiags(object):
                 input_path=resource_path,
                 output_path=output_path)
         except:
-            msg = 'aprime-{}-{}: failed to render from resource'.format(
-                job.start_year, job.end_year)
+            msg = 'aprime-{start:04d}-{end:04d}: failed to render from resource'.format(
+                start=self.start_year, end=self.end_year)
             logging.error(msg)
             return False
         else:
@@ -243,11 +254,7 @@ class APrimeDiags(object):
                 start=self.start_year,
                 end=self.end_year,
                 plots=missing_pages)
-            print_line(
-                ui=self.config.get('ui', False),
-                line=msg,
-                event_list=self.event_list,
-                current_state=False)
+            logging.error(msg)
             return False
 
         msg = 'All links found for aprime-{start:04d}-{end:04d}'.format(
