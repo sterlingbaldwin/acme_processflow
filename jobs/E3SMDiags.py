@@ -139,21 +139,21 @@ class E3SMDiags(object):
 
     def postvalidate(self):
         if not os.path.exists(self.config['results_dir']):
-            msg = 'e3sm_diags-{}-{}: no results directory found'.format(
-                self.start_year, self.end_year)
+            msg = 'e3sm_diags-{start:04d}-{end:04d}: no results directory found'.format(
+                start=self.start_year, end=self.end_year)
             logging.error(msg)
             return False
         contents = os.listdir(self.config['results_dir'])
         if 'viewer' not in contents:
-            msg = 'e3sm_diags-{}-{}: no viewer in output directory'.format(
-                self.start_year, self.end_year)
+            msg = 'e3sm_diags-{start:04d}-{end:04d}: no viewer in output directory'.format(
+                start=self.start_year, end=self.end_year)
             logging.error(msg)
             return False
         viewer_path = os.path.join(self.config['results_dir'], 'viewer')
         contents = os.listdir(viewer_path)
         if 'index.html' not in contents:
-            msg = 'e3sm_diags-{}-{}: no index.html found in output viewer at {}'.format(
-                self.start_year, self.end_year, viewer_path)
+            msg = 'e3sm_diags-{start:04d}-{end:04d}: no index.html found in output viewer at {path}'.format(
+                start=self.start_year, end=self.end_year, path=viewer_path)
             logging.error(msg)
             return False
 
@@ -166,7 +166,6 @@ class E3SMDiags(object):
             self.status = JobStatus.COMPLETED
             return 0
 
-        sys.exit()
         # render the parameters file
         self.output_path = self.config['output_path']
         template_out = os.path.join(
