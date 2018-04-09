@@ -898,6 +898,7 @@ class RunManager(object):
                         if job_set.set_number == job.year_set:
                             job_set.status = SetStatus.FAILED
                             break
+                    self.handle_completed_job(job)
                     self.running_jobs.remove(job)
 
     def handle_completed_job(self, job):
