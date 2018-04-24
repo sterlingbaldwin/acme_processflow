@@ -76,19 +76,23 @@ class FileManager(object):
         self.local_path = kwargs.get('local_path')
         self.local_endpoint = kwargs.get('local_endpoint')
         self.start_year = 0
+        self.custom_remote = kwargs.get('custom_remote')
 
-        head, tail = os.path.split(kwargs.get('remote_path'))
-        if not self.sta:
-            if tail != 'run':
-                self.remote_path = os.path.join(
-                    kwargs.get('remote_path'), 'run')
-            else:
-                self.remote_path = kwargs.get('remote_path')
+        if self.custom_remote:
+            self.remote_path = kwargs.get('remote_path')
         else:
-            if tail == 'run':
-                self.remote_path = head
+            head, tail = os.path.split(kwargs.get('remote_path'))
+            if not self.sta:
+                if tail != 'run':
+                    self.remote_path = os.path.join(
+                        kwargs.get('remote_path'), 'run')
+                else:
+                    self.remote_path = kwargs.get('remote_path')
             else:
-                self.remote_path = kwargs.get('remote_path')
+                if tail == 'run':
+                    self.remote_path = head
+                else:
+                    self.remote_path = kwargs.get('remote_path')
 
     def __str__(self):
         return str({
@@ -118,12 +122,19 @@ class FileManager(object):
             os.makedirs(head)
 
         if self.sta:
-            remote_path = os.path.join(
-                self.remote_path,
-                'archive',
-                'rest',
-                '{year:04d}-01-01-00000'.format(year=simstart + 1),
-                name)
+            if self.custom_remote:
+                remote_path = os.path.join(
+                    self.remote_path,
+                    'rest',
+                    '{year:04d}-01-01-00000'.format(year=simstart + 1),
+                    name)
+            else:
+                remote_path = os.path.join(
+                    self.remote_path,
+                    'archive',
+                    'rest',
+                    '{year:04d}-01-01-00000'.format(year=simstart + 1),
+                    name)
         else:
             remote_path = os.path.join(self.remote_path, name)
         newfiles = self._add_file(
@@ -142,12 +153,19 @@ class FileManager(object):
             name)
 
         if self.sta:
-            remote_path = os.path.join(
-                self.remote_path,
-                'archive',
-                'rest',
-                '{year:04d}-01-01-00000'.format(year=simstart + 1),
-                name)
+            if self.custom_remote:
+                remote_path = os.path.join(
+                    self.remote_path,
+                    'rest',
+                    '{year:04d}-01-01-00000'.format(year=simstart + 1),
+                    name)
+            else:
+                remote_path = os.path.join(
+                    self.remote_path,
+                    'archive',
+                    'rest',
+                    '{year:04d}-01-01-00000'.format(year=simstart + 1),
+                    name)
         else:
             remote_path = os.path.join(self.remote_path, name)
         newfiles = self._add_file(
@@ -165,10 +183,10 @@ class FileManager(object):
         head, tail = os.path.split(local_path)
         if not os.path.exists(head):
             os.makedirs(head)
-        if self.sta:
-            remote_path = os.path.join(self.remote_path, 'run', _type)
-        else:
+        if self.custom_remote or not self.sta:
             remote_path = os.path.join(self.remote_path, _type)
+        else:
+            remote_path = os.path.join(self.remote_path, 'run', _type)
         newfiles = self._add_file(
             newfiles=newfiles,
             name=_type,
@@ -186,17 +204,30 @@ class FileManager(object):
         head, tail = os.path.split(local_path)
         if not os.path.exists(head):
             os.makedirs(head)
-        if self.sta:
-            remote_path = os.path.join(
-                self.remote_path,
-                'archive',
-                'ocn',
-                'hist',
-                name)
+        if self.custom_remote:
+            if self.sta:
+                remote_path = os.path.join(
+                    self.remote_path,
+                    'ocn',
+                    'hist',
+                    name)
+            else:
+                remote_path = os.path.join(
+                    self.remote_path,
+                    name)
         else:
-            remote_path = os.path.join(
-                self.remote_path,
-                name)
+            if self.sta:
+                remote_path = os.path.join(
+                    self.remote_path,
+                    'archive',
+                    'ocn',
+                    'hist',
+                    name)
+            else:
+                remote_path = os.path.join(
+                    self.remote_path,
+                    name)
+            
         newfiles = self._add_file(
             newfiles=newfiles,
             name=name,
@@ -223,17 +254,29 @@ class FileManager(object):
                 name = name.replace('MONTH', monthstr)
                 local_path = os.path.join(
                     local_base, name)
-                if self.sta:
-                    remote_path = os.path.join(
-                        self.remote_path,
-                        'archive',
-                        _type,
-                        'hist',
-                        name)
+                if self.custom_remote:
+                    if self.sta:
+                        remote_path = os.path.join(
+                            self.remote_path,
+                            _type,
+                            'hist',
+                            name)
+                    else:
+                        remote_path = os.path.join(
+                            self.remote_path,
+                            name)
                 else:
-                    remote_path = os.path.join(
-                        self.remote_path,
-                        name)
+                    if self.sta:
+                        remote_path = os.path.join(
+                            self.remote_path,
+                            'archive',
+                            _type,
+                            'hist',
+                            name)
+                    else:
+                        remote_path = os.path.join(
+                            self.remote_path,
+                            name)
                 newfiles = self._add_file(
                     newfiles=newfiles,
                     name=name,
@@ -449,13 +492,32 @@ class FileManager(object):
                         self.updated_rest = True
                     continue
                 elif _type in ['streams.ocean', 'streams.cice', 'mpas-o_in', 'mpas-cice_in']:
-                    remote_path = os.path.join(self.remote_path, 'run')
+                    if self.custom_remote:
+                        remote_path = self.remote_path
+                    else:
+                        remote_path = os.path.join(self.remote_path, 'run')
                 elif _type == 'meridionalHeatTransport':
-                    remote_path = os.path.join(
-                        self.remote_path, 'archive', 'ocn', 'hist')
+                    if self.remote_path:
+                        remote_path = os.path.join(
+                            self.remote_path,
+                            'ocn',
+                            'hist')
+
+                    else:
+                        remote_path = os.path.join(
+                            self.remote_path, 
+                            'archive',
+                            'ocn',
+                            'hist')
                 else:
-                    remote_path = os.path.join(
-                        self.remote_path, 'archive', _type, 'hist')
+                    if self.custom_remote:
+                        remote_path = self.remote_path
+                    else:
+                        remote_path = os.path.join(
+                            self.remote_path,
+                            'archive',
+                            _type,
+                            'hist')
 
                 if _type not in ['rest', 'mpascice.rst']:
                     msg = 'Querying globus for {type}'.format(type=_type)
