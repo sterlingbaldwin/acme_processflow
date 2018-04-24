@@ -1,7 +1,7 @@
 export VERSION="1.0.4"
 export BUILD_NAME="0"
 export CONDA_BLD_PATH=~/conda-bld
-USER="acme"
+USER="e3sm"
 PLATFORM="linux-64"
 PKG="processflow"
 
@@ -16,10 +16,11 @@ if [ ! -z "$1" ]; then
     export TAG="$1"
     echo "Cloning from branch $1" 
 else
+    echo "Cloning from master"
     export TAG="master"
 fi
 echo "Building version "$VERSION"-"$BUILD_NAME" for channel" $TAG
-conda build -c acme -c conda-forge -c uvcdat -c lukasz .
+conda build -c e3sm -c -c conda-forge -c cdat .
 
 if [ ! -z "$1" ]; then
     anaconda upload -u $USER -l "$1" $CONDA_BLD_PATH/$PLATFORM/$PKG-$VERSION-$BUILD_NAME.tar.bz2 
