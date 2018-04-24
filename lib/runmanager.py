@@ -1248,5 +1248,8 @@ class RunManager(object):
             if len(job_set.jobs) == 0:
                 job_set.status == SetStatus.COMPLETED
             if job_set.status != SetStatus.COMPLETED:
+                for job in job_set.jobs:
+                    if job.status == JobStatus.RUNNING:
+                        return - 1
                 return 0
         return 1
