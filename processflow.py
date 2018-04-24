@@ -393,10 +393,13 @@ def main(test=False, **kwargs):
 
 
 if __name__ == "__main__":
-    if sys.argv[1] == 'test':
-        config_path = os.path.join(os.getcwd(), 'tests', 'test_run_no_sta.cfg')
-        testargs = ['-c', config_path, '-n', '-f']
-        ret = main(test=True, testargs=testargs)
+    if len(sys.argv) < 2:
+        ret = main(test=True, testargs=['-h'])
     else:
-        ret = main()
+        if sys.argv[1] == 'test':
+            config_path = os.path.join(os.getcwd(), 'tests', 'test_run_no_sta.cfg')
+            testargs = ['-c', config_path, '-n', '-f']
+            ret = main(test=True, testargs=testargs)
+        else:
+            ret = main()
     sys.exit(ret)
