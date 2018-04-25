@@ -3,7 +3,7 @@
 The processflow performs post processing jobs automatically, removing many of the difficulties of performing 
 diagnostics on model data. 
 
-[Documentation can be found here](https://acme-climate.github.io/acme_processflow/docs/html/index.html)
+[Documentation can be found here](https://e3sm-project.github.io/processflow/docs/html/index.html)
 
 ## Installation<a name="installation"></a>
 
