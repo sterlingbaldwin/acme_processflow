@@ -81,9 +81,9 @@ def parse_args(argv=None, print_help=None):
         help='Always copy diagnostic output, even if the output already exists in the host directory. This is much slower but ensures old output will be overwritten',
         action='store_true')
     parser.add_argument(
-        '--custom-remote-path',
-        help='The remote path will be intrepreted literally, no path interpolation will happen. When used with short term archiving its assumed that the remote_path config key points to the directory containing the data subdirectories.',
-        action='store_true')
+        '--custom-archive-path',
+        help='A custom remote archive path used for short term archiving. This will over rule the normal path interpolation when moving files. This option should only be used when short term archiving is turned on',
+        action='store')
     if print_help:
         parser.print_help()
         return
@@ -170,7 +170,7 @@ Please add a space and run again.'''.format(num=line_index)
     config['global']['print_file_list'] = True if args.file_list else False
     config['global']['no_scripts'] = True if args.no_scripts else False
     config['global']['always_copy'] = True if args.always_copy else False
-    config['global']['custom_remote'] = True if args.custom_remote_path else False
+    config['global']['custom_archive'] = args.custom_archive_path if args.custom_archive_path else False
 
     if args.no_host:
         print_line(
@@ -339,7 +339,8 @@ Please add a space and run again.'''.format(num=line_index)
         local_path=config['global']['input_path'],
         local_endpoint=config['transfer']['destination_endpoint'],
         mutex=mutex,
-        custom_remote=config['global']['custom_remote'])
+        custom_archive=config['global']['custom_archive'],
+        experiment=config['global']['experiment'])
     filemanager.populate_file_list(
         simstart=config['global']['simulation_start_year'],
         simend=config['global']['simulation_end_year'],

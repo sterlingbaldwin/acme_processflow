@@ -4,7 +4,6 @@ import sys
 import threading
 import logging
 import random
-import pdb
 
 from time import sleep
 from peewee import *
@@ -76,23 +75,18 @@ class FileManager(object):
         self.local_path = kwargs.get('local_path')
         self.local_endpoint = kwargs.get('local_endpoint')
         self.start_year = 0
-        self.custom_remote = kwargs.get('custom_remote')
-
-        if self.custom_remote:
-            self.remote_path = kwargs.get('remote_path')
-        else:
-            head, tail = os.path.split(kwargs.get('remote_path'))
-            if not self.sta:
-                if tail != 'run':
-                    self.remote_path = os.path.join(
-                        kwargs.get('remote_path'), 'run')
-                else:
-                    self.remote_path = kwargs.get('remote_path')
-            else:
-                if tail == 'run':
-                    self.remote_path = head
-                else:
-                    self.remote_path = kwargs.get('remote_path')
+        self.custom_archive = kwargs.get('custom_archive')
+        self.experiment = kwargs.get('experiment')
+        
+        
+        self.remote_path = None
+        path_split = kwargs.get('remote_path').split(os.sep)
+        for index, val in enumerate(path_split):
+            if val == self.experiment:
+                self.remote_path = os.sep.join(path_split[:index + 1])
+                break
+        if not self.remote_path:
+            print "could not find remote path, is the case_id set correctly?"
 
     def __str__(self):
         return str({
@@ -122,9 +116,9 @@ class FileManager(object):
             os.makedirs(head)
 
         if self.sta:
-            if self.custom_remote:
+            if self.custom_archive:
                 remote_path = os.path.join(
-                    self.remote_path,
+                    self.custom_archive,
                     'rest',
                     '{year:04d}-01-01-00000'.format(year=simstart + 1),
                     name)
@@ -136,7 +130,10 @@ class FileManager(object):
                     '{year:04d}-01-01-00000'.format(year=simstart + 1),
                     name)
         else:
-            remote_path = os.path.join(self.remote_path, name)
+            remote_path = os.path.join(
+                self.remote_path,
+                'run',
+                name)
         newfiles = self._add_file(
             newfiles=newfiles,
             name=name,
@@ -153,9 +150,9 @@ class FileManager(object):
             name)
 
         if self.sta:
-            if self.custom_remote:
+            if self.custom_archive:
                 remote_path = os.path.join(
-                    self.remote_path,
+                    self.custom_archive,
                     'rest',
                     '{year:04d}-01-01-00000'.format(year=simstart + 1),
                     name)
@@ -167,7 +164,10 @@ class FileManager(object):
                     '{year:04d}-01-01-00000'.format(year=simstart + 1),
                     name)
         else:
-            remote_path = os.path.join(self.remote_path, name)
+            remote_path = os.path.join(
+                self.remote_path,
+                'run',
+                name)
         newfiles = self._add_file(
             newfiles=newfiles,
             name=name,
@@ -176,6 +176,10 @@ class FileManager(object):
             _type='mpascice.rst')
 
     def populate_handle_mpas(self, _type, newfiles):
+        """
+        Populate the file table with the streams.ocean, streams.cice, mpas-o_in, and mpas-cice_in files
+        which are found in the run directory even if sta is on
+        """
         local_path = os.path.join(
             self.local_path,
             'mpas',
@@ -183,10 +187,8 @@ class FileManager(object):
         head, tail = os.path.split(local_path)
         if not os.path.exists(head):
             os.makedirs(head)
-        if self.custom_remote or not self.sta:
-            remote_path = os.path.join(self.remote_path, _type)
-        else:
-            remote_path = os.path.join(self.remote_path, 'run', _type)
+
+        remote_path = os.path.join(self.remote_path, 'run', _type)
         newfiles = self._add_file(
             newfiles=newfiles,
             name=_type,
@@ -204,30 +206,27 @@ class FileManager(object):
         head, tail = os.path.split(local_path)
         if not os.path.exists(head):
             os.makedirs(head)
-        if self.custom_remote:
-            if self.sta:
+
+        if self.sta:
+            if self.custom_archive:
                 remote_path = os.path.join(
-                    self.remote_path,
+                    self.custom_archive,
                     'ocn',
                     'hist',
                     name)
             else:
-                remote_path = os.path.join(
-                    self.remote_path,
-                    name)
-        else:
-            if self.sta:
                 remote_path = os.path.join(
                     self.remote_path,
                     'archive',
                     'ocn',
                     'hist',
                     name)
-            else:
-                remote_path = os.path.join(
-                    self.remote_path,
-                    name)
-            
+        else:
+            remote_path = os.path.join(
+                self.remote_path,
+                'run',
+                name)
+
         newfiles = self._add_file(
             newfiles=newfiles,
             name=name,
@@ -254,29 +253,26 @@ class FileManager(object):
                 name = name.replace('MONTH', monthstr)
                 local_path = os.path.join(
                     local_base, name)
-                if self.custom_remote:
-                    if self.sta:
+                
+                if self.sta:
+                    if self.custom_archive:
                         remote_path = os.path.join(
-                            self.remote_path,
+                            self.custom_archive,
                             _type,
                             'hist',
                             name)
                     else:
-                        remote_path = os.path.join(
-                            self.remote_path,
-                            name)
-                else:
-                    if self.sta:
                         remote_path = os.path.join(
                             self.remote_path,
                             'archive',
                             _type,
                             'hist',
                             name)
-                    else:
-                        remote_path = os.path.join(
-                            self.remote_path,
-                            name)
+                else:
+                    remote_path = os.path.join(
+                        self.remote_path,
+                        'run',
+                        name)
                 newfiles = self._add_file(
                     newfiles=newfiles,
                     name=name,
@@ -376,50 +372,6 @@ class FileManager(object):
                 'remote_path': df.remote_path
             }
 
-    def _get_names(self, res, _type):
-        names = list()
-        names_res = [x['name'] for x in res]
-        names_not_found = list()
-        names_tmp = [x.name for x in DataFile.select().where(
-                     DataFile.datatype == _type)]
-        for name in names_tmp:
-            if name in names_res:
-                names.append(name)
-            else:
-                names_not_found.append(name)
-        if names_not_found:
-            msg = 'WARNING: {} remote files not found for type {}'.format(
-                len(names_not_found),
-                _type)
-            print_line(
-                ui=self.ui,
-                line=msg,
-                event_list=self.event_list,
-                current_state=True)
-        return names
-
-    def _get_types_needed(self):
-        """
-        Return a list of datatypes that are needed but not locally stored
-        """
-        types_needed = list()
-        self.mutex.acquire()
-        try:
-            q = (DataFile
-                 .select()
-                 .where(
-                     DataFile.local_status == filestatus['NOT_EXIST']))
-            data_needed = q.execute()
-            for datafile in data_needed:
-                if datafile.datatype not in types_needed:
-                    types_needed.append(datafile.datatype)
-        except:
-            return False
-        finally:
-            if self.mutex.locked():
-                self.mutex.release()
-        return types_needed
-
     def update_remote_status(self, client):
         """
         Check remote location for existance of the files on our list
@@ -433,161 +385,45 @@ class FileManager(object):
         if result['code'] == "AutoActivationFailed":
             return False
 
-        types_needed = self._get_types_needed()
-        if not types_needed:
-            return
-        else:
-            msg = 'Additional data needed for {}'.format(types_needed)
-            print_line(
-                ui=self.ui,
-                line=msg,
-                event_list=self.event_list)
+        # find the list of files that are still needed
+        remote_directories = list()
+        q = (DataFile
+                .select()
+                .where(
+                    DataFile.remote_status == filestatus['NOT_EXIST']))
+        data_files_needed = q.execute()
+        file_names_needed = [x.name for x in data_files_needed]
+        
+        msg = '{} additional files needed'.format(
+            len(file_names_needed))
+        print_line(
+            ui=self.ui,
+            line=msg,
+            event_list=self.event_list)
+        # find all the unique directories that hold those files
+        for remote_path in [x.remote_path for x in data_files_needed]:
+            tail, head = os.path.split(remote_path)
+            if tail not in remote_directories:
+                remote_directories.append(tail)
 
-        # First handle the short term archive case
-        if self.sta:
-            for _type in types_needed:
-                # if the type is restart, handle the special cases
-                if _type == 'rest':
-                    if not self.updated_rest:
-                        self.mutex.acquire()
-                        name, path, size = self.update_remote_rest_sta_path(
-                            client)
-                        try:
-                            DataFile.update(
-                                remote_status=filestatus['EXISTS'],
-                                remote_size=size,
-                                remote_path=path,
-                                name=name
-                            ).where(
-                                DataFile.datatype == 'rest'
-                            ).execute()
-                        except OperationalError as operror:
-                            line = 'Error writing to database, database is locked by another process'
-                            print_line(
-                                ui=self.ui,
-                                line=line,
-                                event_list=self.event_list)
-
-                        name, path, size = self.update_remote_rest_sta_path(
-                            client, pattern='mpascice.rst')
-                        try:
-                            DataFile.update(
-                                remote_status=filestatus['EXISTS'],
-                                remote_size=size,
-                                remote_path=path,
-                                name=name
-                            ).where(
-                                DataFile.datatype == 'mpascice.rst'
-                            ).execute()
-                        except OperationalError as operror:
-                            line = 'Error writing to database, database is locked by another process'
-                            print_line(
-                                ui=self.ui,
-                                line=line,
-                                event_list=self.event_list)
-                            logging.error(line)
-
-                        if self.mutex.locked():
-                            self.mutex.release()
-                        self.updated_rest = True
-                    continue
-                elif _type in ['streams.ocean', 'streams.cice', 'mpas-o_in', 'mpas-cice_in']:
-                    if self.custom_remote:
-                        remote_path = self.remote_path
-                    else:
-                        remote_path = os.path.join(self.remote_path, 'run')
-                elif _type == 'meridionalHeatTransport':
-                    if self.remote_path:
-                        remote_path = os.path.join(
-                            self.remote_path,
-                            'ocn',
-                            'hist')
-
-                    else:
-                        remote_path = os.path.join(
-                            self.remote_path, 
-                            'archive',
-                            'ocn',
-                            'hist')
-                else:
-                    if self.custom_remote:
-                        remote_path = self.remote_path
-                    else:
-                        remote_path = os.path.join(
-                            self.remote_path,
-                            'archive',
-                            _type,
-                            'hist')
-
-                if _type not in ['rest', 'mpascice.rst']:
-                    msg = 'Querying globus for {type}'.format(type=_type)
-                    print_line(
-                        ui=self.ui,
-                        line=msg,
-                        event_list=self.event_list,
-                        current_state=True)
-
-                    res = self._get_ls(
-                        client=client,
-                        path=remote_path)
-
-                    self.mutex.acquire()
-                    try:
-                        names = self._get_names(res, _type)
-                        step = 100
-                        for idx in range(0, len(names), step):
-                            batch_names = names[idx: idx + step]
-                            to_update_name = [x['name']
-                                              for x in res if x['name'] in batch_names]
-                            to_update_size = [x['size']
-                                              for x in res if x['name'] in batch_names]
-                            q = DataFile.update(
-                                remote_status=filestatus['EXISTS'],
-                                remote_size=to_update_size[to_update_name.index(
-                                    DataFile.name)]
-                            ).where(
-                                (DataFile.name << to_update_name) &
-                                (DataFile.datatype == _type))
-                            n = q.execute()
-                    except Exception as e:
-                        print_debug(e)
-                        print "Do you have the correct start and end dates and experiment name?"
-                    except OperationalError as operror:
-                        line = 'Error writing to database, database is locked by another process'
-                        print_line(
-                            ui=self.ui,
-                            line=line,
-                            event_list=self.event_list)
-                        logging.error(line)
-                    finally:
-                        if self.mutex.locked():
-                            self.mutex.release()
-        else:
-            remote_path = self.remote_path
-            res = self._get_ls(
-                client=client,
-                path=remote_path)
+        remote_files = list()
+        for remote_directory in remote_directories:
+            res = self._get_ls(client, remote_directory)
+            names = [x['name'] for x in res if x['name'] in file_names_needed]
+            sizes = [x['size'] for x in res if x['name'] in file_names_needed]
             self.mutex.acquire()
             try:
-                for _type in types_needed:
-                    names = self._get_names(res, _type)
-                    step = 100
-                    for idx in range(0, len(names), step):
-                        batch_names = names[idx: idx + step]
-                        to_update_name = [x['name']
-                                          for x in res if x['name'] in batch_names]
-                        to_update_size = [x['size']
-                                          for x in res if x['name'] in batch_names]
-                        q = DataFile.update(
-                            remote_status=filestatus['EXISTS'],
-                            remote_size=to_update_size[to_update_name.index(
-                                DataFile.name)]
-                        ).where(
-                            (DataFile.name << to_update_name) &
-                            (DataFile.datatype == _type))
-                        n = q.execute()
+                for name in names:
+                    print 'updating ' + name, sizes[names.index(name)]
+                    DataFile.update(
+                        remote_status=filestatus['EXISTS'],
+                        remote_size=sizes[names.index(name)]
+                    ).where(
+                        DataFile.name == name
+                    ).execute()
             except Exception as e:
                 print_debug(e)
+                print "Do you have the correct start and end dates and experiment name?"
             except OperationalError as operror:
                 line = 'Error writing to database, database is locked by another process'
                 print_line(
@@ -611,8 +447,6 @@ class FileManager(object):
                 sleep(fail_count)
                 if fail_count >= 9:
                     print_debug(e)
-                    pdb.set_trace()
-                    sys.exit()
             else:
                 return res
 

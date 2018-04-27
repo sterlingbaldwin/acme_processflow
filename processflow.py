@@ -388,7 +388,7 @@ def main(test=False, **kwargs):
         for thread in thread_list:
             thread.join(timeout=1.0)
         sleep(1)
-        print_message('----- UNEXPECTED EXCEPTION OCCURED -----')
+        print_message('----- AN UNEXPECTED EXCEPTION OCCURED -----')
         print_debug(e)
 
 
