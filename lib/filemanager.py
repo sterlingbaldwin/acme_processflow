@@ -414,10 +414,11 @@ class FileManager(object):
             self.mutex.acquire()
             try:
                 for name in names:
-                    print 'updating ' + name, sizes[names.index(name)]
+                    remote_path = os.path.join(remote_directory, name)
                     DataFile.update(
                         remote_status=filestatus['EXISTS'],
-                        remote_size=sizes[names.index(name)]
+                        remote_size=sizes[names.index(name)],
+                        remote_path=remote_path
                     ).where(
                         DataFile.name == name
                     ).execute()
