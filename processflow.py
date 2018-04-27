@@ -23,7 +23,7 @@ from lib.util import (print_line,
                       print_debug,
                       transfer_directory)
 
-__version__ = '1.0.3'
+__version__ = '1.1.0'
 __branch__ = 'master'
 
 # check for NCL
