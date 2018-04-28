@@ -20,7 +20,12 @@ else
     export TAG="master"
 fi
 echo "Building version "$VERSION"-"$BUILD_NAME" for channel" $TAG
-conda build -c e3sm -c -c conda-forge -c cdat .
+conda build -c $USER -c conda-forge -c cdat .
+
+if [ $? -eq 1 ]; then
+    echo "conda build failed"
+    exit
+fi
 
 if [ ! -z "$1" ]; then
     anaconda upload -u $USER -l "$1" $CONDA_BLD_PATH/$PLATFORM/$PKG-$VERSION-$BUILD_NAME.tar.bz2 
