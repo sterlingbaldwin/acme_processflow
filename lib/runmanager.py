@@ -879,7 +879,13 @@ class RunManager(object):
                     job.end_time = datetime.now()
                     for job_set in self.job_sets:
                         if job_set.set_number == job.year_set:
-                            job_set.status = SetStatus.FAILED
+                            set_failed = True
+                            for other_job in job_set.jobs:
+                                if other_job.status in [JobStatus.RUNNING, JobStatus.PENDING, JobStatus.SUBMITTED] \
+                                and other_job.type not in job.depends_on:
+                                    dont_set_failed = False
+                            if set_failed:
+                                job_set.status = SetStatus.FAILED
                             break
                     self.running_jobs.remove(job)
 

@@ -4,6 +4,7 @@
 
 import sys
 import os
+import json
 import threading
 import logging
 from time import sleep
@@ -138,7 +139,7 @@ def main(test=False, **kwargs):
             config['global']['ui'],
             "Updating remote file status",
             event_list,
-            current_state=False)
+            current_state=True)
         if not config.get('global').get('no_monitor', False):
             filemanager.update_remote_status(client)
             all_data_remote = filemanager.all_data_remote()

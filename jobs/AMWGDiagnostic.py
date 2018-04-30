@@ -100,31 +100,91 @@ class AMWGDiagnostic(object):
         if self.year_set == 0:
             self.status = JobStatus.INVALID
             return
-        self.status = JobStatus.VALID
+        valid = True
+        for key, val in self.config.items():
+            if 'path' in key:
+                if not os.path.exists(val):
+                    msg = 'amwg-{start:04d}-{end:04d}: {key} missing {val}'.format(
+                        start=self.start_year, end=self.end_year, val=val, key=key)
+                    logging.error(msg)
+                    valid = False
+        if not valid:
+            self.status = JobStatus.INVALID
+        else:
+            self.status = JobStatus.VALID
 
     def postvalidate(self):
         """
         Check that what the job was supposed to do actually happened
         returns 1 if the job is done, 0 otherwise
         """
-        base = str(os.sep).join(
-            self.config.get('test_path_diag').split(os.sep)[:-1])
-        year_set = 'year_set_{0}'.format(
-            self.config.get('year_set'))
-        web_dir = '{base}/{start:04d}-{end:04d}{casename}-obs'.format(
-            base=base,
-            start=self.config.get('start_year'),
-            end=self.config.get('end_year'),
-            casename=self.config.get('test_casename'))
-        if os.path.exists(web_dir):
-            all_files = []
-            for path, dirs, files in os.walk(web_dir):
-                all_files += files
-            return bool(len(all_files) > 1000)
-        else:
-            return False
+        msg = 'starting postvalidation for {job}-{start:04d}-{end:04d}'.format(
+            job=self.type, start=self.start_year, end=self.end_year)
+        logging.info(msg)
 
-    def execute(self):
+        return self._check_links()
+
+    def _check_links(self):
+        """
+        Checks output page for all links, as well as first level subpages
+
+        Parameters:
+            None
+        Returns:
+            True if all links are found, False otherwise
+        """
+        missing_links = list()
+        page_path = os.path.join(self.config['web_dir'], 'index.html')
+        if not os.path.exists(page_path):
+            msg = 'amwg-{}-{}: No output page found'.format(
+                self.start_year, self.end_year)
+            logging.error(msg)
+            return False
+        with open(page_path, 'r') as page_pointer:
+            output_page = BeautifulSoup(page_pointer, 'lxml')
+            output_links = output_page.findAll('a')
+            for link in output_links:
+                link_path = link.attrs['href']
+                if link_path[-3:] == 'htm':
+                    subpage_path = os.path.join(
+                        self.config['web_dir'], link.attrs['href'])
+                    subpage_head, _ = os.path.split(subpage_path)
+                    if not os.path.exists(subpage_path):
+                        msg = 'amwg-{}-{}: No output page found'.format(
+                            self.start_year, self.end_year)
+                        logging.error(msg)
+                        missing_links.append(subpage_path)
+                        continue
+                    with open(subpage_path, 'r') as subpage_pointer:
+                        subpage = BeautifulSoup(subpage_pointer, 'lxml')
+                        subpage_links = subpage.findAll('a')
+                        for sublink in subpage_links:
+                            sublink_href = sublink.attrs['href']
+                            if sublink_href[-3:] != 'png':
+                                continue
+                            sublink_path = os.path.join(
+                                subpage_head, sublink_href)
+                            if not os.path.exists(sublink_path):
+                                missing_links.append(sublink_path)
+        if missing_links:
+            msg = 'amwg-{start:04d}-{end:04d}: missing {len} links'.format(
+                start=self.start_year, end=self.end_year, len=len(missing_links))
+            print_line(
+                ui=self.config.get('ui', False),
+                line=msg,
+                event_list=self.event_list)
+            msg = 'amwg-{start:04d}-{end:04d}: missing the following links'.format(
+                start=self.start_year, end=self.end_year)
+            logging.error(msg)
+            logging.error(missing_links)
+            return False
+        else:
+            msg = 'amwg-{start:04d}-{end:04d}: all links found'.format(
+                start=self.start_year, end=self.end_year)
+            logging.info(msg)
+            return True
+
+    def execute(self, dryrun=False):
         """
         Perform the actual work
         """
@@ -141,8 +201,10 @@ class AMWGDiagnostic(object):
             end_year=self.end_year)
         if not file_list or len(file_list) == 0:
             msg = """
-ERROR: AMWG: {start:04d}-{end:04d} could not find input climatologies at {path}\n
-did you add ncclimo to this year_set?""".format(start=self.start_year,
+-------------------------------------------------------------------------------
+ERROR: AMWG: {start:04d}-{end:04d} could not find input climatologies at {path}
+did you add ncclimo to this year_set?
+-------------------------------------------------------------------------------""".format(start=self.start_year,
                                                 end=self.end_year,
                                                 path=regrid_path)
             print_line(
@@ -205,6 +267,9 @@ did you add ncclimo to this year_set?""".format(start=self.start_year,
             input_path=submission_template_path,
             output_path=run_script)
 
+        if dryrun:
+            self.status = JobStatus.COMPLETED
+            return
         slurm = Slurm()
         msg = 'submitting to queue {type}: {start:04d}-{end:04d}'.format(
             type=self.type,

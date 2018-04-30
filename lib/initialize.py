@@ -284,6 +284,10 @@ Please add a space and run again.'''.format(num=line_index)
     db_path = os.path.join(config['global']['input_path'], 'processflow.db')
     if not os.path.exists(config['global']['input_path']):
         os.makedirs(config['global']['input_path'])
+    
+    logging.info("Running with config:")
+    msg = json.dumps(config, sort_keys=False, indent=4)
+    logging.info(msg)
 
     filemanager = FileManager(
         event_list=event_list,

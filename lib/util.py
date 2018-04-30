@@ -307,6 +307,8 @@ def get_climo_output_files(input_path, start_year, end_year):
     Returns:
         file_list (list(str)): A list of the climo files in the directory
     """
+    if not os.path.exists(input_path):
+        return None
     contents = [s for s in os.listdir(input_path) if not os.path.isdir(s)]
     pattern = r'_{start:04d}\d\d_{end:04d}\d\d_'.format(
         start=start_year,

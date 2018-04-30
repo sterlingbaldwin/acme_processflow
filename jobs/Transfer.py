@@ -170,7 +170,7 @@ class Transfer(object):
         except Exception as e:
             print_debug(e)
 
-    def execute(self, event):
+    def execute(self, event, dryrun=False):
         """
         Start the transfer
 
@@ -233,6 +233,10 @@ class Transfer(object):
                 source_path=datafile['remote_path'],
                 destination_path=datafile['local_path'],
                 recursive=False)
+
+        if dryrun:
+            self.status = JobStatus.COMPLETED
+            return
 
         # Start the transfer
         task_id = None

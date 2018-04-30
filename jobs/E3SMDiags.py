@@ -87,6 +87,13 @@ class E3SMDiags(object):
                 msg = '{0}: {1} is missing or empty'.format(key, val)
                 self.messages.append(msg)
                 break
+        for key, val in self.config.items():
+            if 'path' in key:
+                if not os.path.exists(val):
+                    msg = 'e3sm_diags-{start:04d}-{end:04d}: {key} missing {val}'.format(
+                        start=self.start_year, end=self.end_year, val=val, key=key)
+                    logging.error(msg)
+                    valid = False
 
         if not os.path.exists(self.config.get('run_scripts_path')):
             os.makedirs(self.config.get('run_scripts_path'))
@@ -98,7 +105,51 @@ class E3SMDiags(object):
         if valid:
             self.status = JobStatus.VALID
 
+    def _check_links(self):
+        viewer_path = os.path.join(
+            self.config['results_dir'], 'viewer', 'index.html')
+        viewer_head = os.path.join(self.config['results_dir'], 'viewer')
+        missing_links = list()
+        with open(viewer_path, 'r') as viewer_pointer:
+            viewer_page = BeautifulSoup(viewer_pointer, 'lxml')
+            viewer_links = viewer_page.findAll('a')
+            for link in viewer_links:
+                link_path = os.path.join(viewer_head, link.attrs['href'])
+                if not os.path.exists(link_path):
+                    missing_links.append(link_path)
+                    continue
+                if link_path[-4:] == 'html':
+                    link_tail, _ = os.path.split(link_path)
+                    with open(link_path, 'r') as link_pointer:
+                        link_page = BeautifulSoup(link_pointer, 'lxml')
+                        link_links = link_page.findAll('a')
+                        for sublink in link_links:
+                            try:
+                                sublink_preview = sublink.attrs['data-preview']
+                            except:
+                                continue
+                            else:
+                                sublink_path = os.path.join(
+                                    link_tail, sublink_preview)
+                                if not os.path.exists(sublink_path):
+                                    missing_links.append(sublink_path)
+        if missing_links:
+            msg = 'e3sm-{}-{}: missing the following links'.format(
+                self.start_year, self.end_year)
+            logging.error(msg)
+            logging.error(missing_links)
+            return False
+        else:
+            msg = 'e3sm-{}-{}: all links found'.format(
+                self.start_year, self.end_year)
+            logging.info(msg)
+            return True
+
     def postvalidate(self):
+        msg = 'starting postvalidation for {job}-{start:04d}-{end:04d}'.format(
+            job=self.type, start=self.start_year, end=self.end_year)
+        logging.info(msg)
+
         if not os.path.exists(self.config['results_dir']):
             return False
         contents = os.listdir(self.config['results_dir'])
@@ -115,7 +166,7 @@ class E3SMDiags(object):
         else:
             return bool(len(contents) >= len(self.config['sets']))
 
-    def execute(self):
+    def execute(self, dryrun=False):
 
         # Check if the output already exists
         if self.postvalidate():
@@ -180,6 +231,10 @@ class E3SMDiags(object):
             variables=variables,
             input_path=submission_template_path,
             output_path=run_script)
+
+        if dryrun:
+            self.status = JobStatus.COMPLETED
+            return
 
         slurm = Slurm()
         msg = 'Submitting to queue {type}: {start:04d}-{end:04d}'.format(

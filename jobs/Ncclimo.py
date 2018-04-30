@@ -98,12 +98,10 @@ class Climo(object):
             self.status = JobStatus.INVALID
         return 0
 
-    def execute(self, **kwargs):
+    def execute(self, dryrun=False):
         """
         Calls ncclimo in a subprocess
         """
-
-        dryrun = kwargs.get('dryrun', False)
 
         # check if the output already exists and the job actually needs to run
         if self.postvalidate():
@@ -150,6 +148,10 @@ class Climo(object):
             self.status = JobStatus.COMPLETED
             return 0
 
+        if dryrun:
+            self.status = JobStatus.COMPLETED
+            return
+
         slurm = Slurm()
         msg = 'Submitting to queue {type}: {start:04d}-{end:04d}'.format(
             type=self.type,
@@ -168,24 +170,13 @@ class Climo(object):
         """
         Post execution validation, also run before execution to determine if the output already extists
         """
+        msg = 'starting postvalidation for {job}-{start:04d}-{end:04d}'.format(
+            job=self.type, start=self.start_year, end=self.end_year)
+        logging.info(msg)
         set_start_year = self.config.get('start_year')
         set_end_year = self.config.get('end_year')
         climo_dir = self.config.get('climo_output_directory')
         regrid_dir = self.config.get('regrid_output_directory')
-        # First check the climo directory
-        # if not os.path.exists(climo_dir):
-        #     msg = 'Native output directory missing'
-        #     logging.error(msg)
-        #     return False
-        # file_list = get_climo_output_files(
-        #     input_path=climo_dir,
-        #     start_year=set_start_year,
-        #     end_year=set_end_year)
-        # if len(file_list) < 12: # number of months in a year
-        #     msg = 'ncclimo-{start:04d}-{end:04d}: not enough native grid climos found'.format(
-        #         start=self.start_year, end=self.end_year)
-        #     logging.info(msg)
-        #     return False
 
         # Second check the regrid directory
         if not os.path.exists(regrid_dir):
