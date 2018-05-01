@@ -242,15 +242,11 @@ class FileManager(object):
 
         for year in xrange(simstart, simend + 1):
             for month in xrange(1, 13):
-                if _type in ['atm', 'lnd']:
-                    name = file_type_map[_type].replace(
-                        'EXPERIMENT', experiment)
-                else:
-                    name = file_type_map[_type]
-                yearstr = '{0:04d}'.format(year)
-                monthstr = '{0:02d}'.format(month)
-                name = name.replace('YEAR', yearstr)
-                name = name.replace('MONTH', monthstr)
+                name = (file_type_map[_type]
+                            .replace('EXPERIMENT', experiment)
+                            .replace('YEAR', '{0:04d}'.format(year))
+                            .replace('MONTH', '{0:02d}'.format(month)))
+
                 local_path = os.path.join(
                     local_base, name)
                 

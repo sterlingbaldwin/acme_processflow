@@ -22,6 +22,7 @@ class TestFileManager(unittest.TestCase):
         self.remote_endpoint = '9d6d994a-6d04-11e5-ba46-22000b92c6ec'
         self.remote_path = '/global/cscratch1/sd/golaz/ACME_simulations/20180215.DECKv1b_1pctCO2.ne30_oEC.edison'
         self.local_endpoint = 'a871c6de-2acd-11e7-bc7c-22000b9a448b'
+        self.experiment = '20180215.DECKv1b_1pctCO2.ne30_oEC.edison'
 
     def test_filemanager_setup_no_sta(self):
         """
@@ -36,9 +37,10 @@ class TestFileManager(unittest.TestCase):
         database = '{}.db'.format(inspect.stack()[0][3])
         remote_path = '/global/homes/r/renata/ACME_simulations/20170926.FCT2.A_WCYCL1850S.ne30_oECv3.anvil'
         mutex = threading.Lock()
+        experiment = '20170926.FCT2.A_WCYCL1850S.ne30_oECv3.anvil'
 
         """ 
-        #########################################
+        ###############  TEST   ################
         """
         filemanager = FileManager(
             mutex=mutex,
@@ -49,10 +51,14 @@ class TestFileManager(unittest.TestCase):
             remote_endpoint=self.remote_endpoint,
             remote_path=remote_path,
             local_endpoint=self.local_endpoint,
-            local_path=self.local_path)
+            local_path=self.local_path,
+            experiment=experiment)
 
         self.assertTrue(isinstance(filemanager, FileManager))
         self.assertTrue(os.path.exists(database))
+        """ 
+        ##############  CLEANUP  ###############
+        """
         os.remove(database)
 
 
@@ -60,12 +66,19 @@ class TestFileManager(unittest.TestCase):
         """
         run the filemanager setup with sta turned on
         """
-        print '---- Starting Test: {} ----'.format(inspect.stack()[0][3])
 
+        """ 
+        ##############  SETUP  ###############
+        """
+        print '---- Starting Test: {} ----'.format(inspect.stack()[0][3])
         sta = True
         types = ['atm', 'ice', 'ocn', 'rest', 'streams.ocean', 'streams.cice', 'mpas-o_in', 'mpas-cice_in', 'meridionalHeatTransport', 'lnd']
         database = '{}.db'.format(inspect.stack()[0][3])
         mutex = threading.Lock()
+
+        """ 
+        ##############  TEST  ###############
+        """
         filemanager = FileManager(
             mutex=mutex,
             event_list=EventList(),
@@ -75,10 +88,14 @@ class TestFileManager(unittest.TestCase):
             remote_endpoint=self.remote_endpoint,
             remote_path=self.remote_path,
             local_endpoint=self.local_endpoint,
-            local_path=self.local_path)
+            local_path=self.local_path,
+            experiment=self.experiment)
 
         self.assertTrue(isinstance(filemanager, FileManager))
         self.assertTrue(os.path.exists(database))
+        """ 
+        ##############  CLEANUP  ###############
+        """
         os.remove(database)
 
     def test_filemanager_populate_no_sta(self):
@@ -96,9 +113,8 @@ class TestFileManager(unittest.TestCase):
         simend = 10
         experiment = '20180215.DECKv1b_1pctCO2.ne30_oEC.edison'
         mutex = threading.Lock()
-
         """ 
-        #########################################
+        ##############    TEST    ###############
         """
         filemanager = FileManager(
             event_list=EventList(),
@@ -109,7 +125,8 @@ class TestFileManager(unittest.TestCase):
             remote_endpoint=self.remote_endpoint,
             remote_path=self.remote_path,
             local_endpoint=self.local_endpoint,
-            local_path=self.local_path)
+            local_path=self.local_path,
+            experiment=self.experiment)
         filemanager.populate_file_list(
             simstart=simstart,
             simend=simend,
@@ -133,6 +150,9 @@ class TestFileManager(unittest.TestCase):
                                 .replace('MONTH', '{:02}'.format(month)))
                     self.assertTrue(name in file_names)
         filemanager.mutex.release()
+        """ 
+        ##############  CLEANUP  ###############
+        """
         os.remove(database)
 
     def test_filemanager_update_local(self):
@@ -150,12 +170,10 @@ class TestFileManager(unittest.TestCase):
         database = '{}.db'.format(inspect.stack()[0][3])
         simstart = 51
         simend = 60
+        remote_path = '/global/homes/r/renata/ACME_simulations/20170926.FCT2.A_WCYCL1850S.ne30_oECv3.anvil'
         experiment = '20170926.FCT2.A_WCYCL1850S.ne30_oECv3.anvil'
         mutex = threading.Lock()
-
         """ 
-        #########################################
-        """""" 
         ###############  TEST   #################
         """
         filemanager = FileManager(
@@ -165,9 +183,10 @@ class TestFileManager(unittest.TestCase):
             types=types,
             database=database,
             remote_endpoint=self.remote_endpoint,
-            remote_path=self.remote_path,
+            remote_path=remote_path,
             local_endpoint=self.local_endpoint,
-            local_path=self.local_path)
+            local_path=self.local_path,
+            experiment=experiment)
         filemanager.populate_file_list(
             simstart=simstart,
             simend=simend,
@@ -192,7 +211,11 @@ class TestFileManager(unittest.TestCase):
         filemanager.mutex.release()
         self.assertEqual(df.local_status, 0)
         self.assertTrue(df.local_size > 0)
+        """ 
+        ###############  CLEANUP   #################
+        """
         os.remove(database)
+        os.remove(dummy_file_path)
 
     def test_filemanager_update_remote_no_sta(self):
         """
@@ -213,10 +236,6 @@ class TestFileManager(unittest.TestCase):
         simend = 60
         experiment = '20170926.FCT2.A_WCYCL1850S.ne30_oECv3.anvil'
         mutex = threading.Lock()
-
-        """ 
-        #########################################
-        """
         """ 
         ################  TEST  ##################
         """
@@ -229,7 +248,8 @@ class TestFileManager(unittest.TestCase):
             remote_endpoint=self.remote_endpoint,
             remote_path=remote_path,
             local_endpoint=self.local_endpoint,
-            local_path=self.local_path)
+            local_path=self.local_path,
+            experiment=experiment)
         filemanager.populate_file_list(
             simstart=simstart,
             simend=simend,
@@ -246,6 +266,9 @@ class TestFileManager(unittest.TestCase):
         if filemanager.mutex.locked():
             filemanager.mutex.release()
         self.assertTrue(filemanager.all_data_remote())
+        """ 
+        ##############  CLEANUP  ###############
+        """
         os.remove(database)
 
     def test_filemanager_update_remote_yes_sta(self):
@@ -266,9 +289,6 @@ class TestFileManager(unittest.TestCase):
         simend = 60
         experiment = '20180215.DECKv1b_1pctCO2.ne30_oEC.edison'
         mutex = threading.Lock()
-        """ 
-        #########################################
-        """
 
         """ 
         ###############   TEST  #################
@@ -282,7 +302,8 @@ class TestFileManager(unittest.TestCase):
             remote_endpoint=self.remote_endpoint,
             remote_path=source_path,
             local_endpoint=self.local_endpoint,
-            local_path=self.local_path)
+            local_path=self.local_path,
+            experiment=self.experiment)
         filemanager.populate_file_list(
             simstart=simstart,
             simend=simend,
@@ -297,6 +318,9 @@ class TestFileManager(unittest.TestCase):
         if filemanager.mutex.locked():
             filemanager.mutex.release()
         self.assertTrue(filemanager.all_data_remote())
+        """ 
+        ##############  CLEANUP  ###############
+        """
         os.remove(database)
 
     def test_filemanager_all_data_local(self):
@@ -314,16 +338,13 @@ class TestFileManager(unittest.TestCase):
         simstart = 1
         simend = 10
         event_list = EventList()
+        remote_path = '/dummy/remote/20180215.DECKv1b_1pctCO2.ne30_oEC.edison/run/something'
         local_path = '/p/user_pub/e3sm/baldwin32/E3SM_test_data/dummyproject'
         experiment = '20180215.DECKv1b_1pctCO2.ne30_oEC.edison'
         types = ['atm', 'ocn', 'lnd', 'ice']
         mutex = threading.Lock()
         if os.path.exists(local_path):
             shutil.rmtree(local_path)
-        """ 
-        #########################################
-        """
-
         """ 
         ############### TEST ##################
         """
@@ -334,9 +355,11 @@ class TestFileManager(unittest.TestCase):
             types=types,
             database=database,
             remote_endpoint=self.remote_endpoint,
-            remote_path=self.remote_path,
+            remote_path=remote_path,
             local_endpoint=self.local_endpoint,
-            local_path=local_path)
+            local_path=local_path,
+            experiment=self.experiment)
+        self.assertEqual(filemanager.remote_path, '/dummy/remote/20180215.DECKv1b_1pctCO2.ne30_oEC.edison')
         filemanager.populate_file_list(
             simstart=simstart,
             simend=simend,
