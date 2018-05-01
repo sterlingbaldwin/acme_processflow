@@ -9,9 +9,9 @@ from pprint import pformat
 from time import sleep
 from datetime import datetime
 from shutil import copyfile
+from bs4 import BeautifulSoup
 
 from JobStatus import JobStatus, StatusMap
-
 from lib.slurm import Slurm
 from lib.events import EventList
 from lib.util import (print_debug,
@@ -118,16 +118,22 @@ class AMWGDiagnostic(object):
         Check that what the job was supposed to do actually happened
         returns 1 if the job is done, 0 otherwise
         """
-        msg = 'starting postvalidation for {job}-{start:04d}-{end:04d}'.format(
-            job=self.type, start=self.start_year, end=self.end_year)
-        logging.info(msg)
+        base = str(os.sep).join(
+            self.config.get('test_path_diag').split(os.sep)[:-1])
+        year_set = 'year_set_{0}'.format(
+            self.config.get('year_set'))
+        web_dir = '{base}/{start:04d}-{end:04d}{casename}-obs'.format(
+            base=base,
+            start=self.config.get('start_year'),
+            end=self.config.get('end_year'),
+            casename=self.config.get('test_casename'))
 
         return self._check_links()
-
+    
     def _check_links(self):
         """
         Checks output page for all links, as well as first level subpages
-
+        
         Parameters:
             None
         Returns:
@@ -146,8 +152,7 @@ class AMWGDiagnostic(object):
             for link in output_links:
                 link_path = link.attrs['href']
                 if link_path[-3:] == 'htm':
-                    subpage_path = os.path.join(
-                        self.config['web_dir'], link.attrs['href'])
+                    subpage_path = os.path.join(self.config['web_dir'], link.attrs['href'])
                     subpage_head, _ = os.path.split(subpage_path)
                     if not os.path.exists(subpage_path):
                         msg = 'amwg-{}-{}: No output page found'.format(
@@ -162,8 +167,7 @@ class AMWGDiagnostic(object):
                             sublink_href = sublink.attrs['href']
                             if sublink_href[-3:] != 'png':
                                 continue
-                            sublink_path = os.path.join(
-                                subpage_head, sublink_href)
+                            sublink_path = os.path.join(subpage_head, sublink_href)
                             if not os.path.exists(sublink_path):
                                 missing_links.append(sublink_path)
         if missing_links:

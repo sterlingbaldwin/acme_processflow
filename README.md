@@ -3,7 +3,7 @@
 The processflow performs post processing jobs automatically, removing many of the difficulties of performing 
 diagnostics on model data. 
 
-[Documentation can be found here](https://acme-climate.github.io/acme_processflow/docs/html/index.html)
+[Documentation can be found here](https://e3sm-project.github.io/processflow/docs/html/index.html)
 
 ## Installation<a name="installation"></a>
 
@@ -13,13 +13,15 @@ conda create --name <YOUR_NEW_ENVIRONMENT> -c acme -c conda-forge -c uvcdat proc
 
 # Usage<a name="usage"></a>
 
-        usage: processflow.py [-h] [-c CONFIG] [-u] [-l LOG] [-n] [-m] [-s] [-f]
-                      [-r RESOURCE_DIR] [-i INPUT_PATH] [-o OUTPUT_PATH]
+        usage: processflow.py [-h] [-c CONFIG] [-v] [-u] [-l LOG] [-n] [-m] [-s] [-f]
+                      [-r RESOURCE_DIR] [-i INPUT_PATH] [-o OUTPUT_PATH] [-a]
+                      [--custom-archive-path CUSTOM_ARCHIVE_PATH]
 
         optional arguments:
         -h, --help            show this help message and exit
         -c CONFIG, --config CONFIG
                                 Path to configuration file.
+        -v, --version         Print version informat and exit.
         -u, --ui              Turn on the GUI.
         -l LOG, --log LOG     Path to logging output file.
         -n, --no-host         Don't move output plots into the web host directory.
@@ -35,3 +37,11 @@ conda create --name <YOUR_NEW_ENVIRONMENT> -c acme -c conda-forge -c uvcdat proc
                                 Custom input path
         -o OUTPUT_PATH, --output-path OUTPUT_PATH
                                 Custom output path
+        -a, --always-copy     Always copy diagnostic output, even if the output
+                                already exists in the host directory. This is much
+                                slower but ensures old output will be overwritten
+        --custom-archive-path CUSTOM_ARCHIVE_PATH
+                                A custom remote archive path used for short term
+                                archiving. This will over rule the normal path
+                                interpolation when moving files. This option should
+                                only be used when short term archiving is turned on

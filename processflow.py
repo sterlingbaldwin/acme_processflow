@@ -7,8 +7,8 @@ import os
 import json
 import threading
 import logging
-from time import sleep
 
+from time import sleep
 from globus_cli.services.transfer import get_client
 
 from lib.events import EventList
@@ -24,8 +24,8 @@ from lib.util import (print_line,
                       print_debug,
                       transfer_directory)
 
-__version__ = '1.0.1'
-__branch__ = 'nightly'
+__version__ = '1.1.0'
+__branch__ = 'master'
 
 # check for NCL
 if not os.environ.get('NCARG_ROOT'):
@@ -66,6 +66,8 @@ def main(test=False, **kwargs):
     args = kwargs['testargs'] if test else sys.argv[1:]
     config, filemanager, runmanager = initialize(
         argv=args,
+        version=__version__,
+        branch=__branch__,
         event_list=event_list,
         thread_list=thread_list,
         kill_event=thread_kill_event,
@@ -75,14 +77,11 @@ def main(test=False, **kwargs):
         print "Error in setup, exiting"
         return -1
     
-    msg = 'processflow version {} branch {}'.format(__version__, __branch__)
-    logging.info(msg)
     logging.info('Config setup complete')
-
     # check that all netCDF files exist
     path_exists(config)
+
     # cleanup any temp directories from previous runs
-    # cleanup(config)
     if not os.path.exists(config['global']['run_scripts_path']):
         os.makedirs(config['global']['run_scripts_path'])
     if not os.path.exists(config['global']['tmp_path']):
@@ -266,6 +265,22 @@ def main(test=False, **kwargs):
                 current_state=True,
                 ignore_text=True)
             sleep(0.5)
+            if not filemanager.all_data_local():
+                msg = "Additional data needed"
+                print_line(
+                    ui=config['global']['ui'],
+                    line=msg,
+                    event_list=event_list,
+                    current_state=True,
+                    ignore_text=True)
+                filemanager.transfer_needed(
+                    event_list=event_list,
+                    event=thread_kill_event,
+                    remote_endpoint=config['transfer']['source_endpoint'],
+                    ui=config['global']['ui'],
+                    display_event=display_event,
+                    emailaddr=config['global']['email'],
+                    thread_list=thread_list)
             if not runmanager.start_ready_job_sets():
                 msg = "Additional data needed"
                 print_line(
@@ -342,7 +357,8 @@ def main(test=False, **kwargs):
                     status=status,
                     display_event=display_event,
                     thread_list=thread_list,
-                    kill_event=thread_kill_event)
+                    kill_event=thread_kill_event,
+                    runmanager=runmanager)
                 # SUCCESS EXIT
                 return 0
             print_line(
@@ -373,15 +389,18 @@ def main(test=False, **kwargs):
         for thread in thread_list:
             thread.join(timeout=1.0)
         sleep(1)
-        print_message('----- UNEXPECTED EXCEPTION OCCURED -----')
+        print_message('----- AN UNEXPECTED EXCEPTION OCCURED -----')
         print_debug(e)
 
 
 if __name__ == "__main__":
-    if sys.argv[1] == 'test':
-        config_path = os.path.join(os.getcwd(), 'tests', 'test_run_no_sta.cfg')
-        testargs = ['-c', config_path, '-n', '-f']
-        ret = main(test=True, testargs=testargs)
+    if len(sys.argv) < 2:
+        ret = main(test=True, testargs=['-h'])
     else:
-        ret = main()
+        if sys.argv[1] == 'test':
+            config_path = os.path.join(os.getcwd(), 'tests', 'test_run_no_sta.cfg')
+            testargs = ['-c', config_path, '-n', '-f']
+            ret = main(test=True, testargs=testargs)
+        else:
+            ret = main()
     sys.exit(ret)

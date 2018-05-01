@@ -25,7 +25,15 @@ from util import (setup_globus,
 
 def parse_args(argv=None, print_help=None):
     parser = argparse.ArgumentParser()
-    parser.add_argument('-c', '--config', help='Path to configuration file.')
+    parser.add_argument(
+        '-c',
+        '--config',
+        help='Path to configuration file.')
+    parser.add_argument(
+        '-v',
+        '--version',
+        help='Print version informat and exit.',
+        action='store_true')
     parser.add_argument(
         '-u',
         '--ui',
@@ -67,6 +75,15 @@ def parse_args(argv=None, print_help=None):
         '-o',
         '--output-path',
         help='Custom output path')
+    parser.add_argument(
+        '-a',
+        '--always-copy',
+        help='Always copy diagnostic output, even if the output already exists in the host directory. This is much slower but ensures old output will be overwritten',
+        action='store_true')
+    parser.add_argument(
+        '--custom-archive-path',
+        help='A custom remote archive path used for short term archiving. This will over rule the normal path interpolation when moving files. This option should only be used when short term archiving is turned on',
+        action='store')
     if print_help:
         parser.print_help()
         return
@@ -83,9 +100,15 @@ def initialize(argv, **kwargs):
         thread_list (list): the main list of all running threads
         mutex (threading.Lock): A mutex to handle db access
         kill_event (threading.Event): An event used to kill all running threads
+        version (str): the current version number for processflow
+        branch (str): the branch this version was built from
     """
     # Setup the parser
     args = parse_args(argv=argv)
+    if args.version:
+        msg = 'Processflow version {}'.format(kwargs['version'])
+        print msg
+        sys.exit()
     if not args.config:
         parse_args(print_help=True)
         return False, False, False
@@ -146,6 +169,8 @@ Please add a space and run again.'''.format(num=line_index)
     config['global']['no_monitor'] = True if args.no_monitor else False
     config['global']['print_file_list'] = True if args.file_list else False
     config['global']['no_scripts'] = True if args.no_scripts else False
+    config['global']['always_copy'] = True if args.always_copy else False
+    config['global']['custom_archive'] = args.custom_archive_path if args.custom_archive_path else False
 
     if args.no_host:
         print_line(
@@ -231,6 +256,21 @@ Please add a space and run again.'''.format(num=line_index)
     logging.getLogger('globus_sdk').setLevel(logging.ERROR)
     logging.getLogger('globus_cli').setLevel(logging.ERROR)
 
+    msg = 'processflow version {} branch {}'.format(
+        kwargs['version'],
+        kwargs['branch'])
+    logging.info(msg)
+
+    if config['global']['always_copy']:
+        msg = 'Running in forced-copy mode, all previous diagnostic output will be overwritten'
+    else:
+        msg = 'Running without forced-copy, previous diagnostic output will be preserved'
+    print_line(
+            ui=config['global']['ui'],
+            line=msg,
+            event_list=event_list,
+            current_state=True)
+
     # Make sure the set_frequency is a list of ints
     set_frequency = config['global']['set_frequency']
     if not isinstance(set_frequency, list):
@@ -246,6 +286,9 @@ Please add a space and run again.'''.format(num=line_index)
     # setup config for file type directories
     if not isinstance(config['global']['file_types'], list):
         config['global']['file_types'] = [config['global']['file_types']]
+    
+    if not config['global'].get('url_prefix'):
+        config['global']['url_prefix'] = ''
 
     # setup run_scipts_path
     run_script_path = os.path.join(
@@ -299,7 +342,9 @@ Please add a space and run again.'''.format(num=line_index)
         remote_endpoint=config['transfer']['source_endpoint'],
         local_path=config['global']['input_path'],
         local_endpoint=config['transfer']['destination_endpoint'],
-        mutex=mutex)
+        mutex=mutex,
+        custom_archive=config['global']['custom_archive'],
+        experiment=config['global']['experiment'])
     filemanager.populate_file_list(
         simstart=config['global']['simulation_start_year'],
         simend=config['global']['simulation_end_year'],
@@ -386,7 +431,9 @@ Please add a space and run again.'''.format(num=line_index)
         scripts_path=run_script_path,
         thread_list=thread_list,
         event=event,
-        no_host=config['global']['no_host'])
+        no_host=config['global']['no_host'],
+        url_prefix=config['global']['url_prefix'],
+        always_copy=config['global']['always_copy'])
     runmanager.setup_job_sets(
         set_frequency=config['global']['set_frequency'],
         sim_start_year=sim_start_year,
@@ -394,7 +441,7 @@ Please add a space and run again.'''.format(num=line_index)
         config=config,
         filemanager=filemanager)
 
-    logging.info('Starting run with config')
+    logging.info('Starting run with config:')
     logging.info(json.dumps(config, indent=4, sort_keys=True))
     return config, filemanager, runmanager
 

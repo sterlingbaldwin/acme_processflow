@@ -26,6 +26,7 @@ file_type_map = {
     'atm': 'EXPERIMENT.cam.h0.YEAR-MONTH.nc',
     'ice': 'mpascice.hist.am.timeSeriesStatsMonthly.YEAR-MONTH-01.nc',
     'ocn': 'mpaso.hist.am.timeSeriesStatsMonthly.YEAR-MONTH-01.nc',
+    'lnd': 'EXPERIMENT.clm2.h0.YEAR-MONTH.nc',
     'rest': 'mpaso.rst.YEAR-01-01_00000.nc',
     'mpascice.rst': 'mpascice.rst.YEAR-01-01_00000.nc',
     'streams.ocean': 'streams.ocean',
@@ -74,19 +75,18 @@ class FileManager(object):
         self.local_path = kwargs.get('local_path')
         self.local_endpoint = kwargs.get('local_endpoint')
         self.start_year = 0
-
-        head, tail = os.path.split(kwargs.get('remote_path'))
-        if not self.sta:
-            if tail != 'run':
-                self.remote_path = os.path.join(
-                    kwargs.get('remote_path'), 'run')
-            else:
-                self.remote_path = kwargs.get('remote_path')
-        else:
-            if tail == 'run':
-                self.remote_path = head
-            else:
-                self.remote_path = kwargs.get('remote_path')
+        self.custom_archive = kwargs.get('custom_archive')
+        self.experiment = kwargs.get('experiment')
+        
+        
+        self.remote_path = None
+        path_split = kwargs.get('remote_path').split(os.sep)
+        for index, val in enumerate(path_split):
+            if val == self.experiment:
+                self.remote_path = os.sep.join(path_split[:index + 1])
+                break
+        if not self.remote_path:
+            print "could not find remote path, is the case_id set correctly?"
 
     def __str__(self):
         return str({
@@ -116,14 +116,24 @@ class FileManager(object):
             os.makedirs(head)
 
         if self.sta:
+            if self.custom_archive:
+                remote_path = os.path.join(
+                    self.custom_archive,
+                    'rest',
+                    '{year:04d}-01-01-00000'.format(year=simstart + 1),
+                    name)
+            else:
+                remote_path = os.path.join(
+                    self.remote_path,
+                    'archive',
+                    'rest',
+                    '{year:04d}-01-01-00000'.format(year=simstart + 1),
+                    name)
+        else:
             remote_path = os.path.join(
                 self.remote_path,
-                'archive',
-                'rest',
-                '{year:04d}-01-01-00000'.format(year=simstart + 1),
+                'run',
                 name)
-        else:
-            remote_path = os.path.join(self.remote_path, name)
         newfiles = self._add_file(
             newfiles=newfiles,
             name=name,
@@ -140,14 +150,24 @@ class FileManager(object):
             name)
 
         if self.sta:
+            if self.custom_archive:
+                remote_path = os.path.join(
+                    self.custom_archive,
+                    'rest',
+                    '{year:04d}-01-01-00000'.format(year=simstart + 1),
+                    name)
+            else:
+                remote_path = os.path.join(
+                    self.remote_path,
+                    'archive',
+                    'rest',
+                    '{year:04d}-01-01-00000'.format(year=simstart + 1),
+                    name)
+        else:
             remote_path = os.path.join(
                 self.remote_path,
-                'archive',
-                'rest',
-                '{year:04d}-01-01-00000'.format(year=simstart + 1),
+                'run',
                 name)
-        else:
-            remote_path = os.path.join(self.remote_path, name)
         newfiles = self._add_file(
             newfiles=newfiles,
             name=name,
@@ -156,6 +176,10 @@ class FileManager(object):
             _type='mpascice.rst')
 
     def populate_handle_mpas(self, _type, newfiles):
+        """
+        Populate the file table with the streams.ocean, streams.cice, mpas-o_in, and mpas-cice_in files
+        which are found in the run directory even if sta is on
+        """
         local_path = os.path.join(
             self.local_path,
             'mpas',
@@ -163,10 +187,8 @@ class FileManager(object):
         head, tail = os.path.split(local_path)
         if not os.path.exists(head):
             os.makedirs(head)
-        if self.sta:
-            remote_path = os.path.join(self.remote_path, 'run', _type)
-        else:
-            remote_path = os.path.join(self.remote_path, _type)
+
+        remote_path = os.path.join(self.remote_path, 'run', _type)
         newfiles = self._add_file(
             newfiles=newfiles,
             name=_type,
@@ -184,17 +206,27 @@ class FileManager(object):
         head, tail = os.path.split(local_path)
         if not os.path.exists(head):
             os.makedirs(head)
+
         if self.sta:
-            remote_path = os.path.join(
-                self.remote_path,
-                'archive',
-                'ocn',
-                'hist',
-                name)
+            if self.custom_archive:
+                remote_path = os.path.join(
+                    self.custom_archive,
+                    'ocn',
+                    'hist',
+                    name)
+            else:
+                remote_path = os.path.join(
+                    self.remote_path,
+                    'archive',
+                    'ocn',
+                    'hist',
+                    name)
         else:
             remote_path = os.path.join(
                 self.remote_path,
+                'run',
                 name)
+
         newfiles = self._add_file(
             newfiles=newfiles,
             name=name,
@@ -210,7 +242,7 @@ class FileManager(object):
 
         for year in xrange(simstart, simend + 1):
             for month in xrange(1, 13):
-                if _type == 'atm':
+                if _type in ['atm', 'lnd']:
                     name = file_type_map[_type].replace(
                         'EXPERIMENT', experiment)
                 else:
@@ -221,16 +253,25 @@ class FileManager(object):
                 name = name.replace('MONTH', monthstr)
                 local_path = os.path.join(
                     local_base, name)
+                
                 if self.sta:
-                    remote_path = os.path.join(
-                        self.remote_path,
-                        'archive',
-                        _type,
-                        'hist',
-                        name)
+                    if self.custom_archive:
+                        remote_path = os.path.join(
+                            self.custom_archive,
+                            _type,
+                            'hist',
+                            name)
+                    else:
+                        remote_path = os.path.join(
+                            self.remote_path,
+                            'archive',
+                            _type,
+                            'hist',
+                            name)
                 else:
                     remote_path = os.path.join(
                         self.remote_path,
+                        'run',
                         name)
                 newfiles = self._add_file(
                     newfiles=newfiles,
@@ -312,13 +353,13 @@ class FileManager(object):
             'name': kwargs['name'],
             'local_path': kwargs['local_path'],
             'local_status': local_status,
+            'local_size': local_size,
             'remote_path': kwargs['remote_path'],
             'remote_status': filestatus['NOT_EXIST'],
+            'remote_size': 0,
             'year': kwargs.get('year', 0),
             'month': kwargs.get('month', 0),
-            'datatype': kwargs['_type'],
-            'local_size': local_size,
-            'remote_size': 0
+            'datatype': kwargs['_type']
         })
         return newfiles
 
@@ -329,7 +370,7 @@ class FileManager(object):
                 'name': df.name,
                 'local_path': df.local_path,
                 'remote_path': df.remote_path
-            }         
+            }
 
     def update_remote_status(self, client):
         """
@@ -368,28 +409,22 @@ class FileManager(object):
         remote_files = list()
         for remote_directory in remote_directories:
             res = self._get_ls(client, remote_directory)
-            try:
-                names = [x['name'] for x in res if x['name'] in file_names_needed]
-                sizes = [x['size'] for x in res if x['name'] in file_names_needed]
-            except:
-                raise Exception("Unable to find remote files, check your output path")
+            names = [x['name'] for x in res if x['name'] in file_names_needed]
+            sizes = [x['size'] for x in res if x['name'] in file_names_needed]
             self.mutex.acquire()
             try:
-                step = 100
-                for idx in range(0, len(names), step):
-                    batch_names = names[idx: idx + step]
-                    to_update_name = [x['name']
-                                        for x in res if x['name'] in batch_names]
-                    to_update_size = [x['size']
-                                        for x in res if x['name'] in batch_names]
-                    q = (DataFile
-                            .update(
-                                remote_status=filestatus['EXISTS'],
-                                remote_size=to_update_size[to_update_name.index(DataFile.name)])
-                            .where(DataFile.name << to_update_name))
-                    n = q.execute()
+                for name in names:
+                    remote_path = os.path.join(remote_directory, name)
+                    DataFile.update(
+                        remote_status=filestatus['EXISTS'],
+                        remote_size=sizes[names.index(name)],
+                        remote_path=remote_path
+                    ).where(
+                        DataFile.name == name
+                    ).execute()
             except Exception as e:
                 print_debug(e)
+                print "Do you have the correct start and end dates and experiment name?"
             except OperationalError as operror:
                 line = 'Error writing to database, database is locked by another process'
                 print_line(
@@ -413,7 +448,6 @@ class FileManager(object):
                 sleep(fail_count)
                 if fail_count >= 9:
                     print_debug(e)
-                    sys.exit()
             else:
                 return res
 
@@ -460,15 +494,14 @@ class FileManager(object):
         self.mutex.acquire()
         try:
             query = (DataFile
-                        .select()
-                        .where(
+                     .select()
+                     .where(
                             (DataFile.local_status == filestatus['NOT_EXIST']) |
                             (DataFile.local_status == filestatus['IN_TRANSIT'])))
             for datafile in query.execute():
-                should_save = False
                 if os.path.exists(datafile.local_path):
                     local_size = os.path.getsize(datafile.local_path)
-                    if local_size == datafile.remote_size:
+                    if local_size == datafile.remote_size and local_size != 0:
                         datafile.local_status = filestatus['EXISTS']
                         datafile.local_size = local_size
                         datafile.save()
@@ -484,21 +517,30 @@ class FileManager(object):
                 self.mutex.release()
 
     def all_data_local(self):
+        """
+        Returns True if all data is local, False otherwise
+        """
         self.mutex.acquire()
         try:
             query = (DataFile
-                        .select()
-                        .where(
-                            DataFile.local_status == filestatus['NOT_EXIST']))
+                     .select()
+                     .where(
+                         (DataFile.local_status == filestatus['NOT_EXIST']) |
+                         (DataFile.local_status == filestatus['IN_TRANSIT'])))
             missing_data = query.execute()
             # if any of the data is missing, not all data is local
-            if missing_data is None or len(missing_data) != 0:
+            if missing_data:
+                msg = 'All data is not local, missing the following'
+                logging.info(msg)
+                logging.info([x.name for x in missing_data])
                 return False
         except Exception as e:
             print_debug(e)
         finally:
             if self.mutex.locked():
                 self.mutex.release()
+        msg = 'All data is local'
+        logging.info(msg)
         return True
 
     def all_data_remote(self):
@@ -525,7 +567,8 @@ class FileManager(object):
             event (threadding.event): the thread event to trigger a cancel
         """
         if self.active_transfers >= 2:
-            msg = 'Currently have {} transfers active, not starting any new ones'.format(self.active_transfers)
+            msg = 'Currently have {} transfers active, not starting any new ones'.format(
+                self.active_transfers)
             logging.info(msg)
             return False
         # required files dont exist locally, do exist remotely
@@ -591,11 +634,13 @@ class FileManager(object):
             event_list=event_list)
         self.mutex.acquire()
         try:
-            DataFile.update(
-                local_status=filestatus['IN_TRANSIT']
-            ).where(
-                DataFile.name << transfer_names
-            ).execute()
+            step = 100
+            for idx in range(0, len(transfer_names), step):
+                DataFile.update(
+                    local_status=filestatus['IN_TRANSIT']
+                ).where(
+                    DataFile.name << transfer_names[idx: idx + step]
+                ).execute()
         except Exception as e:
             print_debug(e)
             return False
@@ -628,7 +673,7 @@ class FileManager(object):
     def _handle_transfer(self, transfer, event, event_list):
         # this is to stop the simultanious print issue
         sleep(random.uniform(0.01, 0.1))
-        
+
         self.active_transfers += 1
         transfer.execute(event)
         self.active_transfers -= 1
@@ -649,8 +694,8 @@ class FileManager(object):
             self.mutex.acquire()
             names = [x['name'] for x in transfer.file_list]
             query = (DataFile
-                        .select()
-                        .where(DataFile.name << names))
+                     .select()
+                     .where(DataFile.name << names))
             for datafile in query.execute():
                 if os.path.exists(datafile.local_path) \
                         and os.path.getsize(datafile.local_path) == datafile.remote_size:
@@ -686,7 +731,6 @@ class FileManager(object):
         if self.mutex.locked():
             self.mutex.release()
 
-
     def years_ready(self, start_year, end_year):
         """
         Checks if atm files exist from start year to end of endyear
@@ -705,8 +749,8 @@ class FileManager(object):
         self.mutex.acquire()
         try:
             query = (DataFile
-                        .select()
-                        .where(
+                     .select()
+                     .where(
                             (DataFile.datatype == 'atm') &
                             (DataFile.year >= start_year) &
                             (DataFile.year <= end_year)))
@@ -734,14 +778,14 @@ class FileManager(object):
         try:
             if _type not in monthly:
                 query = (DataFile
-                            .select()
-                            .where(
+                         .select()
+                         .where(
                                 (DataFile.datatype == _type) &
                                 (DataFile.local_status == filestatus['EXISTS'])))
             else:
                 query = (DataFile
-                            .select()
-                            .where(
+                         .select()
+                         .where(
                                 (DataFile.datatype == _type) &
                                 (DataFile.year >= start_year) &
                                 (DataFile.year <= end_year) &

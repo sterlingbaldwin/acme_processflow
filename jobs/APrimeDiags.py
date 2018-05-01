@@ -8,7 +8,7 @@ import json
 from pprint import pformat
 from time import sleep
 from datetime import datetime
-from shutil import copyfile
+from shutil import copyfile, copy2, copytree, rmtree
 from bs4 import BeautifulSoup
 
 from lib.events import EventList
@@ -16,7 +16,8 @@ from lib.slurm import Slurm
 from JobStatus import JobStatus, StatusMap
 from lib.util import (render,
                       print_debug,
-                      print_line)
+                      print_line,
+                      format_debug)
 
 
 class APrimeDiags(object):
@@ -27,6 +28,7 @@ class APrimeDiags(object):
         self.event_list = event_list
         self.inputs = {
             'account': '',
+            'resource_path': '',
             'simulation_start_year': '',
             'target_host_path': '',
             'ui': '',
@@ -139,8 +141,7 @@ class APrimeDiags(object):
 
         if not self._check_links():
             # links arent in the correct place
-            msg = 'aprime-{}-{}: some links are broken in output page'.format(
-                self.start_year, self.end_year)
+            msg = 'aprime-{}-{}: some links are broken in output page'.format(self.start_year, self.end_year)
             logging.error(msg)
 
             # create host directory and copy in output
@@ -153,6 +154,63 @@ class APrimeDiags(object):
             return ret
 
         return True
+    
+    def _copy_output_to_host_location(self):
+        """
+        Copies plot output to the correct host location and renders index.html
+        """
+        output_contents_length = 199
+        output_path = os.path.join(
+            self.config['output_path'],
+            'coupled_diagnostics',
+            '{exp}_vs_obs'.format(exp=self.config['experiment']),
+            '{exp}_years{start}-{end}_vs_obs'.format(
+                exp=self.config['experiment'],
+                start=self.start_year,
+                end=self.end_year))
+
+        if not os.path.exists(output_path) or not os.path.isdir(output_path):
+            return False
+        output_contents = os.listdir(output_path)
+        if len(output_contents) < output_contents_length:
+            return False
+
+        if os.path.exists(self.config['target_host_path']):
+            rmtree(self.config['target_host_path'])
+        try:
+            copytree(
+                src=output_path,
+                dst=self.config['target_host_path'])
+        except Exception as e:
+            print_debug(e)
+            return False
+        
+        msg = 'aprime-{start:04d}-{end:04d}: native index generation failed, rendering from resource'.format(
+            start=self.start_year, end=self.end_year)
+        logging.info(msg)
+        variables = {
+            'experiment': self.config['experiment'],
+            'start_year': '{:04d}'.format(self.start_year),
+            'end_year': '{:04d}'.format(self.end_year)
+        }
+        resource_path = os.path.join(
+            self.config['resource_path'],
+            'aprime_index.html')
+        output_path = os.path.join(
+            self.config['target_host_path'],
+            'index.html')
+        try:
+            render(
+                variables=variables,
+                input_path=resource_path,
+                output_path=output_path)
+        except:
+            msg = 'aprime-{start:04d}-{end:04d}: failed to render from resource'.format(
+                start=self.start_year, end=self.end_year)
+            logging.error(msg)
+            return False
+        else:
+            return True
 
     def _copy_output_to_host_location(self):
         """
@@ -218,7 +276,17 @@ class APrimeDiags(object):
         returns True if all the links are found, False otherwise
         """
         found = False
-        for path in [self.config['web_dir'], self.config['target_host_path']]:
+        host_directory = "{experiment}_years{start}-{end}_vs_obs".format(
+            experiment=self.config['experiment'],
+            start=self.start_year,
+            end=self.end_year)
+
+        web_dir = os.path.join(
+            self.config['web_dir'],
+            os.environ['USER'],
+            host_directory)
+
+        for path in [web_dir, self.config['target_host_path']]:
             page_path = os.path.join(path, 'index.html')
             page_head, _ = os.path.split(page_path)
             if os.path.exists(page_path):
@@ -226,7 +294,8 @@ class APrimeDiags(object):
                 break
 
         if not found:
-            msg = 'aprime-{}-{}: output page doesnt exist'.format(self.start_year, self.end_year)
+            msg = 'aprime-{}-{}: couldnt find output page in search locations: {} or {}'.format(
+                self.start_year, self.end_year, self.config['web_dir'], self.config['target_host_path'])
             logging.error(msg)
             return False
         else:
@@ -248,11 +317,7 @@ class APrimeDiags(object):
                 start=self.start_year,
                 end=self.end_year,
                 plots=missing_pages)
-            print_line(
-                ui=self.config.get('ui', False),
-                line=msg,
-                event_list=self.event_list,
-                current_state=False)
+            logging.error(msg)
             return False
 
         msg = 'All links found for aprime-{start:04d}-{end:04d}'.format(

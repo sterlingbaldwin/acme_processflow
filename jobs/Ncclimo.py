@@ -111,7 +111,7 @@ class Climo(object):
         self.output_path = self.config['regrid_output_directory']
 
         cmd = [
-            'ncclimo',
+            '~zender1/bin/ncclimo',
             '-c', self.config['caseId'],
             '-a', self.config['annual_mode'],
             '-s', str(self.config['start_year']),
