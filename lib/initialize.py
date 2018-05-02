@@ -26,64 +26,57 @@ from util import (setup_globus,
 def parse_args(argv=None, print_help=None):
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        '-c',
-        '--config',
+        '-c', '--config',
+        required=True,
         help='Path to configuration file.')
     parser.add_argument(
-        '-v',
-        '--version',
+        '-v', '--version',
         help='Print version informat and exit.',
         action='store_true')
     parser.add_argument(
-        '-u',
-        '--ui',
+        '-u', '--ui',
         help='Turn on the GUI.',
         action='store_true')
     parser.add_argument(
-        '-l',
-        '--log',
+        '-l', '--log',
         help='Path to logging output file.')
     parser.add_argument(
-        '-n',
-        '--no-host',
+        '-n', '--no-host',
         help='Don\'t move output plots into the web host directory.',
         action='store_true')
     parser.add_argument(
-        '-m',
-        '--no-monitor',
+        '-m', '--no-monitor',
         help='Don\'t run the remote monitor or move any files over globus.',
         action='store_true')
     parser.add_argument(
-        '-s',
-        '--no-scripts',
+        '-s', '--no-scripts',
         help='Don\'t copy the case_scripts directory from the remote machine.',
         action='store_true')
     parser.add_argument(
-        '-f',
-        '--file-list',
+        '-f', '--file-list',
         help='Turn on debug output of the internal file_list so you can see what the current state of the model files are',
         action='store_true')
     parser.add_argument(
-        '-r',
-        '--resource-dir',
+        '-r', '--resource-dir',
         help='Path to custom resource directory')
     parser.add_argument(
-        '-i',
-        '--input-path',
+        '-i', '--input-path',
         help='Custom input path')
     parser.add_argument(
-        '-o',
-        '--output-path',
+        '-o', '--output-path',
         help='Custom output path')
     parser.add_argument(
-        '-a',
-        '--always-copy',
+        '-a', '--always-copy',
         help='Always copy diagnostic output, even if the output already exists in the host directory. This is much slower but ensures old output will be overwritten',
         action='store_true')
     parser.add_argument(
         '--custom-archive-path',
         help='A custom remote archive path used for short term archiving. This will over rule the normal path interpolation when moving files. This option should only be used when short term archiving is turned on',
         action='store')
+    parser.add_argument(
+        '-d', '--debug',
+        help='Set log level to debug',
+        action='store_true')
     if print_help:
         parser.print_help()
         return
@@ -244,15 +237,17 @@ Please add a space and run again.'''.format(num=line_index)
         line='Log saved to {}'.format(log_path),
         event_list=event_list,
         current_state=True)
-    from imp import reload
-    reload(logging)
+    if not kwargs.get('testing'):
+        from imp import reload
+        reload(logging)
     config['global']['log_path'] = log_path
+    log_level = logging.DEBUG if args.debug else logging.info
     logging.basicConfig(
         format='%(asctime)s:%(levelname)s: %(message)s',
         datefmt='%m/%d/%Y %I:%M:%S %p',
         filename=log_path,
         filemode='w',
-        level=logging.DEBUG)
+        level=log_level)
     logging.getLogger('globus_sdk').setLevel(logging.ERROR)
     logging.getLogger('globus_cli').setLevel(logging.ERROR)
 
