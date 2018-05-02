@@ -207,6 +207,7 @@ def main(test=False, **kwargs):
                     loop_count += 1
                     continue
                 if not all_data:
+                    filemanager.update_local_status()
                     all_data = filemanager.all_data_local()
                 if not all_data_remote and not all_data:
                     all_data_remote = filemanager.all_data_remote()
@@ -229,6 +230,7 @@ def main(test=False, **kwargs):
             # check the local status every 10 seconds
             if loop_count == local_check_delay:
                 if not all_data:
+                    filemanager.update_local_status()
                     all_data = filemanager.all_data_local()
                 else:
                     if not printed:
@@ -265,7 +267,9 @@ def main(test=False, **kwargs):
                 current_state=True,
                 ignore_text=True)
             sleep(0.5)
-            if not filemanager.all_data_local():
+            if not all_data:
+                filemanager.update_local_status()
+                all_data = filemanager.all_data_local()
                 msg = "Additional data needed"
                 print_line(
                     ui=config['global']['ui'],
