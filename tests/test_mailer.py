@@ -1,16 +1,17 @@
 import os, sys
 import unittest
-
+import inspect
 if sys.path[0] != '.':
     sys.path.insert(0, os.path.abspath('.'))
 
 from lib.mailer import Mailer
-
+from lib.util import print_message
 
 
 class TestMailer(unittest.TestCase):
 
     def test_send_mail_valid(self):
+        print '\n'; print_message('---- Starting Test: {} ----'.format(inspect.stack()[0][3]), 'ok')
         m = Mailer(
             src='baldwin32@llnl.gov',
             dst='baldwin32@llnl.gov')
@@ -20,6 +21,7 @@ class TestMailer(unittest.TestCase):
         self.assertTrue(ret)
 
     def test_send_mail_invalid(self):
+        print '\n'; print_message('---- Starting Test: {} ----'.format(inspect.stack()[0][3]), 'ok')
         m = Mailer(
             src='xxyyzz',
             dst='xxyyzz')

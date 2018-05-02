@@ -42,7 +42,7 @@ class FileManager(object):
     Manage all files required by jobs
     """
 
-    def __init__(self, database, types, sta=False, ui=False, **kwargs):
+    def __init__(self, database=None, types=None, sta=False, ui=False, **kwargs):
         """
         Parameters:
             mutex (theading.Lock) the mutext for accessing the database
@@ -64,11 +64,13 @@ class FileManager(object):
         self.db_path = database
         if os.path.exists(database):
             os.remove(database)
+
         self.mutex.acquire()
         DataFile._meta.database.init(database)
         if DataFile.table_exists():
             DataFile.drop_table()
-        DataFile.create_table()
+
+        DataFile.create_table() 
         if self.mutex.locked():
             self.mutex.release()
         self.remote_endpoint = kwargs.get('remote_endpoint')
@@ -242,15 +244,11 @@ class FileManager(object):
 
         for year in xrange(simstart, simend + 1):
             for month in xrange(1, 13):
-                if _type in ['atm', 'lnd']:
-                    name = file_type_map[_type].replace(
-                        'EXPERIMENT', experiment)
-                else:
-                    name = file_type_map[_type]
-                yearstr = '{0:04d}'.format(year)
-                monthstr = '{0:02d}'.format(month)
-                name = name.replace('YEAR', yearstr)
-                name = name.replace('MONTH', monthstr)
+                name = (file_type_map[_type]
+                            .replace('EXPERIMENT', experiment)
+                            .replace('YEAR', '{0:04d}'.format(year))
+                            .replace('MONTH', '{0:02d}'.format(month)))
+
                 local_path = os.path.join(
                     local_base, name)
                 
@@ -408,6 +406,11 @@ class FileManager(object):
 
         remote_files = list()
         for remote_directory in remote_directories:
+            msg = 'Checking remote directory {}'.format(remote_directory)
+            print_line(
+                ui=self.ui,
+                line=msg,
+                event_list=self.event_list)
             res = self._get_ls(client, remote_directory)
             names = [x['name'] for x in res if x['name'] in file_names_needed]
             sizes = [x['size'] for x in res if x['name'] in file_names_needed]
@@ -435,6 +438,11 @@ class FileManager(object):
             finally:
                 if self.mutex.locked():
                     self.mutex.release()
+        msg = 'remote update complete'
+        print_line(
+            ui=self.ui,
+            line=msg,
+            event_list=self.event_list)
 
     def _get_ls(self, client, path):
         for fail_count in xrange(10):
@@ -531,8 +539,8 @@ class FileManager(object):
             # if any of the data is missing, not all data is local
             if missing_data:
                 msg = 'All data is not local, missing the following'
-                logging.info(msg)
-                logging.info([x.name for x in missing_data])
+                logging.debug(msg)
+                logging.debug([x.name for x in missing_data])
                 return False
         except Exception as e:
             print_debug(e)
@@ -540,7 +548,7 @@ class FileManager(object):
             if self.mutex.locked():
                 self.mutex.release()
         msg = 'All data is local'
-        logging.info(msg)
+        logging.debug(msg)
         return True
 
     def all_data_remote(self):

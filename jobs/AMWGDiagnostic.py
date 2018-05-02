@@ -100,7 +100,18 @@ class AMWGDiagnostic(object):
         if self.year_set == 0:
             self.status = JobStatus.INVALID
             return
-        self.status = JobStatus.VALID
+        valid = True
+        for key, val in self.config.items():
+            if 'path' in key:
+                if not os.path.exists(val):
+                    msg = 'amwg-{start:04d}-{end:04d}: {key} missing {val}'.format(
+                        start=self.start_year, end=self.end_year, val=val, key=key)
+                    logging.error(msg)
+                    valid = False
+        if not valid:
+            self.status = JobStatus.INVALID
+        else:
+            self.status = JobStatus.VALID
 
     def postvalidate(self):
         """
@@ -177,8 +188,7 @@ class AMWGDiagnostic(object):
             logging.info(msg)
             return True
 
-
-    def execute(self):
+    def execute(self, dryrun=False):
         """
         Perform the actual work
         """
@@ -195,8 +205,10 @@ class AMWGDiagnostic(object):
             end_year=self.end_year)
         if not file_list or len(file_list) == 0:
             msg = """
-ERROR: AMWG: {start:04d}-{end:04d} could not find input climatologies at {path}\n
-did you add ncclimo to this year_set?""".format(start=self.start_year,
+-------------------------------------------------------------------------------
+ERROR: AMWG: {start:04d}-{end:04d} could not find input climatologies at {path}
+did you add ncclimo to this year_set?
+-------------------------------------------------------------------------------""".format(start=self.start_year,
                                                 end=self.end_year,
                                                 path=regrid_path)
             print_line(
@@ -259,6 +271,9 @@ did you add ncclimo to this year_set?""".format(start=self.start_year,
             input_path=submission_template_path,
             output_path=run_script)
 
+        if dryrun:
+            self.status = JobStatus.COMPLETED
+            return
         slurm = Slurm()
         msg = 'submitting to queue {type}: {start:04d}-{end:04d}'.format(
             type=self.type,

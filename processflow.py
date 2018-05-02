@@ -4,6 +4,7 @@
 
 import sys
 import os
+import json
 import threading
 import logging
 
@@ -16,14 +17,14 @@ from lib.finalize import finalize
 from lib.filemanager import FileManager
 from lib.runmanager import RunManager
 from lib.display import start_display
-from lib.util import (print_line,
-                      path_exists,
-                      write_human_state,
-                      print_message,
-                      print_debug,
-                      transfer_directory)
+from lib.util import print_line,
+from lib.util import path_exists,
+from lib.util import write_human_state,
+from lib.util import print_message,
+from lib.util import print_debug,
+from lib.util import transfer_directory)
 
-__version__ = '1.1.0'
+__version__ = '1.1.1'
 __branch__ = 'master'
 
 # check for NCL
@@ -137,7 +138,7 @@ def main(test=False, **kwargs):
             config['global']['ui'],
             "Updating remote file status",
             event_list,
-            current_state=False)
+            current_state=True)
         if not config.get('global').get('no_monitor', False):
             filemanager.update_remote_status(client)
             all_data_remote = filemanager.all_data_remote()
@@ -206,6 +207,7 @@ def main(test=False, **kwargs):
                     loop_count += 1
                     continue
                 if not all_data:
+                    filemanager.update_local_status()
                     all_data = filemanager.all_data_local()
                 if not all_data_remote and not all_data:
                     all_data_remote = filemanager.all_data_remote()
@@ -228,6 +230,7 @@ def main(test=False, **kwargs):
             # check the local status every 10 seconds
             if loop_count == local_check_delay:
                 if not all_data:
+                    filemanager.update_local_status()
                     all_data = filemanager.all_data_local()
                 else:
                     if not printed:
@@ -264,7 +267,9 @@ def main(test=False, **kwargs):
                 current_state=True,
                 ignore_text=True)
             sleep(0.5)
-            if not filemanager.all_data_local():
+            if not all_data:
+                filemanager.update_local_status()
+                all_data = filemanager.all_data_local()
                 msg = "Additional data needed"
                 print_line(
                     ui=config['global']['ui'],
@@ -397,9 +402,10 @@ if __name__ == "__main__":
         ret = main(test=True, testargs=['-h'])
     else:
         if sys.argv[1] == 'test':
-            config_path = os.path.join(os.getcwd(), 'tests', 'test_run_no_sta.cfg')
-            testargs = ['-c', config_path, '-n', '-f']
-            ret = main(test=True, testargs=testargs)
+            print '=============================='
+            print '---- running in test mode ----'
+            print '=============================='
+            ret = main(test=True, testargs=sys.argv[2:])
         else:
             ret = main()
     sys.exit(ret)

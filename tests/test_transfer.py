@@ -10,11 +10,11 @@ if sys.path[0] != '.':
 
 from lib.util import transfer_directory
 from lib.events import EventList
-
+from lib.util import print_message
 from jobs.Transfer import Transfer
 from jobs.JobStatus import JobStatus
 
-project_path = os.path.abspath(os.path.join('..', 'testproject_transfer'))
+project_path = '/p/user_pub/e3sm/baldwin32/E3SM_test_data/test_transfer'
 
 
 class TestTransfer(unittest.TestCase):
@@ -24,26 +24,15 @@ class TestTransfer(unittest.TestCase):
         self.source_endpoint = '9d6d994a-6d04-11e5-ba46-22000b92c6ec'
         self.destination_endpoint = 'a871c6de-2acd-11e7-bc7c-22000b9a448b'
 
-    # def test_transfer_directory(self):
-    #     transfer_directory(
-    #         source_endpoint='9d6d994a-6d04-11e5-ba46-22000b92c6ec',
-    #         destination_endpoint='a871c6de-2acd-11e7-bc7c-22000b9a448b',
-    #         src_path='/global/homes/s/sbaldwin/test_directory',
-    #         dst_path=project_path,
-    #         event_list=EventList(),
-    #         event=threading.Event())
-
-    #     self.assertTrue(os.path.exists(project_path))
-    #     contents = os.listdir(project_path)
-    #     for item in ['a', 'b', 'c', 'd']:
-    #         self.assertTrue(item in contents)
-    #     shutil.rmtree(project_path)
-
     def test_transfer_file(self):
-        print '---- Starting Test: {} ----'.format(inspect.stack()[0][3])
+        """
+        test moving a single file
+        """
+        print '\n'; print_message('---- Starting Test: {} ----'.format(inspect.stack()[0][3]), 'ok')
         source_file = {
             'remote_path': '/global/homes/s/sbaldwin/test_directory/test_file.txt',
-            'local_path': os.path.join(project_path, 'test_file.txt')}
+            'local_path': os.path.join(project_path, 'test_file.txt')
+        }
         source_path = '/global/homes/s/sbaldwin/test_directory'
         transfer = Transfer({
             'file_list': [source_file],
@@ -59,6 +48,7 @@ class TestTransfer(unittest.TestCase):
         transfer.execute(event=threading.Event())
         self.assertTrue(transfer.postvalidate())
         self.assertEqual(transfer.status.name, 'COMPLETED')
+        self.assertTrue(os.path.exists(source_file['local_path']))
 
 
 if __name__ == '__main__':

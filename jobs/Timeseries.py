@@ -6,6 +6,7 @@ import re
 import json
 import sys
 import logging
+import cdms2
 
 from pprint import pformat
 from subprocess import Popen, PIPE
@@ -106,14 +107,38 @@ class Timeseries(object):
             'job_id': self.job_id,
             'year_set': self.year_set
         }, sort_keys=True, indent=4)
+    
+    def check_variables(self):
+        """
+        Check that all the variables asked to be extracted are present in the files,
+        if a variable is missing remove it from the variable list and keep going
+        """
+        file_list = self.filemanager.get_file_paths_by_year(
+            start_year=self.start_year,
+            end_year=self.end_year,
+            _type='atm')
 
-    def execute(self):
+        datafile = cdms2.open(file_list[0])
+        variables = datafile.variables
+        var_list = list()
+        for variable in self.config['var_list']:
+            if variable in variables.keys():
+                var_list.append(variable)
+            else:
+                msg = 'variable {var} not found in file {file}'.format(
+                    var=variable, file=file_list[0])
+                logging.error(msg)
+        self.config['var_list'] = var_list
+
+    def execute(self, dryrun=False):
         """
         Submits ncclimo to slurm after checking if it had been previously run
         """
         if self.postvalidate():
             self.status = JobStatus.COMPLETED
             return 0
+        
+        self.check_variables()
 
         file_list = self.filemanager.get_file_paths_by_year(
             start_year=self.start_year,
@@ -155,6 +180,10 @@ class Timeseries(object):
             batchfile.write('#!/bin/bash\n')
             batchfile.write(slurm_prefix)
             batchfile.write(slurm_command)
+        
+        if dryrun:
+            self.status = JobStatus.COMPLETED
+            return
 
         slurm = Slurm()
         msg = 'Submitting to queue {type}: {start:04d}-{end:04d}'.format(
@@ -183,6 +212,9 @@ class Timeseries(object):
         """
         Post execution validation
         """
+        msg = 'starting postvalidation for {job}-{start:04d}-{end:04d}'.format(
+            job=self.type, start=self.start_year, end=self.end_year)
+        logging.info(msg)
         found_all = True
         missing_list = list()
         # self.config.get('native_output_directory'), 

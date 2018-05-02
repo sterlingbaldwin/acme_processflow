@@ -10,7 +10,7 @@ if sys.path[0] != '.':
 from jobs.Timeseries import Timeseries
 from jobs.JobStatus import JobStatus
 from lib.events import EventList
-
+from lib.util import print_message
 
 class TestTimeseries(unittest.TestCase):
 
@@ -22,7 +22,10 @@ class TestTimeseries(unittest.TestCase):
         self.project_path = os.path.join(os.getcwd(), '..', 'testproject')
 
     def test_timeseries_setup(self):
-        print '---- Starting Test: {} ----'.format(inspect.stack()[0][3])
+        """
+        test a valid timeseries setup
+        """
+        print '\n'; print_message('---- Starting Test: {} ----'.format(inspect.stack()[0][3]), 'ok')
         timeseries = Timeseries({
             'regrid_output_directory': os.getcwd(),
             'filemanager': None,
@@ -37,7 +40,7 @@ class TestTimeseries(unittest.TestCase):
             'regrid_map_path': self.config['ncclimo']['regrid_map_path'],
             'file_list': [],
         }, EventList())
-        self.assertEqual(timeseries.status, JobStatus.VALID)
+        self.assertEqual(timeseries.status.name, 'VALID')
 
 
 if __name__ == '__main__':
