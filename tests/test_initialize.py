@@ -18,7 +18,7 @@ from lib.filemanager import FileManager
 from lib.runmanager import RunManager
 from lib.util import print_message
 
-__version__ = '1.1.0'
+__version__ = '1.1.1'
 __branch__ = 'master'
 
 class TestInitialize(unittest.TestCase):

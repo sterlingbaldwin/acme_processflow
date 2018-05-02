@@ -98,8 +98,7 @@ class E3SMDiags(object):
 
         if not os.path.exists(self.config.get('run_scripts_path')):
             os.makedirs(self.config.get('run_scripts_path'))
-        # if isinstance(self.config['seasons'], str):
-        #     self.config['seasons'] = [self.config['seasons']]
+
         if self.year_set == 0:
             self.messages.append('invalid year_set')
             self.status = JobStatus.INVALID
@@ -130,46 +129,6 @@ class E3SMDiags(object):
                                 continue
                             else:
                                 sublink_path = os.path.join(link_tail, sublink_preview)
-                                if not os.path.exists(sublink_path):
-                                    missing_links.append(sublink_path)
-        if missing_links:
-            msg = 'e3sm-{}-{}: missing the following links'.format(
-                self.start_year, self.end_year)
-            logging.error(msg)
-            logging.error(missing_links)
-            return False
-        else:
-            msg = 'e3sm-{}-{}: all links found'.format(
-                self.start_year, self.end_year)
-            logging.info(msg)
-            return True
-
-    def _check_links(self):
-        viewer_path = os.path.join(
-            self.config['results_dir'], 'viewer', 'index.html')
-        viewer_head = os.path.join(self.config['results_dir'], 'viewer')
-        missing_links = list()
-        with open(viewer_path, 'r') as viewer_pointer:
-            viewer_page = BeautifulSoup(viewer_pointer, 'lxml')
-            viewer_links = viewer_page.findAll('a')
-            for link in viewer_links:
-                link_path = os.path.join(viewer_head, link.attrs['href'])
-                if not os.path.exists(link_path):
-                    missing_links.append(link_path)
-                    continue
-                if link_path[-4:] == 'html':
-                    link_tail, _ = os.path.split(link_path)
-                    with open(link_path, 'r') as link_pointer:
-                        link_page = BeautifulSoup(link_pointer, 'lxml')
-                        link_links = link_page.findAll('a')
-                        for sublink in link_links:
-                            try:
-                                sublink_preview = sublink.attrs['data-preview']
-                            except:
-                                continue
-                            else:
-                                sublink_path = os.path.join(
-                                    link_tail, sublink_preview)
                                 if not os.path.exists(sublink_path):
                                     missing_links.append(sublink_path)
         if missing_links:

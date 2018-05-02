@@ -17,14 +17,14 @@ from lib.finalize import finalize
 from lib.filemanager import FileManager
 from lib.runmanager import RunManager
 from lib.display import start_display
-from lib.util import (print_line,
-                      path_exists,
-                      write_human_state,
-                      print_message,
-                      print_debug,
-                      transfer_directory)
+from lib.util import print_line,
+from lib.util import path_exists,
+from lib.util import write_human_state,
+from lib.util import print_message,
+from lib.util import print_debug,
+from lib.util import transfer_directory)
 
-__version__ = '1.1.0'
+__version__ = '1.1.1'
 __branch__ = 'master'
 
 # check for NCL
@@ -402,9 +402,10 @@ if __name__ == "__main__":
         ret = main(test=True, testargs=['-h'])
     else:
         if sys.argv[1] == 'test':
-            config_path = os.path.join(os.getcwd(), 'tests', 'test_run_no_sta.cfg')
-            testargs = ['-c', config_path, '-n', '-f']
-            ret = main(test=True, testargs=testargs)
+            print '=============================='
+            print '---- running in test mode ----'
+            print '=============================='
+            ret = main(test=True, testargs=sys.argv[2:])
         else:
             ret = main()
     sys.exit(ret)
