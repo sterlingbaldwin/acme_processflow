@@ -17,12 +17,12 @@ from lib.finalize import finalize
 from lib.filemanager import FileManager
 from lib.runmanager import RunManager
 from lib.display import start_display
-from lib.util import print_line,
-from lib.util import path_exists,
-from lib.util import write_human_state,
-from lib.util import print_message,
-from lib.util import print_debug,
-from lib.util import transfer_directory)
+from lib.util import print_line
+from lib.util import path_exists
+from lib.util import write_human_state
+from lib.util import print_message
+from lib.util import print_debug
+from lib.util import transfer_directory
 
 __version__ = '1.1.1'
 __branch__ = 'master'
