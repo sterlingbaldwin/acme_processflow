@@ -28,7 +28,9 @@ class TestProcessflow(unittest.TestCase):
             '/export/baldwin32/jenkins/workspace/',
             inspect.stack()[0][3])
         if os.path.exists(output_path):
+            print 'removing previous output directory'
             shutil.rmtree(output_path)
+        print "---- project cleanup complete ----"
 
         config = ConfigObj(config_path)
         testargs = ['-c', config_path, '-f', '-r',
