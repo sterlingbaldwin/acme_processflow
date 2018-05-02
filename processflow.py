@@ -44,6 +44,14 @@ event_list = EventList()
 
 
 def main(test=False, **kwargs):
+    """
+    Processflow main
+    """
+    if test:
+        print '=========================================='
+        print '---- Processflow running in test mode ----'
+        print '=========================================='
+
     # The master configuration object
     config = {}
 
@@ -63,9 +71,9 @@ def main(test=False, **kwargs):
     client = get_client()
 
     # Read in parameters from config
-    args = kwargs['testargs'] if test else sys.argv[1:]
+    _args = kwargs['testargs'] if test else sys.argv[1:]
     config, filemanager, runmanager = initialize(
-        argv=args,
+        argv=_args,
         version=__version__,
         branch=__branch__,
         event_list=event_list,
@@ -401,11 +409,5 @@ if __name__ == "__main__":
     if len(sys.argv) < 2:
         ret = main(test=True, testargs=['-h'])
     else:
-        if sys.argv[1] == 'test':
-            print '=============================='
-            print '---- running in test mode ----'
-            print '=============================='
-            ret = main(test=True, testargs=sys.argv[2:])
-        else:
-            ret = main()
+        ret = main()
     sys.exit(ret)

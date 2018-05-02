@@ -33,7 +33,7 @@ class TestProcessflow(unittest.TestCase):
         print "---- project cleanup complete ----"
 
         config = ConfigObj(config_path)
-        testargs = ['test', '-c', config_path, '-f', '-r', './resources', '-s', '-o', output_path, '-d']
+        testargs = ['-c', config_path, '-f', '-r', './resources', '-s', '-o', output_path, '-d']
         ret = main(test=True, testargs=testargs)
         self.assertEqual(ret, 0)
 
@@ -92,7 +92,7 @@ class TestProcessflow(unittest.TestCase):
             print "removing previous input directory"
             shutil.rmtree(input_path)
         print "---- project cleanup complete ----"
-        testargs = ['test', '-c', config_path, '-n', '-f', '-r', './resources', '-o', output_path, '-i', input_path, '-d']
+        testargs = ['-c', config_path, '-n', '-f', '-r', './resources', '-o', output_path, '-i', input_path, '-d']
         ret = main(test=True, testargs=testargs)
         self.assertEqual(ret, 0)
 

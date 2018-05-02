@@ -451,15 +451,23 @@ class TestInitialize(unittest.TestCase):
         mutex = threading.Lock()
         event_list = EventList()
         thread_list = []
-        config, filemanager, runmanager = initialize(
-            argv=args,
-            version=__version__,
-            branch=__branch__,
-            event_list=event_list,
-            thread_list=thread_list,
-            kill_event=thread_kill_event,
-            mutex=mutex,
-            testing=True)
+        caught_exception = False
+        config = None
+        filemanager = None
+        runmanager = None
+        try:
+            config, filemanager, runmanager = initialize(
+                argv=args,
+                version=__version__,
+                branch=__branch__,
+                event_list=event_list,
+                thread_list=thread_list,
+                kill_event=thread_kill_event,
+                mutex=mutex,
+                testing=True)
+        except:
+            caught_exception = True
+        self.assertTrue(caught_exception)
         self.assertFalse(config)
         self.assertFalse(filemanager)
         self.assertFalse(runmanager)
