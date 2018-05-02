@@ -11,17 +11,21 @@ if sys.path[0] != '.':
 from jobs.JobStatus import JobStatus
 from jobs.AMWGDiagnostic import AMWGDiagnostic
 from lib.events import EventList
-
+from lib.util import print_message
 
 class TestAMWGDiagnostic(unittest.TestCase):
 
     def __init__(self, *args, **kwargs):
         super(TestAMWGDiagnostic, self).__init__(*args, **kwargs)
-        config_path = os.path.join(os.getcwd(), 'tests', 'test_configs', 'test_run_no_sta.cfg')
+        config_path = os.path.join(
+            os.getcwd(),
+            'tests',
+            'test_configs',
+            'test_run_no_sta.cfg')
         self.config = ConfigObj(config_path)
 
     def test_AMWG_setup(self):
-        print '---- Starting Test: {} ----'.format(inspect.stack()[0][3])
+        print '\n'; print_message('---- Starting Test: {} ----'.format(inspect.stack()[0][3]), 'ok')
         self.config['global']['project_path'] = '/p/user_pub/e3sm/baldwin32/E3SM_test_data/DECKv1b_1pctCO2_complete'
         self.config['global']['exeriment'] = '20180215.DECKv1b_1pctCO2.ne30_oEC.edison'
         start_year = 1
@@ -97,9 +101,10 @@ class TestAMWGDiagnostic(unittest.TestCase):
     def test_AMWG_no_file_list(self):
         """
         Test that when given a directory with no files, the job
-        marks itself as FAILED and exits
+        marks itself as INVALID, then when asked to run sets its
+        status to FAILED and exits
         """
-        print '---- Starting Test: {} ----'.format(inspect.stack()[0][3])
+        print '\n'; print_message('---- Starting Test: {} ----'.format(inspect.stack()[0][3]), 'ok')
         self.config['global']['project_path'] = '/p/user_pub/e3sm/baldwin32/E3SM_test_data/DECKv1b_1pctCO2_not_complete'
         self.config['global']['exeriment'] = '20180215.DECKv1b_1pctCO2.ne30_oEC.edison'
         start_year = 1
@@ -171,16 +176,16 @@ class TestAMWGDiagnostic(unittest.TestCase):
         amwg = AMWGDiagnostic(
             config=config,
             event_list=EventList())
-        self.assertEqual(amwg.status.name, 'VALID')
+        self.assertEqual(amwg.status.name, 'INVALID')
         amwg.execute(dryrun=False)
         self.assertEqual(amwg.status.name, 'FAILED')
         self.assertFalse(amwg.postvalidate())
 
     def test_AMWG_execute_not_completed(self):
-        print '---- Starting Test: {} ----'.format(inspect.stack()[0][3])
+        print '\n'; print_message('---- Starting Test: {} ----'.format(inspect.stack()[0][3]), 'ok')
         start_year = 1
         end_year = 10
-        self.config['global']['project_path'] = '/p/user_pub/e3sm/baldwin32/E3SM_test_data/DECKv1b_1pctCO2_not_complete'
+        self.config['global']['project_path'] = '/p/user_pub/e3sm/baldwin32/E3SM_test_data/DECKv1b_1pctCO2_complete'
         self.config['global']['exeriment'] = '20180215.DECKv1b_1pctCO2.ne30_oEC.edison'
         set_string = '{start:04d}-{end:04d}'.format(
             start=start_year,
@@ -253,7 +258,7 @@ class TestAMWGDiagnostic(unittest.TestCase):
         self.assertFalse(amwg.postvalidate())
     
     def test_AMWG_execute_missing_output_path(self):
-        print '---- Starting Test: {} ----'.format(inspect.stack()[0][3])
+        print '\n'; print_message('---- Starting Test: {} ----'.format(inspect.stack()[0][3]), 'ok')
         start_year = 10
         end_year = 100
         self.config['global']['project_path'] = '/p/user_pub/e3sm/baldwin32/E3SM_test_data/DECKv1b_1pctCO2_not_complete'
@@ -339,7 +344,7 @@ class TestAMWGDiagnostic(unittest.TestCase):
         self.assertFalse(amwg.postvalidate())
 
     def test_AMWG_execute_completed(self):
-        print '---- Starting Test: {} ----'.format(inspect.stack()[0][3])
+        print '\n'; print_message('---- Starting Test: {} ----'.format(inspect.stack()[0][3]), 'ok')
         start_year = 1
         end_year = 10
         self.config['global']['project_path'] = '/p/user_pub/e3sm/baldwin32/E3SM_test_data/DECKv1b_1pctCO2_complete'

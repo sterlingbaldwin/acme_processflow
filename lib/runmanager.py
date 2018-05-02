@@ -8,11 +8,11 @@ from shutil import copytree, move, copytree, rmtree, copy2
 from subprocess import Popen
 
 from lib.slurm import Slurm
-from lib.util import (get_climo_output_files,
-                      create_symlink_dir,
-                      print_line,
-                      render,
-                      format_debug)
+from lib.util import get_climo_output_files
+from lib.util import create_symlink_dir
+from lib.util import print_line
+from lib.util import render
+from lib.util import format_debug
 
 from lib.YearSet import YearSet, SetStatus
 from jobs.Ncclimo import Climo
@@ -24,6 +24,7 @@ from jobs.JobStatus import JobStatus, StatusMap, ReverseMap
 
 
 class RunManager(object):
+
     def __init__(self, event_list, output_path, caseID, scripts_path, thread_list, event, ui, resource_path, account, short_name, url_prefix, always_copy=False, no_host=False):
         self.short_name = short_name
         # self.account = account

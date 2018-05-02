@@ -5,7 +5,7 @@ SECONDS=0
 BRANCH="$(git name-rev --name-only HEAD)"
 echo "Running tests for branch $BRANCH"
 
-tests=("tests/test_e3sm.py" "tests/test_initialize.py" "tests/test_yearset.py" "tests/test_filemanager.py" "tests/test_util.py" "tests/test_slurm.py" "tests/test_mailer.py" "tests/test_ncclimo.py" "tests/test_timeseries.py" "tests/test_amwg.py" "tests/test_runmanager.py")
+tests=("tests/test_e3sm.py" "tests/test_initialize.py" "tests/test_yearset.py" "tests/test_filemanager.py" "tests/test_util.py" "tests/test_slurm.py" "tests/test_mailer.py" "tests/test_ncclimo.py" "tests/test_timeseries.py" "tests/test_runmanager.py" "tests/test_amwg.py")
 
 if [ "$1" == "all" ]; then
     echo "Running end to end tests"
@@ -33,7 +33,11 @@ do
         echo "--- ${tname} passed ---"
         (( PASSED+=1 ))
     else
+        echo "==================================================="
+        echo "==================================================="
         echo "${tname} failed"
+        echo "==================================================="
+        echo "==================================================="
     fi
 done
 

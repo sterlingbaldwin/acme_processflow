@@ -10,6 +10,7 @@ if sys.path[0] != '.':
 from lib.filemanager import FileManager, file_type_map
 from lib.models import DataFile
 from lib.events import EventList
+from lib.util import print_message
 from globus_cli.services.transfer import get_client
 
 
@@ -32,7 +33,7 @@ class TestFileManager(unittest.TestCase):
         """ 
         ##############  SETUP   ################
         """
-        print '---- Starting Test: {} ----'.format(inspect.stack()[0][3])
+        print '\n'; print_message('---- Starting Test: {} ----'.format(inspect.stack()[0][3]), 'ok')
         sta = False
         database = '{}.db'.format(inspect.stack()[0][3])
         remote_path = '/global/homes/r/renata/ACME_simulations/20170926.FCT2.A_WCYCL1850S.ne30_oECv3.anvil'
@@ -70,7 +71,7 @@ class TestFileManager(unittest.TestCase):
         """ 
         ##############  SETUP  ###############
         """
-        print '---- Starting Test: {} ----'.format(inspect.stack()[0][3])
+        print '\n'; print_message('---- Starting Test: {} ----'.format(inspect.stack()[0][3]), 'ok')
         sta = True
         types = ['atm', 'ice', 'ocn', 'rest', 'streams.ocean', 'streams.cice', 'mpas-o_in', 'mpas-cice_in', 'meridionalHeatTransport', 'lnd']
         database = '{}.db'.format(inspect.stack()[0][3])
@@ -106,7 +107,7 @@ class TestFileManager(unittest.TestCase):
         """ 
         ###############  SETUP   ################
         """
-        print '---- Starting Test: {} ----'.format(inspect.stack()[0][3])
+        print '\n'; print_message('---- Starting Test: {} ----'.format(inspect.stack()[0][3]), 'ok')
         sta = False
         database = '{}.db'.format(inspect.stack()[0][3])
         simstart = 1
@@ -164,7 +165,7 @@ class TestFileManager(unittest.TestCase):
         """ 
         #############   SETUP   ################
         """
-        print '---- Starting Test: {} ----'.format(inspect.stack()[0][3])
+        print '\n'; print_message('---- Starting Test: {} ----'.format(inspect.stack()[0][3]), 'ok')
         sta = False
         types = ['atm', 'ice', 'ocn', 'rest', 'streams.cice', 'streams.ocean']
         database = '{}.db'.format(inspect.stack()[0][3])
@@ -215,7 +216,6 @@ class TestFileManager(unittest.TestCase):
         ###############  CLEANUP   #################
         """
         os.remove(database)
-        os.remove(dummy_file_path)
 
     def test_filemanager_update_remote_no_sta(self):
         """
@@ -227,7 +227,7 @@ class TestFileManager(unittest.TestCase):
         """ 
         #############   SETUP   ##################
         """
-        print '---- Starting Test: {} ----'.format(inspect.stack()[0][3])
+        print '\n'; print_message('---- Starting Test: {} ----'.format(inspect.stack()[0][3]), 'ok')
         remote_path = '/global/homes/r/renata/ACME_simulations/20170926.FCT2.A_WCYCL1850S.ne30_oECv3.anvil'
         sta = False
         types = ['atm']
@@ -280,7 +280,7 @@ class TestFileManager(unittest.TestCase):
         """ 
         ############### SETUP  #################
         """
-        print '---- Starting Test: {} ----'.format(inspect.stack()[0][3])
+        print '\n'; print_message('---- Starting Test: {} ----'.format(inspect.stack()[0][3]), 'ok')
         sta = True
         types = ['atm', 'ice', 'ocn', 'rest', 'streams.ocean', 'streams.cice', 'mpas-o_in', 'mpas-cice_in', 'meridionalHeatTransport']
         database = '{}.db'.format(inspect.stack()[0][3])
@@ -332,7 +332,7 @@ class TestFileManager(unittest.TestCase):
         """ 
         ############### SETUP ##################
         """
-        print '---- Starting Test: {} ----'.format(inspect.stack()[0][3])
+        print '\n'; print_message('---- Starting Test: {} ----'.format(inspect.stack()[0][3]), 'ok')
         sta = True
         database = '{}.db'.format(inspect.stack()[0][3])
         simstart = 1
@@ -386,6 +386,7 @@ class TestFileManager(unittest.TestCase):
         """ 
         #########################################
         """
+        os.remove(database)
 
 if __name__ == '__main__':
     unittest.main()

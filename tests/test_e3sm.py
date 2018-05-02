@@ -10,18 +10,20 @@ if sys.path[0] != '.':
 from jobs.E3SMDiags import E3SMDiags
 from lib.events import EventList
 from jobs.JobStatus import JobStatus
+from lib.util import print_message
+
 
 class TestE3SM(unittest.TestCase):
 
     def __init__(self, *args, **kwargs):
         super(TestE3SM, self).__init__(*args, **kwargs)
-        config_path = os.path.join(os.getcwd(), 'tests', 'test_configs', 'test_run_no_sta.cfg')
+        config_path = '/p/user_pub/e3sm/baldwin32/E3SM_test_data/DECKv1b_1pctCO2_complete/input/run.cfg'
         self.config = ConfigObj(config_path)
         self.caseID = self.config['global']['experiment']
         self.event_list = EventList()
 
     def test_prevalidate(self):
-        print '---- Starting Test: {} ----'.format(inspect.stack()[0][3])
+        print '\n'; print_message('---- Starting Test: {} ----'.format(inspect.stack()[0][3]), 'ok')
         start_year = 1
         end_year = 10
         set_string = '{start:04d}-{end:04d}'.format(
@@ -98,10 +100,13 @@ class TestE3SM(unittest.TestCase):
         e3sm_diag = E3SMDiags(
             config=config,
             event_list=self.event_list)
-        self.assertEqual(e3sm_diag.status, JobStatus.VALID)
+        self.assertEqual(e3sm_diag.status.name, 'VALID')
+        e3sm_diag.execute(dryrun=True)
+        self.assertEqual(e3sm_diag.status.name, 'COMPLETED')
+        self.assertTrue(e3sm_diag.postvalidate())
     
     def test_prevalidate_missing_output_path(self):
-        print '---- Starting Test: {} ----'.format(inspect.stack()[0][3])
+        print '\n'; print_message('---- Starting Test: {} ----'.format(inspect.stack()[0][3]), 'ok')
         start_year = 10
         end_year = 20
         set_string = '{start:04d}-{end:04d}'.format(
@@ -181,7 +186,7 @@ class TestE3SM(unittest.TestCase):
         self.assertEqual(e3sm_diag.status, JobStatus.INVALID)
     
     def test_completed(self):
-        print '---- Starting Test: {} ----'.format(inspect.stack()[0][3])
+        print '\n'; print_message('---- Starting Test: {} ----'.format(inspect.stack()[0][3]), 'ok')
         start_year = 1
         end_year = 10
         self.config['global']['project_path'] = '/p/user_pub/e3sm/baldwin32/E3SM_test_data/DECKv1b_1pctCO2_complete'
