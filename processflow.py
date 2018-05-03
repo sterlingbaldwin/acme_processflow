@@ -47,10 +47,6 @@ def main(test=False, **kwargs):
     """
     Processflow main
     """
-    if test:
-        print '=========================================='
-        print '---- Processflow running in test mode ----'
-        print '=========================================='
 
     # The master configuration object
     config = {}
@@ -71,15 +67,29 @@ def main(test=False, **kwargs):
     client = get_client()
 
     # Read in parameters from config
-    _args = kwargs['testargs'] if test else sys.argv[1:]
-    config, filemanager, runmanager = initialize(
-        argv=_args,
-        version=__version__,
-        branch=__branch__,
-        event_list=event_list,
-        thread_list=thread_list,
-        kill_event=thread_kill_event,
-        mutex=mutex)
+    if test:
+        print '=========================================='
+        print '---- Processflow running in test mode ----'
+        print '=========================================='
+        _args = kwargs['testargs']
+        config, filemanager, runmanager = initialize(
+            argv=_args,
+            version=__version__,
+            branch=__branch__,
+            event_list=event_list,
+            thread_list=thread_list,
+            kill_event=thread_kill_event,
+            mutex=mutex,
+            testing=True)
+    else:
+        config, filemanager, runmanager = initialize(
+            argv=sys.argv[1:],
+            version=__version__,
+            branch=__branch__,
+            event_list=event_list,
+            thread_list=thread_list,
+            kill_event=thread_kill_event,
+            mutex=mutex)
 
     if isinstance(config, int):
         print "Error in setup, exiting"
