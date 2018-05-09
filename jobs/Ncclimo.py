@@ -148,10 +148,6 @@ class Climo(object):
             self.status = JobStatus.COMPLETED
             return 0
 
-        if dryrun:
-            self.status = JobStatus.COMPLETED
-            return
-
         slurm = Slurm()
         msg = 'Submitting to queue {type}: {start:04d}-{end:04d}'.format(
             type=self.type,
