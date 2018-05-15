@@ -16,6 +16,7 @@ from lib.util import format_debug
 
 from lib.YearSet import YearSet, SetStatus
 from jobs.Ncclimo import Climo
+from jobs.Regrid import Regrid
 from jobs.Timeseries import Timeseries
 from jobs.AMWGDiagnostic import AMWGDiagnostic
 from jobs.APrimeDiags import APrimeDiags
@@ -151,6 +152,12 @@ class RunManager(object):
         atm_path = os.path.join(
             config['global']['input_path'],
             'atm')
+        lnd_path = os.path.join(
+            config['global']['input_path'],
+            'lnd')
+        ocn_path = os.path.join(
+            config['global']['input_path'],
+            'ocn')
         output_base_path = config['global']['output_path']
         run_scripts_path = config['global']['run_scripts_path']
         regrid_map_name = config['global']['remap_grid_name']
@@ -332,6 +339,94 @@ class RunManager(object):
                 # seasons=config['e3sm_diags']['seasons'],
                 backend=config['e3sm_diags']['backend'],
                 sets=config['e3sm_diags']['sets'])
+        
+        if required_jobs.get('regrid'):
+            # add the regrid job
+
+            # create output directories
+            for dtype, path in config['regrid']['data_types'].items():
+                if not isinstance(path, list):
+                    msg = 'each datatype in the regrid section must be in the form: <data_type> = \'<regrid_map_name>\', \'<regrid_map_path>\' '
+                    logging.error(msg)
+                    continue
+                if not os.path.exists(path[1]):
+                    msg = 'could not find regrid map at {}'.format(path[1])
+                    logging.errro(msg)
+                    continue
+                
+                # setup the output path
+                output_path = os.path.join(
+                    output_base_path,
+                    'pp',
+                    'regrid',
+                    path[0],
+                    set_string)
+                if not os.path.exists(output_path):
+                    os.makedirs(output_path)
+
+                # setup the input path
+                if dtype == 'lnd':
+                    input_path = lnd_path
+                elif dtype == 'atm':
+                    input_path = atm_path
+                elif dtype == 'ocn':
+                    input_path = ocn_path
+                else:
+                    msg = 'Unsupported regrid type'
+                    logging.error(msg)
+                    continue
+
+                self.add_regrid(
+                    start_year=year_set.set_start_year,
+                    end_year=year_set.set_end_year,
+                    year_set=year_set.set_number,
+                    input_path=input_path,
+                    output_path=output_path,
+                    regrid_map_path=path[1],
+                    data_type=dtype)
+    
+    def add_regrid(self, **kwargs):
+        """
+        Add a regrid job to the job_list
+        
+        Parameters:
+            start_year (int): the first year
+            end_year (int): the last year
+            year_set (int): the year set number
+            input_path (str): path to the input data
+            output_path (str): path to where to store the output
+            regrid_map_path (str): path to the regrid map
+            data_type (str): the type of data being regridded, either mpas, clm2, or cam
+        """
+        start_year = kwargs['start_year']
+        end_year = kwargs['end_year']
+        input_path = kwargs['input_path']
+        output_path = kwargs['output_path']
+        regird_map_path = kwargs['regird_map_path']
+        year_set = kwargs['year_set']
+        data_type = kwargs['data_type']
+
+        if not self._precheck(year_set, 'regrid', data_type):
+            return
+
+        config = {
+            'account': self.account,
+            'ui': self.ui,
+            'run_scripts_path': self.scripts_path,
+            'start_year': start_year,
+            'end_year': end_year,
+            'caseId': self.caseID,
+            'input_path': input_path,
+            'output_path': output_path,
+            'regrid_map_path': regird_map_path,
+            'year_set': year_set,
+            'data_type': data_type
+        }
+        regrid = Regrid(config)
+        msg = 'Adding Regrid to the job list: {}'.format(str(regrid))
+        logging.info(msg)
+        year_set.add_job(regrid)
+        self._job_total += 1
 
     def add_climo(self, **kwargs):
         """
@@ -700,7 +795,7 @@ class RunManager(object):
         year_set.add_job(e3sm_diag)
         self._job_total += 1
 
-    def _precheck(self, year_set, jobtype):
+    def _precheck(self, year_set, jobtype, data_type=None):
         """
         Check that the jobtype for that given yearset isnt
         already in the job_list
@@ -714,7 +809,11 @@ class RunManager(object):
         """
         for job in year_set.jobs:
             if job.type == jobtype:
-                return False
+                if job.type != 'regrid':
+                    return False
+                else: # regrid is the only job type that can have multiple instances in a year_set
+                    if job.data_type == data_type: # but only one instance per data type
+                        return False
         return True
 
     def start_ready_job_sets(self):

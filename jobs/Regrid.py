@@ -73,6 +73,10 @@ class Regrid(object):
         if config.get('ui') is None:
             config['ui'] = False
         
+        if config['data_type'] not in ['mpas', 'clm', 'cam']:
+            self.status = JobStatus.INVALID
+            return
+
         # Assuming monthly history files
         expected_files = list()
         for year in range(self.start_year, self.end_year + 1):
@@ -91,7 +95,7 @@ class Regrid(object):
                 start=self.start_year, end=seld.end_year, expected_files)
             logging.error(msg)
             self.status = JobStatus.INVALID
-            return 0
+            return
 
         self.slurm_args['account'] = self.config.get('account', '')
         if not os.path.exists(self.config.get('run_scripts_path')):
@@ -114,10 +118,17 @@ class Regrid(object):
 
         cmd = ['ncremap']
 
-        if self.config['data_type'] == 'clm':
+        if self.config['data_type'] == 'lnd':
             cmd += ['-P', 'clm']
-        elif self.config['data_type'] == 'mpas':
+        elif self.config['data_type'] == 'ocn':
             cmd += ['-P', 'mpas']
+        elif self.config['data_type'] == 'atm':
+            cmd += ['-P', 'alm']
+        else:
+            msg = 'Unsupported regrid type'
+            logging.error(msg)
+            self.status = FAILED
+            return 0
 
         cmd += ['-i', self.config['input_path'],
                 '-o', self.config['output_path'],
@@ -212,6 +223,10 @@ class Regrid(object):
             'depends_on': self.depends_on,
             'job_id': self.job_id,
         }, sort_keys=True, indent=4)
+
+    @property
+    def data_type(self):
+        return self.config['data_type']
 
     @property
     def type(self):

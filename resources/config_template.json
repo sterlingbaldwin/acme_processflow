@@ -39,5 +39,9 @@
         "test_atm_res",
         "test_mpas_mesh_name",
         "aprime_code_path"
+    ],
+    "regrid": [
+        "data_types",
+        "regrid_map_paths"
     ]
 }
