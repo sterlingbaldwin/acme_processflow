@@ -24,7 +24,7 @@ from lib.util import print_message
 from lib.util import print_debug
 from lib.util import transfer_directory
 
-__version__ = '1.1.1'
+__version__ = '1.1.3'
 __branch__ = 'master'
 
 # check for NCL

@@ -241,7 +241,7 @@ Please add a space and run again.'''.format(num=line_index)
         from imp import reload
         reload(logging)
     config['global']['log_path'] = log_path
-    log_level = logging.DEBUG if args.debug else logging.info
+    log_level = logging.DEBUG if args.debug else logging.INFO
     logging.basicConfig(
         format='%(asctime)s:%(levelname)s: %(message)s',
         datefmt='%m/%d/%Y %I:%M:%S %p',

@@ -88,7 +88,11 @@ class FileManager(object):
                 self.remote_path = os.sep.join(path_split[:index + 1])
                 break
         if not self.remote_path:
-            print "could not find remote path, is the case_id set correctly?"
+            print '###############################################################################'
+            print "# could not find remote path, were the case_id and source_path set correctly? #"
+            print '# if this is a purely local run, disreguard                                   #'
+            print '###############################################################################'
+            self.remote_path = '/dummy/path/{}'.format(self.experiment)
 
     def __str__(self):
         return str({
