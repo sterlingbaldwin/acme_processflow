@@ -14,7 +14,7 @@ data_files = [(sys.prefix + '/share/processflow/resources',
 
 setup(
     name="acme_processflow",
-    version="1.1.2",
+    version="1.1.3",
     author="Sterling Baldwin",
     author_email="baldwin32@llnl.gov",
     description="ACME Automated Processflow for handling post processing jobs for raw model data",
