@@ -140,7 +140,6 @@ class TestFileManager(unittest.TestCase):
             file_names = [x.name for x in DataFile.select().where(DataFile.datatype == _type)]
             if not len(file_names) == (simlength * 12):
                 print _type + ' does not have ' + str(simlength * 12) + ' files'
-                import ipdb; ipdb.set_trace()
             self.assertEqual(len(file_names), (simlength * 12))
     
             for year in range(simstart, simend + 1):
