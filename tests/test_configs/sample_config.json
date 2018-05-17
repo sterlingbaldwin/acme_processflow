@@ -1,0 +1,200 @@
+{
+    "global": {
+        "project_path": "",
+        "email": "YOUREMAIL@INSTITUION.GOV",
+        "native_grid_cleanup": "False",
+        "resource_dir": "/export/baldwin32/anaconda2/envs/flow/share/processflow/resources",
+        "ui": false,
+        "no_host": false,
+        "no_monitor": false,
+        "print_file_list": false,
+        "no_scripts": false,
+        "always_copy": false,
+        "custom_archive": false
+    },
+    "models": {
+        "model_1": {
+            "transfer_type": "globus",
+            "globus_uuid": "dummy_uuid",
+            "source_path": "/some/path/model_1",
+            "short_name": "mod1",
+            "start_year": "1",
+            "end_year": "5"
+        },
+        "model_2": {
+            "transfer_type": "sftp",
+            "source_hostname": "dummy.host.name",
+            "source_path": "/some/path/model_2",
+            "short_name": "mod2",
+            "start_year": "1",
+            "end_year": "10"
+        },
+        "model_3": {
+            "transfer_type": "local",
+            "short_name": "mod3",
+            "start_year": "1",
+            "end_year": "10"
+        },
+        "comparisons": {
+            "model_1": [
+                "obs",
+                "model_2"
+            ],
+            "model_2": [
+                "obs"
+            ],
+            "model_3": "all"
+        }
+    },
+    "file_types": {
+        "atm": {
+            "file_format": "CASEID.cam.h0.YEAR-MONTH.nc",
+            "remote_path": "SOURCE_PATH/archive/atm/hist",
+            "local_path": "PROJECT_PATH/input/MODEL/atm"
+        },
+        "lnd": {
+            "file_format": "CASEID.clm2.h0.YEAR-MONTH.nc",
+            "remote_path": "SOURCE_PATH/archive/lnd/hist",
+            "local_path": "PROJECT_PATH/input/MODEL/lnd"
+        },
+        "cice": {
+            "file_format": "mpascice.hist.am.timeSeriesStatsMonthly.YEAR-MONTH-01.nc",
+            "remote_path": "SOURCE_PATH/archive/ice/hist",
+            "local_path": "PROJECT_PATH/input/MODEL/ice"
+        },
+        "ocn": {
+            "file_format": "mpaso.hist.am.timeSeriesStatsMonthly.YEAR-MONTH-01.nc",
+            "remote_path": "SOURCE_PATH/archive/ocn/hist",
+            "local_path": "PROJECT_PATH/input/MODEL/ocn"
+        },
+        "ocn_restart": {
+            "file_format": "mpaso.rst.RESTART_YEAR-01-01_00000.nc",
+            "remote_path": "SOURCE_PATH/archive/rest/RESTART_YEAR-01-01-00000/",
+            "local_path": "PROJECT_PATH/input/MODEL/rest"
+        },
+        "cice_restart": {
+            "file_format": "mpascice.rst.RESTART_YEAR-01-01_00000.nc",
+            "remote_path": "SOURCE_PATH/archive/rest/RESTART_YEAR-01-01-00000/",
+            "local_path": "PROJECT_PATH/input/MODEL/rest"
+        },
+        "ocn_streams": {
+            "file_format": "streams.ocean",
+            "remote_path": "SOURCE_PATH/run",
+            "local_path": "PROJECT_PATH/input/MODEL/mpas"
+        },
+        "cice_streams": {
+            "file_format": "streams.cice",
+            "remote_path": "SOURCE_PATH/run",
+            "local_path": "PROJECT_PATH/input/MODEL/mpas"
+        },
+        "ocn_in": {
+            "file_format": "mpas-o_in",
+            "remote_path": "SOURCE_PATH/run",
+            "local_path": "PROJECT_PATH/input/MODEL/mpas"
+        },
+        "cice_in": {
+            "file_format": "mpas-cice_in",
+            "remote_path": "SOURCE_PATH/run",
+            "local_path": "PROJECT_PATH/input/MODEL/mpas"
+        },
+        "meridionalHeatTransport": {
+            "file_format": "mpaso.hist.am.meridionalHeatTransport.YEAR-MONTH-01.nc",
+            "remote_path": "SOURCE_PATH/archive/ocn/hist",
+            "local_path": "PROJECT_PATH/input/MODEL/mpas"
+        }
+    },
+    "img_hosting": {
+        "img_host_server": "https://acme-viewer.llnl.gov",
+        "host_directory": "/var/www/acme/acme-diags/",
+        "host_prefix": ""
+    },
+    "e3sm_diags": {
+        "host_directory": "e3sm-diags",
+        "backend": "mpl",
+        "reference_data_path": "/p/cscratch/acme/data/obs_for_acme_diags",
+        "sets": [
+            "3",
+            "4",
+            "5",
+            "7",
+            "13"
+        ],
+        "run_frequency": [
+            "5",
+            "10"
+        ]
+    },
+    "regrid": {
+        "run_frequency": "5",
+        "lnd": {
+            "source_grid_path": "/path/to/the/source/grid/file",
+            "destination_grid_path": "/path/to/the/destination/grid/file",
+            "destination_grid_name": "<some_name_for_the_regrid_output_directory>"
+        },
+        "atm": {
+            "source_grid_path": "/path/to/the/source/grid/file",
+            "destination_grid_path": "/path/to/the/destination/grid/file",
+            "destination_grid_name": "<some_name_for_the_regrid_output_directory>"
+        },
+        "ocn": {
+            "source_grid_path": "/path/to/the/source/grid/file",
+            "destination_grid_path": "/path/to/the/destination/grid/file",
+            "destination_grid_name": "<some_name_for_the_regrid_output_directory>"
+        }
+    },
+    "amwg": {
+        "diag_home": "/p/cscratch/acme/amwg/amwg_diag",
+        "host_directory": "amwg",
+        "run_frequency": "10"
+    },
+    "ncclimo": {
+        "regrid_map_path": "/p/cscratch/acme/data/map_ne30np4_to_fv129x256_aave.20150901.nc",
+        "run_frequency": [
+            "5",
+            "10"
+        ]
+    },
+    "timeseries": {
+        "run_frequency": "10",
+        "data_types": {
+            "atm": {
+                "var_list": [
+                    "FSNTOA",
+                    "FLUT",
+                    "FSNT",
+                    "FLNT",
+                    "FSNS",
+                    "FLNS",
+                    "SHFLX",
+                    "QFLX",
+                    "PRECC",
+                    "PRECL",
+                    "PRECSC",
+                    "PRECSL",
+                    "TS",
+                    "TREFHT"
+                ]
+            },
+            "lnd": {
+                "var_list": [
+                    "SOILICE",
+                    "SOILLIQ",
+                    "SOILWATER_10CM",
+                    "QINTR",
+                    "QOVER",
+                    "QRUNOFF",
+                    "QSOIL",
+                    "QVEGT",
+                    "TSOI"
+                ]
+            }
+        }
+    },
+    "aprime": {
+        "run_frequency": "10",
+        "host_directory": "aprime-diags",
+        "aprime_code_path": "/p/cscratch/acme/data/a-prime",
+        "test_atm_res": "ne30",
+        "test_mpas_mesh_name": "oEC60to30v3"
+    }
+}

@@ -461,50 +461,6 @@ def write_human_state(event_list, job_sets, mutex, state_path='run_state.txt', p
         logging.error(format_debug(e))
         return
 
-    if print_file_list:
-        head, _ = os.path.split(state_path)
-        file_list_path = os.path.join(head, 'file_list.txt')
-        if not os.path.exists(head):
-            os.makedirs(head)
-        with open(file_list_path, 'w') as fp:
-            mutex.acquire()
-            types = [x.datatype for x in DataFile.select(
-                DataFile.datatype).distinct()]
-            try:
-                for _type in types:
-                    fp.write('===================================\n')
-                    fp.write(_type + ':\n')
-                    datafiles = DataFile.select().where(DataFile.datatype == _type)
-                    for datafile in datafiles:
-
-                        filestr = '------------------------------------------'
-                        filestr += '\n     name: ' + datafile.name + '\n     local_status: '
-                        if datafile.local_status == 0:
-                            filestr += ' present, '
-                        elif datafile.local_status == 1:
-                            filestr += ' missing, '
-                        else:
-                            filestr += ' in transit, '
-                        filestr += '\n     remote_status: '
-                        if datafile.remote_status == 0:
-                            filestr += ' present'
-                        elif datafile.remote_status == 1:
-                            filestr += ' missing'
-                        else:
-                            filestr += ' in transit'
-                        filestr += '\n     local_size: ' + \
-                            str(datafile.local_size)
-                        filestr += '\n     local_path: ' + datafile.local_path
-                        filestr += '\n     remote_size: ' + \
-                            str(datafile.remote_size)
-                        filestr += '\n     remote_path: ' + datafile.remote_path + '\n'
-                        fp.write(filestr)
-            except Exception as e:
-                print_debug(e)
-            finally:
-                if mutex.locked():
-                    mutex.release()
-
 
 class colors:
     HEADER = '\033[95m'

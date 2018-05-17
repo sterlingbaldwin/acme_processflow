@@ -7,34 +7,20 @@ import random
 
 from time import sleep
 from peewee import *
-from globus_cli.commands.ls import _get_ls_res as get_ls
+from enum import IntEnum
 
 from models import DataFile
 from jobs.Transfer import Transfer
 from jobs.JobStatus import JobStatus
 from lib.YearSet import SetStatus
-from lib.util import (print_debug,
-                      print_line)
+from lib.util import print_debug
+from lib.util import print_line
 
-filestatus = {
-    'EXISTS': 0,
-    'NOT_EXIST': 1,
-    'IN_TRANSIT': 2
-}
 
-file_type_map = {
-    'atm': 'EXPERIMENT.cam.h0.YEAR-MONTH.nc',
-    'ice': 'mpascice.hist.am.timeSeriesStatsMonthly.YEAR-MONTH-01.nc',
-    'ocn': 'mpaso.hist.am.timeSeriesStatsMonthly.YEAR-MONTH-01.nc',
-    'lnd': 'EXPERIMENT.clm2.h0.YEAR-MONTH.nc',
-    'rest': 'mpaso.rst.YEAR-01-01_00000.nc',
-    'mpascice.rst': 'mpascice.rst.YEAR-01-01_00000.nc',
-    'streams.ocean': 'streams.ocean',
-    'streams.cice': 'streams.cice',
-    'mpas-cice_in': 'mpas-cice_in',
-    'mpas-o_in': 'mpas-o_in',
-    'meridionalHeatTransport': 'mpaso.hist.am.meridionalHeatTransport.YEAR-MONTH-01.nc',
-}
+class FileStatus(IntEnum):
+    PRESENT = 0
+    NOT_PRESENT = 1
+    IN_TRANSIT = 2
 
 
 class FileManager(object):
@@ -42,26 +28,20 @@ class FileManager(object):
     Manage all files required by jobs
     """
 
-    def __init__(self, database=None, types=None, sta=False, ui=False, **kwargs):
+    def __init__(self, mutex, event_list, config, database='processflow.db', ui=False):
         """
         Parameters:
             mutex (theading.Lock) the mutext for accessing the database
-            sta (bool) is this run short term archived or not (1) yes (0) no
-            types (list(str)): A list of strings of datatypes
             database (str): the path to where to create the sqlite database file
-            remote_endpoint (str): the Globus UUID for the remote endpoint
-            remote_path (str): the base directory to search for this runs model output
-            local_endpoint (str): The Globus UUID for the local endpoint
-            local_path (str): the local project path
+            config (dict): the global configuration dict
         """
-        self.mutex = kwargs['mutex']
-        self.event_list = kwargs['event_list']
-        self.ui = ui
-        self.sta = sta
-        self.updated_rest = False
-        self.types = types if isinstance(types, list) else [types]
-        self.active_transfers = 0
-        self.db_path = database
+        self._mutex = mutex
+        self._event_list = event_list
+        self._ui = ui
+        self._active_transfers = 0
+        self._db_path = database
+        self._config = config
+
         if os.path.exists(database):
             os.remove(database)
 
@@ -73,297 +53,166 @@ class FileManager(object):
         DataFile.create_table() 
         if self.mutex.locked():
             self.mutex.release()
-        self.remote_endpoint = kwargs.get('remote_endpoint')
-        self.local_path = kwargs.get('local_path')
-        self.local_endpoint = kwargs.get('local_endpoint')
-        self.start_year = 0
-        self.custom_archive = kwargs.get('custom_archive')
-        self.experiment = kwargs.get('experiment')
-        
-        
-        self.remote_path = None
-        path_split = kwargs.get('remote_path').split(os.sep)
-        for index, val in enumerate(path_split):
-            if val == self.experiment:
-                self.remote_path = os.sep.join(path_split[:index + 1])
-                break
-        if not self.remote_path:
-            print '###############################################################################'
-            print "# could not find remote path, were the case_id and source_path set correctly? #"
-            print '# if this is a purely local run, disreguard                                   #'
-            print '###############################################################################'
-            self.remote_path = '/dummy/path/{}'.format(self.experiment)
 
     def __str__(self):
+        # TODO: make this better
         return str({
-            'short term archive': self.sta,
-            'active_transfers': self.active_transfers,
-            'remote_path': self.remote_path,
-            'remote_endpoint': self.remote_endpoint,
-            'local_path': self.local_path,
-            'local_endpoint': self.local_endpoint,
             'db_path': self.db_path
         })
-
-    def populate_handle_rest(self, simstart, newfiles):
+    
+    def write_database(self, output_path):
         """
-        Add the restart files to the newfiles list to be added to the db
+        Write out a human readable version of the database for debug purposes
         """
+        file_list_path = os.path.join(
+            self._config['output_path'],
+            'file_list.txt')
+        with open(file_list_path, 'w') as fp:
+            self._mutex.acquire()
+            try:
+                for model in self._config['models']:
+                    if model == 'comparisons':
+                        continue
+                fp.write('+++++++++++++++++++++++++++++++++++++++++++++')
+                fp.write('      {model}'.format(model=model))
+                fp.write('+++++++++++++++++++++++++++++++++++++++++++++')
+                q = (DataFile
+                        .select(DataFile.datatype)
+                        .where(DataFile.model == model)
+                        .distinct())
+                for _type in q.execute():
+                    fp.write('===================================\n')
+                    fp.write('\t' + _type + ':\n')
+                    datafiles = DataFile.select().where(DataFile.datatype == _type)
+                    for datafile in datafiles:
 
-        # First add the mpaso.rst
-        name = file_type_map['rest'].replace(
-            'YEAR', '{:04d}'.format(simstart + 1))
-        local_path = os.path.join(
-            self.local_path,
-            'rest',
-            name)
-        head, tail = os.path.split(local_path)
-        if not os.path.exists(head):
-            os.makedirs(head)
+                        filestr = '------------------------------------------'
+                        filestr += '\n\t     name: ' + datafile.name + '\n     local_status: '
+                        if datafile.local_status == 0:
+                            filestr += ' present, '
+                        elif datafile.local_status == 1:
+                            filestr += ' missing, '
+                        else:
+                            filestr += ' in transit, '
+                        filestr += '\n\t     remote_status: '
+                        if datafile.remote_status == 0:
+                            filestr += ' present'
+                        elif datafile.remote_status == 1:
+                            filestr += ' missing'
+                        else:
+                            filestr += ' in transit'
+                        filestr += '\n\t     local_size: ' + \
+                            str(datafile.local_size)
+                        filestr += '\n\t     local_path: ' + datafile.local_path
+                        filestr += '\n\t     remote_size: ' + \
+                            str(datafile.remote_size)
+                        filestr += '\n\t     remote_path: ' + datafile.remote_path + '\n'
+                        fp.write(filestr)
+            except Exception as e:
+                print_debug(e)
+            finally:
+                if mutex.locked():
+                    mutex.release()
 
-        if self.sta:
-            if self.custom_archive:
-                remote_path = os.path.join(
-                    self.custom_archive,
-                    'rest',
-                    '{year:04d}-01-01-00000'.format(year=simstart + 1),
-                    name)
-            else:
-                remote_path = os.path.join(
-                    self.remote_path,
-                    'archive',
-                    'rest',
-                    '{year:04d}-01-01-00000'.format(year=simstart + 1),
-                    name)
-        else:
-            remote_path = os.path.join(
-                self.remote_path,
-                'run',
-                name)
-        newfiles = self._add_file(
-            newfiles=newfiles,
-            name=name,
-            local_path=local_path,
-            remote_path=remote_path,
-            _type='rest')
-
-        # Second add the mpascice.rst
-        name = file_type_map['mpascice.rst'].replace(
-            'YEAR', '{:04d}'.format(simstart + 1))
-        local_path = os.path.join(
-            self.local_path,
-            'rest',
-            name)
-
-        if self.sta:
-            if self.custom_archive:
-                remote_path = os.path.join(
-                    self.custom_archive,
-                    'rest',
-                    '{year:04d}-01-01-00000'.format(year=simstart + 1),
-                    name)
-            else:
-                remote_path = os.path.join(
-                    self.remote_path,
-                    'archive',
-                    'rest',
-                    '{year:04d}-01-01-00000'.format(year=simstart + 1),
-                    name)
-        else:
-            remote_path = os.path.join(
-                self.remote_path,
-                'run',
-                name)
-        newfiles = self._add_file(
-            newfiles=newfiles,
-            name=name,
-            local_path=local_path,
-            remote_path=remote_path,
-            _type='mpascice.rst')
-
-    def populate_handle_mpas(self, _type, newfiles):
+    def render_string(self, instring, **kwargs):
         """
-        Populate the file table with the streams.ocean, streams.cice, mpas-o_in, and mpas-cice_in files
-        which are found in the run directory even if sta is on
+        take a list of keyword arguments and replace uppercase instances of them in the input string
         """
-        local_path = os.path.join(
-            self.local_path,
-            'mpas',
-            _type)
-        head, tail = os.path.split(local_path)
-        if not os.path.exists(head):
-            os.makedirs(head)
+        for string, val in kwargs.items():
+            if string.uppper() in instring:
+                instring = instring.replace(string.upper(), val)
+        return instring
 
-        remote_path = os.path.join(self.remote_path, 'run', _type)
-        newfiles = self._add_file(
-            newfiles=newfiles,
-            name=_type,
-            local_path=local_path,
-            remote_path=remote_path,
-            _type=_type)
-
-    def populate_heat_transport(self, newfiles):
-        name = 'mpaso.hist.am.meridionalHeatTransport.{year:04d}-02-01.nc'.format(
-            year=self.start_year)
-        local_path = os.path.join(
-            self.local_path,
-            'mpas',
-            name)
-        head, tail = os.path.split(local_path)
-        if not os.path.exists(head):
-            os.makedirs(head)
-
-        if self.sta:
-            if self.custom_archive:
-                remote_path = os.path.join(
-                    self.custom_archive,
-                    'ocn',
-                    'hist',
-                    name)
-            else:
-                remote_path = os.path.join(
-                    self.remote_path,
-                    'archive',
-                    'ocn',
-                    'hist',
-                    name)
-        else:
-            remote_path = os.path.join(
-                self.remote_path,
-                'run',
-                name)
-
-        newfiles = self._add_file(
-            newfiles=newfiles,
-            name=name,
-            local_path=local_path,
-            remote_path=remote_path,
-            _type='meridionalHeatTransport')
-
-    def populate_monthly(self, _type, newfiles, simstart, simend, experiment):
-        local_base = os.path.join(
-            self.local_path, _type)
-        if not os.path.exists(local_base):
-            os.makedirs(local_base)
-
-        for year in xrange(simstart, simend + 1):
-            for month in xrange(1, 13):
-                name = (file_type_map[_type]
-                            .replace('EXPERIMENT', experiment)
-                            .replace('YEAR', '{0:04d}'.format(year))
-                            .replace('MONTH', '{0:02d}'.format(month)))
-
-                local_path = os.path.join(
-                    local_base, name)
-                
-                if self.sta:
-                    if self.custom_archive:
-                        remote_path = os.path.join(
-                            self.custom_archive,
-                            _type,
-                            'hist',
-                            name)
-                    else:
-                        remote_path = os.path.join(
-                            self.remote_path,
-                            'archive',
-                            _type,
-                            'hist',
-                            name)
-                else:
-                    remote_path = os.path.join(
-                        self.remote_path,
-                        'run',
-                        name)
-                newfiles = self._add_file(
-                    newfiles=newfiles,
-                    name=name,
-                    local_path=local_path,
-                    remote_path=remote_path,
-                    _type=_type,
-                    year=year,
-                    month=month)
-
-    def populate_file_list(self, simstart, simend, experiment):
+    def populate_file_list(self):
         """
         Populate the database with the required DataFile entries
-
-        Parameters:
-            simstart (int): the start year of the simulation,
-            simend (int): the end year of the simulation,
-            experiment (str): the name of the experiment
-                ex: 20170915.beta2.A_WCYCL1850S.ne30_oECv3_ICG.edison
         """
+        import ipdb; ipdb.set_trace()
         msg = 'Creating file table'
         print_line(
             ui=False,
             line=msg,
             event_list=self.event_list)
-        if self.sta:
-            msg = 'Using short term archive'
-        else:
-            msg = 'Short term archive turned off'
-        print_line(
-            ui=self.ui,
-            line=msg,
-            event_list=self.event_list)
-        if not self.start_year:
-            self.start_year = simstart
-        newfiles = []
+        newfiles = list()
         with DataFile._meta.database.atomic():
-            for _type in self.types:
-                if _type not in file_type_map:
-                    continue
-                if _type == 'rest':
-                    self.populate_handle_rest(simstart, newfiles)
-                elif _type in ['streams.ocean', 'streams.cice', 'mpas-o_in', 'mpas-cice_in']:
-                    self.populate_handle_mpas(_type, newfiles)
-                elif _type == 'meridionalHeatTransport':
-                    self.populate_heat_transport(newfiles)
-                else:
-                    self.populate_monthly(
-                        _type, newfiles, simstart, simend, experiment)
-            msg = 'Inserting file data into the table'
-            print_line(
-                ui=self.ui,
-                line=msg,
-                event_list=self.event_list)
             self.mutex.acquire()
-            try:
-                step = 50
-                for idx in range(0, len(newfiles), step):
-                    DataFile.insert_many(newfiles[idx: idx + step]).execute()
-            except Exception as e:
-                print_debug(e)
-            finally:
-                if self.mutex.locked():
-                    self.mutex.release()
+            for model in self._config['models']:
+                if model == 'comparisons':
+                    continue
+                for _type in self._config['file_types']:
+                    if self._config['file_types'][_type].get(model):
+                        source_path = self._config['file_types'][_type][model]['remote_path']
+                    else:
+                        source_path = self._config['file_types'][_type]['remote_path']
+                    replace = {
+                        'project_path': self._config['project_path'],
+                        'source_path': remote_path,
+                        'caseid': model,
+                        'restart_year': int(self._config['models'][model]['start_year']) + 1
+                    }
+                    new_files = list()
+                    if self._config['file_types'][_type].get('monthly'):
+                        # TODO: handle monthly output
+                        start_year = self._config['models'][model]['start_year']
+                        end_year = self._config['models'][model]['end_year']
+                        for year in range(start_year, end_year + 1):
+                            for month in range(1, 13):
+                                replace['year'] = '{:04d}'.format(year)
+                                replace['month'] = '{:02d}'.format(month)
+                            filename = self.render_string(
+                                self._config['file_types'][_type]['file_format'],
+                                **replace)
+                            remote_path = self.render_string(
+                                self._config['file_types'][_type][model]['remote_path'],
+                                **replace)
+                            filename = self.render_string(
+                                self._config['file_types'][_type]['local_path'],
+                                **replace)
+                            new_files.append({
+                                'filename': filename,
+                                'remote_path': remote_path,
+                                'local_path': local_path,
+                                'local_status': FileStatus.NOT_PRESENT,
+                                'model': model,
+                                'remote_status': FileStatus.NOT_PRESENT,
+                                'year': year,
+                                'month': month,
+                                'datatype': _type,
+                                'remote_size': 0,
+                                'local_size': 0
+                            })
+                    else:
+                        filename = self.render_string(
+                            self._config['file_types'][_type]['file_format'],
+                            **replace)
+                        remote_path = self.render_string(
+                            self._config['file_types'][_type][model]['remote_path'],
+                            **replace)
+                        filename = self.render_string(
+                            self._config['file_types'][_type]['local_path'],
+                            **replace)
+                        new_files.append({
+                            'filename': filename,
+                            'remote_path': remote_path,
+                            'local_path': local_path,
+                            'local_status': FileStatus.NOT_PRESENT,
+                            'model': model,
+                            'remote_status': FileStatus.NOT_PRESENT,
+                            'year': 0,
+                            'month': 0,
+                            'datatype': _type,
+                            'remote_size': 0,
+                            'local_size': 0
+                        })
+                    DataFile.insert_many(new_files).execute()
+
+            if self.mutex.locked():
+                self.mutex.release()
             msg = 'Database update complete'
             print_line(
                 ui=self.ui,
                 line=msg,
                 event_list=self.event_list)
-
-    def _add_file(self, newfiles, **kwargs):
-        local_status = filestatus['EXISTS'] \
-            if os.path.exists(kwargs['local_path']) \
-            else filestatus['NOT_EXIST']
-        local_size = os.path.getsize(kwargs['local_path']) \
-            if local_status == filestatus['EXISTS'] \
-            else 0
-        newfiles.append({
-            'name': kwargs['name'],
-            'local_path': kwargs['local_path'],
-            'local_status': local_status,
-            'local_size': local_size,
-            'remote_path': kwargs['remote_path'],
-            'remote_status': filestatus['NOT_EXIST'],
-            'remote_size': 0,
-            'year': kwargs.get('year', 0),
-            'month': kwargs.get('month', 0),
-            'datatype': kwargs['_type']
-        })
-        return newfiles
 
     def print_db(self):
         self.mutex.acquire()
@@ -373,6 +222,7 @@ class FileManager(object):
                 'local_path': df.local_path,
                 'remote_path': df.remote_path
             }
+        self.mutex.release()
 
     def update_remote_status(self, client):
         """

@@ -4,6 +4,7 @@ database = SqliteDatabase(None)  # Defer initialization
 
 
 class DataFile(Model):
+    model = CharField()
     name = CharField()
     local_path = CharField()
     local_status = IntegerField()
