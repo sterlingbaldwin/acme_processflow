@@ -6,6 +6,7 @@ from datetime import datetime
 from threading import Thread
 from shutil import copytree, move, copytree, rmtree, copy2
 from subprocess import Popen
+from time import sleep
 
 from lib.slurm import Slurm
 from lib.util import get_climo_output_files
@@ -43,6 +44,12 @@ class RunManager(object):
         self.scripts_path = scripts_path
         self._resource_path = resource_path
         self.max_running_jobs = self.slurm.get_node_number() * 6
+        while self.max_running_jobs == 0:
+            sleep(1)
+            msg = 'no slurm nodes found, checking again'
+            logging.error(msg)
+            self.max_running_jobs = self.slurm.get_node_number() * 6
+
         self.no_host = no_host
         self.url_prefix = url_prefix
         self._job_total = 0
@@ -344,7 +351,10 @@ class RunManager(object):
             # add the regrid job
 
             # create output directories
-            for dtype, path in config['regrid']['data_types'].items():
+            for data_type in config['regrid']['data_types']:
+                src_grid_path = config['regrid']['data_types'][data_type]['source_grid_path']
+                dst_grid_path = config['regrid']['data_types'][data_type]['destination_grid_path']
+                dst_grid_name = config['regrid']['data_types'][data_type]['destination_grid_name']
                 if not isinstance(path, list):
                     msg = 'each datatype in the regrid section must be in the form: <data_type> = \'<regrid_map_name>\', \'<regrid_map_path>\' '
                     logging.error(msg)
@@ -359,7 +369,7 @@ class RunManager(object):
                     output_base_path,
                     'pp',
                     'regrid',
-                    path[0],
+                    dst_grid_name,
                     set_string)
                 if not os.path.exists(output_path):
                     os.makedirs(output_path)
@@ -367,10 +377,13 @@ class RunManager(object):
                 # setup the input path
                 if dtype == 'lnd':
                     input_path = lnd_path
+                    file_type = 'clm2.h0'
                 elif dtype == 'atm':
                     input_path = atm_path
+                    file_type = 'cam.h0'
                 elif dtype == 'ocn':
                     input_path = ocn_path
+                    file_type = 'mpaso.hist.am.globalStats'
                 else:
                     msg = 'Unsupported regrid type'
                     logging.error(msg)
@@ -379,11 +392,15 @@ class RunManager(object):
                 self.add_regrid(
                     start_year=year_set.set_start_year,
                     end_year=year_set.set_end_year,
-                    year_set=year_set.set_number,
+                    year_set=year_set,
                     input_path=input_path,
                     output_path=output_path,
                     regrid_map_path=path[1],
-                    data_type=dtype)
+                    data_type=dtype,
+                    file_type=file_type,
+                    source_grid_path=src_grid_path,
+                    destination_grid_path=dst_grid_path,
+                    destination_grid_name=dst_grid_name)
     
     def add_regrid(self, **kwargs):
         """
@@ -392,19 +409,21 @@ class RunManager(object):
         Parameters:
             start_year (int): the first year
             end_year (int): the last year
-            year_set (int): the year set number
+            year_set (YearSet): the year set that holds this job
             input_path (str): path to the input data
             output_path (str): path to where to store the output
             regrid_map_path (str): path to the regrid map
             data_type (str): the type of data being regridded, either mpas, clm2, or cam
+            file_type (str): the file name member for this data type, for example atm would be cam.h0
         """
         start_year = kwargs['start_year']
         end_year = kwargs['end_year']
         input_path = kwargs['input_path']
         output_path = kwargs['output_path']
-        regird_map_path = kwargs['regird_map_path']
+        regrid_map_path = kwargs['regrid_map_path']
         year_set = kwargs['year_set']
         data_type = kwargs['data_type']
+        file_type = kwargs['file_type']
 
         if not self._precheck(year_set, 'regrid', data_type):
             return
@@ -418,11 +437,12 @@ class RunManager(object):
             'caseId': self.caseID,
             'input_path': input_path,
             'output_path': output_path,
-            'regrid_map_path': regird_map_path,
-            'year_set': year_set,
-            'data_type': data_type
+            'regrid_map_path': regrid_map_path,
+            'year_set': year_set.set_number,
+            'data_type': data_type,
+            'file_type': file_type
         }
-        regrid = Regrid(config)
+        regrid = Regrid(config, event_list=self.event_list)
         msg = 'Adding Regrid to the job list: {}'.format(str(regrid))
         logging.info(msg)
         year_set.add_job(regrid)
@@ -863,7 +883,7 @@ class RunManager(object):
                         continue
 
                     if self.check_max_running_jobs():
-                        msg = 'Too many jobs are running, waiting for the queue to shrink before submitting'
+                        msg = 'Too {} jobs are running, waiting for the queue to shrink before submitting'.format(self.max_running_jobs)
                         logging.info(msg)
                         return
                     msg = "{job}-{start:04d}-{end:04d}: Starting job setup and execute".format(
