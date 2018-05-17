@@ -27,7 +27,6 @@ def parse_args(argv=None, print_help=None):
     parser = argparse.ArgumentParser()
     parser.add_argument(
         '-c', '--config',
-        required=True,
         help='Path to configuration file.')
     parser.add_argument(
         '-v', '--version',
@@ -299,6 +298,8 @@ Please add a space and run again.'''.format(num=line_index)
         'tmp')
     config['global']['tmp_path'] = tmp_path
     if os.path.exists(tmp_path):
+        msg = 'removing previous temp directory {}'.format(tmp_path)
+        logging.debug(msg)
         rmtree(tmp_path)
     os.makedirs(tmp_path)
 
