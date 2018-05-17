@@ -147,7 +147,7 @@ class Timeseries(object):
         file_list.sort()
         list_string = ' '.join(file_list)
         slurm_command = ' '.join([
-            '~zender1/bin/ncclimo',
+            'ncclimo',
             '-a', self.config['annual_mode'],
             '-c', self.config['caseId'],
             '-v', ','.join(self.config['var_list']),
