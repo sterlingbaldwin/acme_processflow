@@ -14,10 +14,10 @@ from bs4 import BeautifulSoup
 from lib.events import EventList
 from lib.slurm import Slurm
 from JobStatus import JobStatus, StatusMap
-from lib.util import (render,
-                      print_debug,
-                      print_line,
-                      format_debug)
+from lib.util import render
+from lib.util import print_debug
+from lib.util import print_line
+from lib.util import format_debug
 
 
 class APrimeDiags(object):
@@ -98,7 +98,6 @@ class APrimeDiags(object):
             msg = 'Creating input directory at {}'.format(
                 self.config['input_path'])
             print_line(
-                ui=self.config.get('ui', False),
                 line=msg,
                 event_list=self.event_list,
                 current_state=True)
@@ -323,7 +322,6 @@ class APrimeDiags(object):
         msg = 'All links found for aprime-{start:04d}-{end:04d}'.format(
             start=self.start_year, end=self.end_year)
         print_line(
-            ui=self.config.get('ui', False),
             line=msg,
             event_list=self.event_list,
             current_state=True)
@@ -467,7 +465,6 @@ class APrimeDiags(object):
             start=self.start_year,
             end=self.end_year)
         print_line(
-            ui=self.config.get('ui', False),
             line=msg,
             event_list=self.event_list,
             current_state=True)
