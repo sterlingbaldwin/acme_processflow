@@ -14,12 +14,12 @@ from bs4 import BeautifulSoup
 from JobStatus import JobStatus, StatusMap
 from lib.slurm import Slurm
 from lib.events import EventList
-from lib.util import (print_debug,
-                      print_message,
-                      create_symlink_dir,
-                      render,
-                      print_line,
-                      get_climo_output_files)
+from lib.util import print_debug
+from lib.util import print_message
+from lib.util import create_symlink_dir
+from lib.util import render
+from lib.util import print_line
+from lib.util import get_climo_output_files
 
 
 class AMWGDiagnostic(object):
@@ -174,7 +174,6 @@ class AMWGDiagnostic(object):
             msg = 'amwg-{start:04d}-{end:04d}: missing {len} links'.format(
                 start=self.start_year, end=self.end_year, len=len(missing_links))
             print_line(
-                ui=self.config.get('ui', False),
                 line=msg,
                 event_list=self.event_list)
             msg = 'amwg-{start:04d}-{end:04d}: missing the following links'.format(
@@ -212,7 +211,6 @@ did you add ncclimo to this year_set?
                                                 end=self.end_year,
                                                 path=regrid_path)
             print_line(
-                ui=self.config.get('ui', False),
                 line=msg,
                 event_list=self.event_list)
             self.status = JobStatus.FAILED
@@ -220,7 +218,6 @@ did you add ncclimo to this year_set?
         if not os.path.exists(self.config['test_path_climo']):
             msg = 'creating temp directory for amwg'
             print_line(
-                ui=self.config.get('ui', False),
                 line=msg,
                 event_list=self.event_list,
                 current_state=True)
@@ -280,7 +277,6 @@ did you add ncclimo to this year_set?
             start=self.start_year,
             end=self.end_year)
         print_line(
-            ui=self.config.get('ui', False),
             line=msg,
             event_list=self.event_list,
             current_state=True)

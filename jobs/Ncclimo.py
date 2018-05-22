@@ -15,11 +15,11 @@ from datetime import datetime
 from lib.events import EventList
 from lib.slurm import Slurm
 from JobStatus import JobStatus
-from lib.util import (print_debug,
-                      print_message,
-                      cmd_exists,
-                      get_climo_output_files,
-                      print_line)
+from lib.util import print_debug
+from lib.util import print_message
+from lib.util import cmd_exists
+from lib.util import get_climo_output_files
+from lib.util import print_line
 
 
 class Climo(object):
@@ -80,7 +80,6 @@ class Climo(object):
                 msg = 'Argument {} missing for Ncclimo, prevalidation failed'.format(
                     i)
                 print_line(
-                    ui=self.config.get('ui', False),
                     line=msg,
                     event_list=self.event_list)
                 break
@@ -154,7 +153,6 @@ class Climo(object):
             start=self.start_year,
             end=self.end_year)
         print_line(
-            ui=self.config.get('ui', False),
             line=msg,
             event_list=self.event_list,
             current_state=True)

@@ -16,10 +16,10 @@ from datetime import datetime
 from lib.events import EventList
 from lib.slurm import Slurm
 from JobStatus import JobStatus
-from lib.util import (print_debug,
-                      print_message,
-                      cmd_exists,
-                      print_line)
+from lib.util import print_debug
+from lib.util import print_message
+from lib.util import cmd_exists
+from lib.util import print_line
 
 
 class Timeseries(object):

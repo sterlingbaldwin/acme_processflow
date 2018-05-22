@@ -11,10 +11,10 @@ from shutil import copyfile
 from lib.events import EventList
 from lib.slurm import Slurm
 from JobStatus import JobStatus, StatusMap
-from lib.util import (render,
-                      get_climo_output_files,
-                      create_symlink_dir,
-                      print_line)
+from lib.util import render
+from lib.util import get_climo_output_files
+from lib.util import create_symlink_dir
+from lib.util import print_line
 
 
 class E3SMDiags(object):
@@ -245,7 +245,6 @@ class E3SMDiags(object):
             start=self.start_year,
             end=self.end_year)
         print_line(
-            ui=self.config.get('ui', False),
             line=msg,
             event_list=self.event_list,
             current_state=True)
