@@ -4,7 +4,7 @@ database = SqliteDatabase(None)  # Defer initialization
 
 
 class DataFile(Model):
-    model = CharField()
+    case = CharField()
     name = CharField()
     local_path = CharField()
     local_status = IntegerField()
@@ -15,6 +15,9 @@ class DataFile(Model):
     datatype = CharField()
     remote_size = IntegerField()
     local_size = IntegerField()
+    transfer_type = CharField()
+    remote_uuid = CharField()
+    remote_hostname = CharField()
 
     class Meta:
         database = database
