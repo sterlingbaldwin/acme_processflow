@@ -10,18 +10,13 @@ from time import sleep
 from datetime import datetime
 from string import Formatter
 
-from globus_cli.commands.login import do_link_login_flow, check_logged_in
-from globus_cli.commands.ls import _get_ls_res as get_ls
-from globus_cli.services.transfer import get_client
-from globus_sdk import TransferData
-
 from jobs.JobStatus import ReverseMap, JobStatus
 from YearSet import SetStatusMap
 from mailer import Mailer
 from models import DataFile
 
 
-def print_line(ui, line, event_list, current_state=False, ignore_text=False):
+def print_line(line, event_list, current_state=False, ignore_text=False):
     """
     Prints a message to either the console, the event_list, or the current event
 
@@ -33,126 +28,17 @@ def print_line(ui, line, event_list, current_state=False, ignore_text=False):
         ignore_text (bool): should this be printed to the console if in text mode
     """
     logging.debug(line)
-    if ui:
-        if current_state:
-            event_list.replace(0, line)
-            event_list.push(line)
-        else:
-            event_list.push(line)
-    else:
-        if not ignore_text:
-            now = datetime.now()
-            timestr = '{hour}:{min}:{sec}'.format(
-                hour=now.strftime('%H'),
-                min=now.strftime('%M'),
-                sec=now.strftime('%S'))
-            msg = '{time}: {line}'.format(
-                time=timestr,
-                line=line)
-            print msg
-            sys.stdout.flush()
-
-
-def transfer_directory(**kwargs):
-    """
-    Transfer all the contents from source_endpoint:src_path to destination_endpoint:dst_path
-
-    parameters:
-        source_endpoint (str) the globus UUID for the source files
-        destination_endpoint (str) the globus UUID for the destination
-        src_path (str) the path to the source directory to copy
-        dst_path (str) the path on the destination directory
-    """
-    src_path = kwargs['src_path']
-    event_list = kwargs['event_list']
-    event = kwargs['event']
-
-    client = get_client()
-    transfer = TransferData(
-        client,
-        kwargs['source_endpoint'],
-        kwargs['destination_endpoint'],
-        sync_level='checksum')
-    transfer.add_item(
-        source_path=src_path,
-        destination_path=kwargs['dst_path'],
-        recursive=True)
-    
-    try:
-        result = client.submit_transfer(transfer)
-        task_id = result['task_id']
-    except:
-        return False
-
-    head, directory_name = os.path.split(src_path)
-    msg = '{dir} transfer starting'.format(dir=directory_name)
-    print_line(
-        ui=False,
-        line=msg,
-        event_list=event_list,
-        current_state=True,
-        ignore_text=False)
-    retcode = 0
-    while True:
-        if event and event.is_set():
-            client.cancel_task(task_id)
-            return
-        status = client.get_task(task_id).get('status')
-        if status == 'SUCCEEDED':
-            msg = '{dir} transfer complete'.format(dir=directory_name)
-            retcode = 1
-            break
-        elif status == 'FAILED':
-            msg = '{dir} transfer FAILED'.format(dir=directory_name)
-            retcode = 0
-            break
-        else:
-            sleep(5)
-
-    print_line(
-        ui=False,
-        line=msg,
-        event_list=event_list,
-        current_state=True,
-        ignore_text=False)
-    return retcode
-
-
-def check_globus(**kwargs):
-    """
-    Check that the globus endpoints are not only active but will return information
-    about the paths we're interested in.
-
-    Im assuming that the endpoints have already been activated
-    """
-    try:
-        endpoints = [{
-            'type': 'source',
-            'id': kwargs['source_endpoint'],
-            'path': kwargs['source_path']
-        }, {
-            'type': 'destination',
-            'id': kwargs['destination_endpoint'],
-            'path': kwargs['destination_path']
-        }]
-    except Exception as e:
-        print_debug(e)
-
-    client = get_client()
-    try:
-        for endpoint in endpoints:
-            _ = get_ls(
-                client,
-                endpoint['path'],
-                endpoint['id'],
-                False, 0, False)
-    except Exception as e:
-        print_debug(e)
-        return False, endpoint
-    else:
-        print "----- Access granted -----"
-        return True, None
-
+    if not ignore_text:
+        now = datetime.now()
+        timestr = '{hour}:{min}:{sec}'.format(
+            hour=now.strftime('%H'),
+            min=now.strftime('%M'),
+            sec=now.strftime('%S'))
+        msg = '{time}: {line}'.format(
+            time=timestr,
+            line=line)
+        print msg
+        sys.stdout.flush()
 
 def strfdelta(tdelta, fmt):
     """
@@ -175,125 +61,6 @@ def strfdelta(tdelta, fmt):
             d[i], rem = divmod(rem, l[i])
 
     return f.format(fmt, **d)
-
-
-def setup_globus(endpoints, ui=False, **kwargs):
-    """
-    Check globus login status and login as nessisary, then
-    iterate over a list of endpoints and activate them all
-
-    Parameters:
-       endpoints: list of strings containing globus endpoint UUIDs
-       ui: a boolean flag, true if running with the UI
-
-       kwargs:
-        event_list: the display event list to push user notifications
-        display_event: the thread event for the ui to turn off the ui for grabbing input for globus
-        src: an email address to send notifications to if running in ui=False mode
-        dst: a destination email address
-    return:
-       True if successful, False otherwise
-    """
-    message_sent = False
-    display_event = kwargs.get('display_event')
-
-    if not ui:
-        if kwargs.get('src') is None or kwargs.get('dst') is None:
-            logging.error('No source or destination given to setup_globus')
-            print "No email address found"
-            return False
-        mailer = Mailer(
-            src='processflowbot@llnl.gov',
-            dst=kwargs['dst'])
-
-    # First go through the globus login process
-    while not check_logged_in():
-        # if not in ui mode, send an email to the user with a link to log in
-        if not ui:
-            if kwargs.get('event_list'):
-                line = 'Waiting on user to log into globus, email sent to {addr}'.format(
-                    addr=kwargs['src'])
-                kwargs['event_list'].push(message=line)
-            if not message_sent:
-                status = 'Globus login needed'
-                message = 'Your automated post processing job requires you log into globus. Please ssh into {host} activate the environment and run {cmd}\n\n'.format(
-                    host=socket.gethostname(),
-                    cmd='"globus login"')
-                print 'sending login message to {}'.format(kwargs['src'])
-                message_sent = mailer.send(
-                    status=status,
-                    msg=message)
-            sleep(30)
-        # if in ui mode, set the display_event and ask for user input
-        else:
-            if ui:
-                display_event.set()
-            print '================================================'
-            do_link_login_flow()
-
-    if not endpoints:
-        if ui:
-            display_event.clear()
-        return True
-    if isinstance(endpoints, str):
-        endpoints = [endpoints]
-
-    message_sent = False
-    message_printed = False
-    activated = False
-    email_msg = ''
-    client = get_client()
-    while not activated:
-        activated = True
-        for endpoint in endpoints:
-            msg = 'activating endpoint {}'.format(endpoint)
-            logging.info(msg)
-            try:
-                r = client.endpoint_autoactivate(endpoint, if_expires_in=3600)
-            except Exception as e:
-                print_debug(e)
-                return False
-            logging.info(r['code'])
-            if r["code"] == "AutoActivationFailed":
-                activated = False
-                logging.info('endpoint autoactivation failed, going to manual')
-                server_document = client.endpoint_server_list(endpoint)
-                for server in server_document['DATA']:
-                    hostname = server["hostname"]
-                    break
-                message = """
-Data transfer server {server} requires manual activation.
-Please open the following URL in a browser to activate the endpoint:
-https://www.globus.org/app/endpoints/{endpoint}/activate
-
-""".format(endpoint=endpoint, server=server['hostname'])
-
-                if not ui:
-                    email_msg += message
-                else:
-                    raw_input("Press ENTER after activating the endpoint")
-                    r = client.endpoint_autoactivate(
-                        endpoint, if_expires_in=3600)
-                    if not r["code"] == "AutoActivationFailed":
-                        activated = True
-
-        if not activated:
-            if not message_sent:
-                print 'sending activation message to {}'.format(kwargs['dst'])
-                message_sent = mailer.send(
-                    status='Endpoint activation required',
-                    msg=email_msg)
-                if not message_sent:
-                    print "Error sending notification email"
-                    logging.error("Unable to send notification email")
-                    return False
-            if not message_printed:
-                print email_msg
-                message_printed = True
-            sleep(10)
-    if ui:
-        display_event.clear()
-    return True
 
 
 def get_climo_output_files(input_path, start_year, end_year):
@@ -340,7 +107,6 @@ def path_exists(config_items):
 def cmd_exists(cmd):
     return any(os.access(os.path.join(path, cmd), os.X_OK) for path in os.environ["PATH"].split(os.pathsep))
 
-
 def print_debug(e):
     """
     Print an exceptions relavent information
@@ -352,7 +118,6 @@ def print_debug(e):
     print '5', traceback.tb_lineno(sys.exc_info()[2])
     _, _, tb = sys.exc_info()
     print '6', traceback.print_tb(tb)
-
 
 def format_debug(e):
     """
@@ -373,7 +138,6 @@ def format_debug(e):
     exec_1=sys.exc_info()[1],
     lineno=traceback.tb_lineno(sys.exc_info()[2]),
     stack=traceback.print_tb(tb))
-
 
 def write_human_state(event_list, job_sets, mutex, state_path='run_state.txt', print_file_list=False):
     """
@@ -461,7 +225,6 @@ def write_human_state(event_list, job_sets, mutex, state_path='run_state.txt', p
         logging.error(format_debug(e))
         return
 
-
 class colors:
     HEADER = '\033[95m'
     OKBLUE = '\033[94m'
@@ -471,7 +234,6 @@ class colors:
     ENDC = '\033[0m'
     BOLD = '\033[1m'
     UNDERLINE = '\033[4m'
-
 
 def print_message(message, status='error'):
     """
@@ -484,7 +246,6 @@ def print_message(message, status='error'):
         print colors.FAIL + '[-] ' + colors.ENDC + colors.BOLD + str(message) + colors.ENDC
     elif status == 'ok':
         print colors.OKGREEN + '[+] ' + colors.ENDC + str(message)
-
 
 def render(variables, input_path, output_path, delimiter='%%'):
     """
@@ -548,7 +309,6 @@ def render(variables, input_path, output_path, delimiter='%%'):
         outfile.write(rendered_string)
     return True
 
-
 def create_symlink_dir(src_dir, src_list, dst):
     """
     Create a directory, and fill it with symlinks to all the items in src_list
@@ -569,7 +329,6 @@ def create_symlink_dir(src_dir, src_list, dst):
         except Exception as e:
             msg = format_debug(e)
             logging.error(msg)
-
 
 def thread_sleep(seconds, event):
     """
