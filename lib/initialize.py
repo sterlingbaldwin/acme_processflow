@@ -8,19 +8,18 @@ import argparse
 
 from pprint import pformat
 from shutil import rmtree, copy
-
 from configobj import ConfigObj
-from YearSet import YearSet, SetStatus
 from shutil import copyfile
+
+from YearSet import YearSet, SetStatus
 from lib.filemanager import FileManager
 from lib.runmanager import RunManager
 from lib.mailer import Mailer
 from jobs.JobStatus import JobStatus
-from util import (setup_globus,
-                  check_globus,
-                  print_message,
-                  print_debug,
-                  print_line)
+from lib.globus_interface import setup_globus
+from util import print_message
+from util import print_debug
+from util import print_line
 
 
 def parse_args(argv=None, print_help=None):
@@ -48,8 +47,8 @@ def parse_args(argv=None, print_help=None):
         help='Don\'t run the remote monitor or move any files over globus.',
         action='store_true')
     parser.add_argument(
-        '-s', '--no-scripts',
-        help='Don\'t copy the case_scripts directory from the remote machine.',
+        '-s', '--scripts',
+        help='Copy the case_scripts directory from the remote machine.',
         action='store_true')
     parser.add_argument(
         '-f', '--file-list',
@@ -109,7 +108,6 @@ def initialize(argv, **kwargs):
     mutex = kwargs['mutex']
     event = kwargs['kill_event']
     print_line(
-        ui=False,
         line='Entering setup',
         event_list=event_list,
         current_state=True)
@@ -157,14 +155,10 @@ Please add a space and run again.'''.format(num=line_index)
         return False, False, False
 
     # Setup boolean config flags
-    ui = args.ui
-    config['global']['ui'] = True if ui else False
-    config['global']['no_host'] = True if args.no_host else False
-    config['global']['no_monitor'] = True if args.no_monitor else False
+    config['global']['host'] = False if args.no_host else True
     config['global']['print_file_list'] = True if args.file_list else False
-    config['global']['no_scripts'] = True if args.no_scripts else False
+    config['global']['scripts'] = True if args.scripts else False
     config['global']['always_copy'] = True if args.always_copy else False
-    config['global']['custom_archive'] = args.custom_archive_path if args.custom_archive_path else False
 
     messages = verify_config(config)
     if messages:
@@ -177,35 +171,31 @@ Please add a space and run again.'''.format(num=line_index)
 
     if args.no_host or not config.get('img_hosting'):
         print_line(
-        ui=False,
-        line='Not hosting img output',
-        event_list=event_list,
-        current_state=True)
-
-    try:
-        setup_directories(args)
-    except Exception as e:
-        print_message('Failed to setup directories')
-        print_debug(e)
-        sys.exit(1)
-
-    # Copy the config into the input directory for safe keeping
-    input_config_path = os.path.join(
-        config['global']['input_path'], 'run.cfg')
-    try:
-        copy(args.config, input_config_path)
-    except:
-        pass
+            line='Not hosting img output',
+            event_list=event_list,
+            current_state=True)
+    
+    # setup input and output directories
+    input_path = os.path.join(
+        config['global']['project_path'],
+        'input')
+    if not os.path.exists(input_path):
+        os.makedirs(input_path)
+    output_path = os.path.join(
+        config['global']['project_path'],
+        'output')
+    if not os.path.exists(output_path):
+        os.makedirs(output_path)
 
     # setup logging
     if args.log:
         log_path = args.log
     else:
         log_path = os.path.join(
-            config.get('global').get('output_path'),
+            config['global']['project_path'],
+            'output',
             'processflow.log')
     print_line(
-        ui=ui,
         line='Log saved to {}'.format(log_path),
         event_list=event_list,
         current_state=True)
@@ -228,69 +218,84 @@ Please add a space and run again.'''.format(num=line_index)
         kwargs['branch'])
     logging.info(msg)
 
+    try:
+        setup_directories(args, config)
+    except Exception as e:
+        print_message('Failed to setup directories')
+        print_debug(e)
+        sys.exit(1)
+
+    # Copy the config into the input directory for safe keeping
+    input_config_path = os.path.join(
+        config['global']['input_path'], 'run.cfg')
+    try:
+        copy(args.config, input_config_path)
+    except:
+        pass
+
     if config['global']['always_copy']:
         msg = 'Running in forced-copy mode, all previous diagnostic output will be overwritten'
     else:
         msg = 'Running without forced-copy, previous diagnostic output will be preserved'
-    print_line(ui=ui,
-               line=msg,
-               event_list=event_list,
-               current_state=True)
+    print_line(
+        line=msg,
+        event_list=event_list,
+        current_state=True)
 
     # initialize the filemanager
     msg = 'Initializing file manager'
-    print_line(ui=ui,
-               line=msg,
-               event_list=event_list,
-               current_state=True)
-    filemanager = FileManager(
+    db = os.path.join(
+        config['global'].get('project_path'),
+        'output',
+        'processflow.db')
+    print_line(
+        line=msg,
         event_list=event_list,
-        ui=ui,
+        current_state=True)
+    filemanager = FileManager(
+        database=db,
+        event_list=event_list,
         mutex=mutex,
         config=config)
     filemanager.populate_file_list()
+    filemanager.write_database()
     print_line(
-        ui=ui,
         line='Starting local status update',
         event_list=event_list,
         current_state=True)
     filemanager.update_local_status()
     print_line(
-        ui=ui,
         line='Local status update complete',
         event_list=event_list,
         current_state=True)
+    filemanager.write_database()
     all_data = filemanager.all_data_local()
     if all_data:
         line = 'All data is local'
     else:
         line = 'Additional data needed'
     print_line(
-        ui=ui,
         line=line,
         event_list=event_list,
         current_state=True)
-    # TODO: rest of method
     logging.info("FileManager setup complete")
     logging.info(str(filemanager))
 
     if all_data or args.no_monitor:
         print_line(
-            ui=ui,
             line="skipping globus setup",
             event_list=event_list,
             current_state=True)
     else:
-        endpoints = [endpoint for endpoint in config['transfer'].values()]
-        addr = config.get('global').get('email')
-        if not addr:
-            print 'When running in text mode, you must enter an email address.'
-            return False, False, False
+        endpoints = [endpoint for endpoint in filemanager.get_endpoints()]
+        local_endpoint = config['global'].get('local_globus_uuid')
+        if local_endpoint:
+            endpoints.append(local_endpoint)
+        addr = config['global'].get('email')
+        msg = 'Checking authentication for {} endpoints'.format(endpoints)
+        print_line(line=msg, event_list=event_list)
         setup_success = setup_globus(
             endpoints=endpoints,
-            ui=False,
-            src=config.get('global').get('email'),
-            dst=config.get('global').get('email'),
             event_list=event_list)
 
         if not setup_success:
@@ -298,27 +303,9 @@ Please add a space and run again.'''.format(num=line_index)
             return False, False, False
         else:
             print_line(
-                ui=ui,
                 line='Globus authentication complete',
                 event_list=event_list,
                 current_state=True)
-
-        line = 'Checking file access on globus transfer nodes'
-        print_line(
-            ui=ui,
-            line=line,
-            event_list=event_list,
-            current_state=True)
-        setup_success, endpoint = check_globus(
-            source_endpoint=config['transfer']['source_endpoint'],
-            source_path=config['global']['source_path'],
-            destination_endpoint=config['transfer']['destination_endpoint'],
-            destination_path=config['global']['input_path'])
-        if not setup_success:
-            print 'ERROR! Unable to access {} globus node'.format(endpoint['type'])
-            print 'The node may be down, or you may not have access to the requested directory'
-            return False, False, False
-
     # setup the runmanager
     runmanager = RunManager(
         short_name=config['global']['short_name'],
@@ -334,6 +321,7 @@ Please add a space and run again.'''.format(num=line_index)
         no_host=config['global']['no_host'],
         url_prefix=config['global']['url_prefix'],
         always_copy=config['global']['always_copy'])
+    import ipdb; ipdb.set_trace()
     runmanager.setup_job_sets(
         set_frequency=config['global']['set_frequency'],
         sim_start_year=sim_start_year,
@@ -345,7 +333,7 @@ Please add a space and run again.'''.format(num=line_index)
     logging.info(json.dumps(config, indent=4, sort_keys=True))
     return config, filemanager, runmanager
 
-def setup_directories(_args):
+def setup_directories(_args, config):
     """
     Setup the input, output, tmp, pp, and diags directories
     """
@@ -369,22 +357,42 @@ def setup_directories(_args):
     config['global']['input_path'] = input_path
     if not os.path.exists(input_path):
         os.makedirs(input_path)
+    for sim in config['simulations']:
+        if sim in ['start_year', 'end_year', 'comparisons']: continue
+        sim_input = os.path.join(input_path, sim)
+        if not os.path.exists(sim_input):
+            os.makedirs(sim_input)
     # setup temp directory
     tmp_path = os.path.join(output_path, 'tmp')
     if os.path.exists(tmp_path):
         msg = 'removing previous temp directory {}'.format(tmp_path)
         logging.info(msg)
-        shutil.rmtree(tmp_path)
+        rmtree(tmp_path)
+    for sim in config['simulations']:
+        if sim in ['start_year', 'end_year', 'comparisons']: continue
+        sim_tmp = os.path.join(tmp_path, sim)
+        if not os.path.exists(sim_tmp):
+            os.makedirs(sim_tmp)
     # setup post processing dir
     pp_path = os.path.join(output_path, 'pp')
     config['global']['pp_path'] = pp_path
     if not os.path.exists(pp_path):
         os.makedirs(pp_path)
+    for sim in config['simulations']:
+        if sim in ['start_year', 'end_year', 'comparisons']: continue
+        sim_pp = os.path.join(pp_path, sim)
+        if not os.path.exists(sim_pp):
+            os.makedirs(sim_pp)
     # setup diags dir
     diags_path = os.path.join(output_path, 'diags')
     config['global']['diags_path'] = diags_path
     if not os.path.exists(diags_path):
         os.makedirs(diags_path)
+    for sim in config['simulations']:
+        if sim in ['start_year', 'end_year', 'comparisons']: continue
+        sim_diags = os.path.join(diags_path, sim)
+        if not os.path.exists(sim_diags):
+            os.makedirs(sim_diags)
     # setup run_scipts_path
     run_script_path = os.path.join(
         config['global']['output_path'],
@@ -396,8 +404,8 @@ def setup_directories(_args):
 def verify_config(config):
     messages = list()
     # check that each mandatory section exists
-    if not config.get('models'):
-        msg = 'No models section found in config'
+    if not config.get('simulations'):
+        msg = 'No simulations section found in config'
         messages.append(msg)
     if not config.get('global'):
         msg = 'No global section found in config'
@@ -411,44 +419,53 @@ def verify_config(config):
         messages.append(msg)
     if messages:
         return messages
-    # check models
-    if not config['models'].get('comparisons'):
+
+    # check simulations
+    if not config['simulations'].get('comparisons'):
         msg = 'no comparisons specified'
         messages.append(msg)
     else:
-        for comp in config['models']['comparisons']:
-            if config['models']['comparisons'][comp] != 'all':
-                if not isinstance(config['models']['comparisons'][comp], list):
-                    config['models']['comparisons'][comp] = [config['models']['comparisons'][comp]]
-                for other_model in config['models']['comparisons'][comp]:
-                    if other_model not in config['models'] and other_model != 'obs':
-                        msg = 'model {}:{} not found in config.models'.format(comp, config['models']['comparisons'][comp])
-                        messages.append(msg)
-    for model in config.get('models'):
-        if model == 'comparisons':
+        for comp in config['simulations']['comparisons']:
+            if not isinstance(config['simulations']['comparisons'][comp], list):
+                config['simulations']['comparisons'][comp] = [config['simulations']['comparisons'][comp]]
+            for other_sim in config['simulations']['comparisons'][comp]:
+                if other_sim in ['obs', 'all']: continue
+                if other_sim not in config['simulations']:
+                    msg = '{} not found in config.simulations'.format(other_sim)
+                    messages.append(msg)
+    for sim in config.get('simulations'):
+        if sim in ['comparisons', 'start_year', 'end_year']:
             continue
-        if not config['models'][model].get('transfer_type'):
-            msg = '{} is missing trasfer_type, if its data is local, set transfer_type to \'local\''.format(model)
+        if not config['simulations'][sim].get('transfer_type'):
+            msg = '{} is missing trasfer_type, if the data is local, set transfer_type to \'local\''.format(sim)
             messages.append(msg)
         else:
-            if config['models'][model]['transfer_type'] == 'globus' and not config['models'][model].get('globus_uuid'):
-                msg = '{} has transfer_type of globus, but is missing globus_uuid'.format(model)
+            if config['simulations'][sim]['transfer_type'] == 'globus' and not config['simulations'][sim].get('remote_uuid'):
+                msg = 'case {} has transfer_type of globus, but is missing remote_uuid'.format(sim)
                 messages.append(msg)
-            elif config['models'][model]['transfer_type'] == 'sftp' and not config['models'][model].get('source_hostname'):
-                msg = '{} has transfer_type of sftp, but is missing source_hostname'.format(model)
+            elif config['simulations'][sim]['transfer_type'] == 'sftp' and not config['simulations'][sim].get('remote_hostname'):
+                msg = 'case {} has transfer_type of sftp, but is missing remote_hostname'.format(sim)
                 messages.append(msg)
-            if config['models'][model]['transfer_type'] != 'local' and not config['models'][model].get('source_path'):
-                msg = '{} has non-local data, but no source_path given'.format(model)
+            if config['simulations'][sim]['transfer_type'] != 'local' and not config['simulations'][sim].get('remote_path'):
+                msg = 'case {} has non-local data, but no remote_path given'.format(sim)
                 messages.append(msg)
-        if not config['models'][model].get('start_year'):
-            msg = '{} has no start_year'.format(model)
+            if config['simulations'][sim]['transfer_type'] == 'local' and not config['simulations'][sim].get('local_path'):
+                msg = 'case {} is set for local data, but no local_path is set'.format(sim)
+                messages.append(msg)
+        if not config['simulations'].get('start_year'):
+            msg = 'no start_year set for simulations'
             messages.append(msg)
-        if not config['models'][model].get('end_year'):
-            msg = '{} has no end_year'.format(model)
+        else:
+            config['simulations']['start_year'] = int(config['simulations']['start_year'])
+        if not config['simulations'].get('end_year'):
+            msg = 'no end_year set for simulations'
             messages.append(msg)
-        if int(config['models'][model]['end_year']) < int(config['models'][model]['start_year']):
-            '{} end_year is less then start_year, is time going backwards!?'.format(model)
+        else:
+            config['simulations']['end_year'] = int(config['simulations']['end_year'])
+        if int(config['simulations'].get('end_year')) < int(config['simulations'].get('start_year')):
+            msg = 'simulation end_year is less then start_year, is time going backwards!?'
             messages.append(msg)
+
     # check file_types
     for ftype in config.get('file_types'):
         if not config['file_types'][ftype].get('file_format'):
@@ -460,6 +477,11 @@ def verify_config(config):
         if not config['file_types'][ftype].get('local_path'):
             msg = '{} has no local_path'.format(ftype)
             messages.append(msg)
+        if config['file_types'][ftype].get('monthly') == 'True':
+            config['file_types'][ftype]['monthly'] = True
+        if config['file_types'][ftype].get('monthly') == 'False':
+            config['file_types'][ftype]['monthly'] = False
+    # check img_hosting
     if config.get('img_hosting'):
         if not config['img_hosting'].get('img_host_server'):
             msg = 'image hosting is turned on, but no img_host_server specified'
@@ -467,88 +489,93 @@ def verify_config(config):
         if not config['img_hosting'].get('host_directory'):
             msg = 'image hosting is turned on, but no host_directory specified'
             messages.append(msg)
-    if config.get('e3sm_diags'):
-        if config.get('img_hosting') and not config['e3sm_diags'].get('host_directory'):
-            msg = 'image hosting turned on, but no host_directory given for e3sm_diags'
-            messages.append(msg)
-        if not config['e3sm_diags'].get('backend'):
-            msg = 'no backend given for e3sm_diags'
-            messages.append(msg)
-        if not config['e3sm_diags'].get('reference_data_path'):
-            msg = 'no reference_data_path given for e3sm_diags'
-            messages.append(msg)
-        if not config['e3sm_diags'].get('sets'):
-            msg = 'no sets given for e3sm_diags'
-            messages.append(msg)
-        if not config['e3sm_diags'].get('run_frequency'):
-            msg = 'no run_frequency given for e3sm_diags'
-            messages.append(msg)
-    # check regrid
-    if config.get('regrid'):
-        if not config['regrid'].get('run_frequency'):
-            msg = 'no run_frequency given for regrid'
-            messages.append(msg)
-        for item in config['regrid']:
-            if item == 'run_frequency':
-                continue
-            if not config['regrid'][item].get('source_grid_path'):
-                msg = 'no source_grid_path given for {} regrid'.format(item)
+
+    if config.get('diags'):
+        # check e3sm_diags
+        if config['diags'].get('e3sm_diags'):
+            if config.get('img_hosting') and not config['diags']['e3sm_diags'].get('host_directory'):
+                msg = 'image hosting turned on, but no host_directory given for e3sm_diags'
                 messages.append(msg)
-            if not config['regrid'][item].get('destination_grid_path'):
-                msg = 'no destination_grid_path given for {} regrid'.format(item)
+            if not config['diags']['e3sm_diags'].get('backend'):
+                msg = 'no backend given for e3sm_diags'
                 messages.append(msg)
-            if not config['regrid'][item].get('destination_grid_name'):
-                msg = 'no destination_grid_name given for {} regrid'.format(item)
+            if not config['diags']['e3sm_diags'].get('reference_data_path'):
+                msg = 'no reference_data_path given for e3sm_diags'
                 messages.append(msg)
-    # check amwg
-    if config.get('amwg'):
-        if not config['amwg'].get('diag_home'):
-            msg = 'no diag_home given for amwg'
-            messages.append(msg)
-        if not config['amwg'].get('run_frequency'):
-            msg = 'no diag_home given for amwg'
-            messages.append(msg)
-        if config.get('img_hosting') and not config['amwg'].get('host_directory'):
-            msg = 'img_hosting turned on, but no host_directory given for amwg'
-            messages.append(msg)
-    # check ncclimo
-    if config.get('ncclimo'):
-        if not config['ncclimo'].get('regrid_map_path'):
-            msg = 'no regrid_map_path given for ncclimo'
-            messages.append(msg)
-        if not config['ncclimo'].get('run_frequency'):
-            msg = 'no run_frequency given for ncclimo'
-            messages.append(msg)
-    # check timeseries
-    if config.get('timeseries'):
-        if not config['timeseries'].get('run_frequency'):
-            msg = 'no run_frequency given for timeseries'
-            messages.append(msg)
-        if not config['timeseries'].get('data_types'):
-            msg = 'no data_types given for timeseries, acceptable options are atm, lnd, ocn'
-            messages.append(msg)
-        else:
-            for dtype in config['timeseries']['data_types']:
-                if not config['timeseries']['data_types'][dtype].get('var_list'):
-                    msg = 'no var_list given for {}'.format(dtype)
+            if not config['diags']['e3sm_diags'].get('sets'):
+                msg = 'no sets given for e3sm_diags'
+                messages.append(msg)
+            if not config['diags']['e3sm_diags'].get('run_frequency'):
+                msg = 'no run_frequency given for e3sm_diags'
+                messages.append(msg)
+        
+        # check amwg
+        if config['diags'].get('amwg'):
+            if not config['diags']['amwg'].get('diag_home'):
+                msg = 'no diag_home given for amwg'
+                messages.append(msg)
+            if not config['diags']['amwg'].get('run_frequency'):
+                msg = 'no diag_home given for amwg'
+                messages.append(msg)
+            if config.get('img_hosting') and not config['diags']['amwg'].get('host_directory'):
+                msg = 'img_hosting turned on, but no host_directory given for amwg'
+                messages.append(msg)
+        
+        # check aprime
+        if config['diags'].get('aprime'):
+            if not config['diags']['aprime'].get('run_frequency'):
+                msg = 'no run_frequency given for aprime'
+                messages.append(msg)
+            if config.get('img_hosting') and not config['diags']['aprime'].get('host_directory'):
+                msg = 'img_hosting turned on but no host_directory given for aprime'
+                messages.append(msg)
+            if not config['diags']['aprime'].get('aprime_code_path'):
+                msg = 'no aprime_code_path given for aprime'
+                messages.append(msg)
+            if not config['diags']['aprime'].get('test_atm_res'):
+                msg = 'no test_atm_res given for aprime'
+                messages.append(msg)
+            if not config['diags']['aprime'].get('test_mpas_mesh_name'):
+                msg = 'no test_mpas_mesh_name given for aprime'
+                messages.append(msg) 
+
+    if config.get('post-processing'):
+        # check regrid
+        if config['post-processing'].get('regrid'):
+            for item in config['post-processing']['regrid']:
+                if not config['post-processing']['regrid'][item].get('source_grid_path'):
+                    msg = 'no source_grid_path given for {} regrid'.format(item)
                     messages.append(msg)
-    # check aprime
-    if config.get('aprime'):
-        if not config['aprime'].get('run_frequency'):
-            msg = 'no run_frequency given for aprime'
-            messages.append(msg)
-        if config.get('img_hosting') and not config['aprime'].get('host_directory'):
-            msg = 'img_hosting turned on but no host_directory given for aprime'
-            messages.append(msg)
-        if not config['aprime'].get('aprime_code_path'):
-            msg = 'no aprime_code_path given for aprime'
-            messages.append(msg)
-        if not config['aprime'].get('test_atm_res'):
-            msg = 'no test_atm_res given for aprime'
-            messages.append(msg)
-        if not config['aprime'].get('test_mpas_mesh_name'):
-            msg = 'no test_mpas_mesh_name given for aprime'
-            messages.append(msg) 
+                if not config['post-processing']['regrid'][item].get('destination_grid_path'):
+                    msg = 'no destination_grid_path given for {} regrid'.format(item)
+                    messages.append(msg)
+                if not config['post-processing']['regrid'][item].get('destination_grid_name'):
+                    msg = 'no destination_grid_name given for {} regrid'.format(item)
+                    messages.append(msg)
+
+        # check ncclimo
+        if config['post-processing'].get('ncclimo'):
+            if not config['post-processing']['ncclimo'].get('regrid_map_path'):
+                msg = 'no regrid_map_path given for ncclimo'
+                messages.append(msg)
+            if not config['post-processing']['ncclimo'].get('run_frequency'):
+                msg = 'no run_frequency given for ncclimo'
+                messages.append(msg)
+
+        # check timeseries
+        if config['post-processing'].get('timeseries'):
+            if not config['post-processing']['timeseries'].get('run_frequency'):
+                msg = 'no run_frequency given for timeseries'
+                messages.append(msg)
+            for item in config['post-processing']['timeseries']:
+                if item == 'run_frequency':
+                    continue
+                if item not in ['atm', 'lnd', 'ocn']:
+                    msg = '{} is an unsupported timeseries type'.format(item)
+                    message.append(msg)
+                if not isinstance(config['post-processing']['timeseries'][item], list):
+                    config['post-processing']['timeseries'][item] = [config['post-processing']['timeseries'][item]]
+
     return messages
 
 
