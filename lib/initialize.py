@@ -12,15 +12,15 @@ from configobj import ConfigObj
 from shutil import copyfile
 
 from YearSet import YearSet, SetStatus
-from lib.filemanager import FileManager
-from lib.runmanager import RunManager
-from lib.mailer import Mailer
-from jobs.JobStatus import JobStatus
-from lib.globus_interface import setup_globus
+from filemanager import FileManager
+from runmanager import RunManager
+from mailer import Mailer
+from JobStatus import JobStatus
+from globus_interface import setup_globus
 from util import print_message
 from util import print_debug
 from util import print_line
-
+from verify_config import verify_config, check_config_white_space
 
 def parse_args(argv=None, print_help=None):
     parser = argparse.ArgumentParser()
@@ -32,19 +32,11 @@ def parse_args(argv=None, print_help=None):
         help='Print version informat and exit.',
         action='store_true')
     parser.add_argument(
-        '-u', '--ui',
-        help='Turn on the GUI.',
-        action='store_true')
-    parser.add_argument(
         '-l', '--log',
         help='Path to logging output file.')
     parser.add_argument(
         '-n', '--no-host',
         help='Don\'t move output plots into the web host directory.',
-        action='store_true')
-    parser.add_argument(
-        '-m', '--no-monitor',
-        help='Don\'t run the remote monitor or move any files over globus.',
         action='store_true')
     parser.add_argument(
         '-s', '--scripts',
@@ -55,26 +47,24 @@ def parse_args(argv=None, print_help=None):
         help='Turn on debug output of the internal file_list so you can see what the current state of the model files are',
         action='store_true')
     parser.add_argument(
-        '-r', '--resource-dir',
+        '-r', '--resource-path',
         help='Path to custom resource directory')
-    parser.add_argument(
-        '-i', '--input-path',
-        help='Custom input path')
-    parser.add_argument(
-        '-o', '--output-path',
-        help='Custom output path')
     parser.add_argument(
         '-a', '--always-copy',
         help='Always copy diagnostic output, even if the output already exists in the host directory. This is much slower but ensures old output will be overwritten',
         action='store_true')
     parser.add_argument(
-        '--custom-archive-path',
-        help='A custom remote archive path used for short term archiving. This will over rule the normal path interpolation when moving files. This option should only be used when short term archiving is turned on',
-        action='store')
-    parser.add_argument(
         '-d', '--debug',
         help='Set log level to debug',
         action='store_true')
+    parser.add_argument(
+        '--dryrun',
+        help='Do everything up to starting the jobs, but dont start any jobs',
+        action='store_true')
+    parser.add_argument(
+        '-m', '--max-jobs',
+        help='maximum number of running jobs',
+        type=int)
     if print_help:
         parser.print_help()
         return
@@ -109,8 +99,7 @@ def initialize(argv, **kwargs):
     event = kwargs['kill_event']
     print_line(
         line='Entering setup',
-        event_list=event_list,
-        current_state=True)
+        event_list=event_list)
 
     # check if globus config is valid, else remove it
     globus_config = os.path.join(os.path.expanduser('~'), '.globus.cfg')
@@ -143,10 +132,10 @@ Please add a space and run again.'''.format(num=line_index)
 
     # run validator for config file
     if config.get('global'):
-        if args.resource_dir:
-            config['global']['resource_dir'] = args.resource_dir
+        if args.resource_path:
+            config['global']['resource_path'] = args.resource_path
         else:
-            config['global']['resource_dir'] = os.path.join(
+            config['global']['resource_path'] = os.path.join(
                 sys.prefix,
                 'share',
                 'processflow',
@@ -159,6 +148,14 @@ Please add a space and run again.'''.format(num=line_index)
     config['global']['print_file_list'] = True if args.file_list else False
     config['global']['scripts'] = True if args.scripts else False
     config['global']['always_copy'] = True if args.always_copy else False
+    config['global']['dryrun'] = True if args.dryrun else False
+    config['global']['debug'] = True if args.debug else False
+    config['global']['max_jobs'] = args.max_jobs if args.max_jobs else False
+
+    if args.max_jobs:
+        print_line(
+            line="running with maximum {} jobs".format(args.max_jobs),
+            event_list=event_list)
 
     messages = verify_config(config)
     if messages:
@@ -172,8 +169,7 @@ Please add a space and run again.'''.format(num=line_index)
     if args.no_host or not config.get('img_hosting'):
         print_line(
             line='Not hosting img output',
-            event_list=event_list,
-            current_state=True)
+            event_list=event_list)
     
     # setup input and output directories
     input_path = os.path.join(
@@ -197,8 +193,7 @@ Please add a space and run again.'''.format(num=line_index)
             'processflow.log')
     print_line(
         line='Log saved to {}'.format(log_path),
-        event_list=event_list,
-        current_state=True)
+        event_list=event_list)
     if not kwargs.get('testing'):
         from imp import reload
         reload(logging)
@@ -227,7 +222,8 @@ Please add a space and run again.'''.format(num=line_index)
 
     # Copy the config into the input directory for safe keeping
     input_config_path = os.path.join(
-        config['global']['input_path'], 'run.cfg')
+        config['global']['project_path'], 
+        'input', 'run.cfg')
     try:
         copy(args.config, input_config_path)
     except:
@@ -239,53 +235,47 @@ Please add a space and run again.'''.format(num=line_index)
         msg = 'Running without forced-copy, previous diagnostic output will be preserved'
     print_line(
         line=msg,
-        event_list=event_list,
-        current_state=True)
+        event_list=event_list)
 
     # initialize the filemanager
-    msg = 'Initializing file manager'
     db = os.path.join(
         config['global'].get('project_path'),
         'output',
         'processflow.db')
-    print_line(
-        line=msg,
-        event_list=event_list,
-        current_state=True)
+    msg = 'Initializing file manager'
+    print_line(msg, event_list)
     filemanager = FileManager(
         database=db,
         event_list=event_list,
         mutex=mutex,
         config=config)
+    
     filemanager.populate_file_list()
-    filemanager.write_database()
-    print_line(
-        line='Starting local status update',
-        event_list=event_list,
-        current_state=True)
+    msg = 'Starting local status update'
+    print_line(msg, event_list)
+
     filemanager.update_local_status()
-    print_line(
-        line='Local status update complete',
-        event_list=event_list,
-        current_state=True)
+    msg = 'Local status update complete'
+    print_line(msg, event_list)
+
+    msg = filemanager.report_files_local()
+    print_line(msg, event_list)
+
     filemanager.write_database()
     all_data = filemanager.all_data_local()
     if all_data:
-        line = 'All data is local'
+        msg = 'all data is local'
     else:
-        line = 'Additional data needed'
-    print_line(
-        line=line,
-        event_list=event_list,
-        current_state=True)
+        msg = 'Additional data needed'
+    print_line(msg, event_list)
+
     logging.info("FileManager setup complete")
     logging.info(str(filemanager))
 
-    if all_data or args.no_monitor:
+    if all_data:
         print_line(
             line="skipping globus setup",
-            event_list=event_list,
-            current_state=True)
+            event_list=event_list)
     else:
         endpoints = [endpoint for endpoint in filemanager.get_endpoints()]
         local_endpoint = config['global'].get('local_globus_uuid')
@@ -304,57 +294,37 @@ Please add a space and run again.'''.format(num=line_index)
         else:
             print_line(
                 line='Globus authentication complete',
-                event_list=event_list,
-                current_state=True)
+                event_list=event_list)
     # setup the runmanager
     runmanager = RunManager(
-        short_name=config['global']['short_name'],
-        account=config['global']['account'],
-        resource_path=config['global']['resource_dir'],
-        ui=ui,
         event_list=event_list,
-        output_path=config['global']['output_path'],
-        caseID=config['global']['experiment'],
-        scripts_path=run_script_path,
         thread_list=thread_list,
         event=event,
-        no_host=config['global']['no_host'],
-        url_prefix=config['global']['url_prefix'],
-        always_copy=config['global']['always_copy'])
-    import ipdb; ipdb.set_trace()
-    runmanager.setup_job_sets(
-        set_frequency=config['global']['set_frequency'],
-        sim_start_year=sim_start_year,
-        sim_end_year=sim_end_year,
         config=config,
         filemanager=filemanager)
-
-    logging.info('Starting run with config:')
-    logging.info(json.dumps(config, indent=4, sort_keys=True))
+    runmanager.setup_cases()
+    runmanager.setup_jobs()
+    runmanager.write_job_sets(
+        os.path.join(config['global']['project_path'],
+        'output', 'state.txt'))
     return config, filemanager, runmanager
 
 def setup_directories(_args, config):
     """
-    Setup the input, output, tmp, pp, and diags directories
+    Setup the input, output, pp, and diags directories
     """
     # setup output directory
-    if _args.output_path:
-        output_path = _args.output_path
-    else:
-        output_path = os.path.join(
-            config['global']['project_path'],
-            'output')
-    config['global']['output_path'] = output_path
+
+    output_path = os.path.join(
+        config['global']['project_path'],
+        'output')
     if not os.path.exists(output_path):
         os.makedirs(output_path)
+
     # setup input directory
-    if _args.input_path:
-        input_path = _args.input_path
-    else:
-        input_path = os.path.join(
-            config['global']['project_path'],
-            'input')
-    config['global']['input_path'] = input_path
+    input_path = os.path.join(
+        config['global']['project_path'],
+        'input')
     if not os.path.exists(input_path):
         os.makedirs(input_path)
     for sim in config['simulations']:
@@ -362,27 +332,13 @@ def setup_directories(_args, config):
         sim_input = os.path.join(input_path, sim)
         if not os.path.exists(sim_input):
             os.makedirs(sim_input)
-    # setup temp directory
-    tmp_path = os.path.join(output_path, 'tmp')
-    if os.path.exists(tmp_path):
-        msg = 'removing previous temp directory {}'.format(tmp_path)
-        logging.info(msg)
-        rmtree(tmp_path)
-    for sim in config['simulations']:
-        if sim in ['start_year', 'end_year', 'comparisons']: continue
-        sim_tmp = os.path.join(tmp_path, sim)
-        if not os.path.exists(sim_tmp):
-            os.makedirs(sim_tmp)
+
     # setup post processing dir
     pp_path = os.path.join(output_path, 'pp')
     config['global']['pp_path'] = pp_path
     if not os.path.exists(pp_path):
         os.makedirs(pp_path)
-    for sim in config['simulations']:
-        if sim in ['start_year', 'end_year', 'comparisons']: continue
-        sim_pp = os.path.join(pp_path, sim)
-        if not os.path.exists(sim_pp):
-            os.makedirs(sim_pp)
+
     # setup diags dir
     diags_path = os.path.join(output_path, 'diags')
     config['global']['diags_path'] = diags_path
@@ -390,209 +346,15 @@ def setup_directories(_args, config):
         os.makedirs(diags_path)
     for sim in config['simulations']:
         if sim in ['start_year', 'end_year', 'comparisons']: continue
-        sim_diags = os.path.join(diags_path, sim)
+        sim_diags = os.path.join(diags_path, config['simulations'][sim]['short_name'])
         if not os.path.exists(sim_diags):
             os.makedirs(sim_diags)
-    # setup run_scipts_path
+
+    # setup run_scripts_path
     run_script_path = os.path.join(
-        config['global']['output_path'],
-        'run_scripts')
+        output_path,
+        'scripts')
     config['global']['run_scripts_path'] = run_script_path
     if not os.path.exists(run_script_path):
         os.makedirs(run_script_path)
 
-def verify_config(config):
-    messages = list()
-    # check that each mandatory section exists
-    if not config.get('simulations'):
-        msg = 'No simulations section found in config'
-        messages.append(msg)
-    if not config.get('global'):
-        msg = 'No global section found in config'
-        messages.append(msg)
-    else:
-        if not config['global'].get('project_path'):
-            msg = 'no project_path in global options'
-            messages.append(msg)
-    if not config.get('file_types'):
-        msg = 'No file_types section found in config'
-        messages.append(msg)
-    if messages:
-        return messages
-
-    # check simulations
-    if not config['simulations'].get('comparisons'):
-        msg = 'no comparisons specified'
-        messages.append(msg)
-    else:
-        for comp in config['simulations']['comparisons']:
-            if not isinstance(config['simulations']['comparisons'][comp], list):
-                config['simulations']['comparisons'][comp] = [config['simulations']['comparisons'][comp]]
-            for other_sim in config['simulations']['comparisons'][comp]:
-                if other_sim in ['obs', 'all']: continue
-                if other_sim not in config['simulations']:
-                    msg = '{} not found in config.simulations'.format(other_sim)
-                    messages.append(msg)
-    for sim in config.get('simulations'):
-        if sim in ['comparisons', 'start_year', 'end_year']:
-            continue
-        if not config['simulations'][sim].get('transfer_type'):
-            msg = '{} is missing trasfer_type, if the data is local, set transfer_type to \'local\''.format(sim)
-            messages.append(msg)
-        else:
-            if config['simulations'][sim]['transfer_type'] == 'globus' and not config['simulations'][sim].get('remote_uuid'):
-                msg = 'case {} has transfer_type of globus, but is missing remote_uuid'.format(sim)
-                messages.append(msg)
-            elif config['simulations'][sim]['transfer_type'] == 'sftp' and not config['simulations'][sim].get('remote_hostname'):
-                msg = 'case {} has transfer_type of sftp, but is missing remote_hostname'.format(sim)
-                messages.append(msg)
-            if config['simulations'][sim]['transfer_type'] != 'local' and not config['simulations'][sim].get('remote_path'):
-                msg = 'case {} has non-local data, but no remote_path given'.format(sim)
-                messages.append(msg)
-            if config['simulations'][sim]['transfer_type'] == 'local' and not config['simulations'][sim].get('local_path'):
-                msg = 'case {} is set for local data, but no local_path is set'.format(sim)
-                messages.append(msg)
-        if not config['simulations'].get('start_year'):
-            msg = 'no start_year set for simulations'
-            messages.append(msg)
-        else:
-            config['simulations']['start_year'] = int(config['simulations']['start_year'])
-        if not config['simulations'].get('end_year'):
-            msg = 'no end_year set for simulations'
-            messages.append(msg)
-        else:
-            config['simulations']['end_year'] = int(config['simulations']['end_year'])
-        if int(config['simulations'].get('end_year')) < int(config['simulations'].get('start_year')):
-            msg = 'simulation end_year is less then start_year, is time going backwards!?'
-            messages.append(msg)
-
-    # check file_types
-    for ftype in config.get('file_types'):
-        if not config['file_types'][ftype].get('file_format'):
-            msg = '{} has no file_format'.format(ftype)
-            messages.append(msg)
-        if not config['file_types'][ftype].get('remote_path'):
-            msg = '{} has no remote_path'.format(ftype)
-            messages.append(msg)
-        if not config['file_types'][ftype].get('local_path'):
-            msg = '{} has no local_path'.format(ftype)
-            messages.append(msg)
-        if config['file_types'][ftype].get('monthly') == 'True':
-            config['file_types'][ftype]['monthly'] = True
-        if config['file_types'][ftype].get('monthly') == 'False':
-            config['file_types'][ftype]['monthly'] = False
-    # check img_hosting
-    if config.get('img_hosting'):
-        if not config['img_hosting'].get('img_host_server'):
-            msg = 'image hosting is turned on, but no img_host_server specified'
-            messages.append(msg)
-        if not config['img_hosting'].get('host_directory'):
-            msg = 'image hosting is turned on, but no host_directory specified'
-            messages.append(msg)
-
-    if config.get('diags'):
-        # check e3sm_diags
-        if config['diags'].get('e3sm_diags'):
-            if config.get('img_hosting') and not config['diags']['e3sm_diags'].get('host_directory'):
-                msg = 'image hosting turned on, but no host_directory given for e3sm_diags'
-                messages.append(msg)
-            if not config['diags']['e3sm_diags'].get('backend'):
-                msg = 'no backend given for e3sm_diags'
-                messages.append(msg)
-            if not config['diags']['e3sm_diags'].get('reference_data_path'):
-                msg = 'no reference_data_path given for e3sm_diags'
-                messages.append(msg)
-            if not config['diags']['e3sm_diags'].get('sets'):
-                msg = 'no sets given for e3sm_diags'
-                messages.append(msg)
-            if not config['diags']['e3sm_diags'].get('run_frequency'):
-                msg = 'no run_frequency given for e3sm_diags'
-                messages.append(msg)
-        
-        # check amwg
-        if config['diags'].get('amwg'):
-            if not config['diags']['amwg'].get('diag_home'):
-                msg = 'no diag_home given for amwg'
-                messages.append(msg)
-            if not config['diags']['amwg'].get('run_frequency'):
-                msg = 'no diag_home given for amwg'
-                messages.append(msg)
-            if config.get('img_hosting') and not config['diags']['amwg'].get('host_directory'):
-                msg = 'img_hosting turned on, but no host_directory given for amwg'
-                messages.append(msg)
-        
-        # check aprime
-        if config['diags'].get('aprime'):
-            if not config['diags']['aprime'].get('run_frequency'):
-                msg = 'no run_frequency given for aprime'
-                messages.append(msg)
-            if config.get('img_hosting') and not config['diags']['aprime'].get('host_directory'):
-                msg = 'img_hosting turned on but no host_directory given for aprime'
-                messages.append(msg)
-            if not config['diags']['aprime'].get('aprime_code_path'):
-                msg = 'no aprime_code_path given for aprime'
-                messages.append(msg)
-            if not config['diags']['aprime'].get('test_atm_res'):
-                msg = 'no test_atm_res given for aprime'
-                messages.append(msg)
-            if not config['diags']['aprime'].get('test_mpas_mesh_name'):
-                msg = 'no test_mpas_mesh_name given for aprime'
-                messages.append(msg) 
-
-    if config.get('post-processing'):
-        # check regrid
-        if config['post-processing'].get('regrid'):
-            for item in config['post-processing']['regrid']:
-                if not config['post-processing']['regrid'][item].get('source_grid_path'):
-                    msg = 'no source_grid_path given for {} regrid'.format(item)
-                    messages.append(msg)
-                if not config['post-processing']['regrid'][item].get('destination_grid_path'):
-                    msg = 'no destination_grid_path given for {} regrid'.format(item)
-                    messages.append(msg)
-                if not config['post-processing']['regrid'][item].get('destination_grid_name'):
-                    msg = 'no destination_grid_name given for {} regrid'.format(item)
-                    messages.append(msg)
-
-        # check ncclimo
-        if config['post-processing'].get('ncclimo'):
-            if not config['post-processing']['ncclimo'].get('regrid_map_path'):
-                msg = 'no regrid_map_path given for ncclimo'
-                messages.append(msg)
-            if not config['post-processing']['ncclimo'].get('run_frequency'):
-                msg = 'no run_frequency given for ncclimo'
-                messages.append(msg)
-
-        # check timeseries
-        if config['post-processing'].get('timeseries'):
-            if not config['post-processing']['timeseries'].get('run_frequency'):
-                msg = 'no run_frequency given for timeseries'
-                messages.append(msg)
-            for item in config['post-processing']['timeseries']:
-                if item == 'run_frequency':
-                    continue
-                if item not in ['atm', 'lnd', 'ocn']:
-                    msg = '{} is an unsupported timeseries type'.format(item)
-                    message.append(msg)
-                if not isinstance(config['post-processing']['timeseries'][item], list):
-                    config['post-processing']['timeseries'][item] = [config['post-processing']['timeseries'][item]]
-
-    return messages
-
-
-def check_config_white_space(filepath):
-    line_index = 0
-    found = False
-    with open(filepath, 'r') as infile:
-        for line in infile.readlines():
-            line_index += 1
-            index = line.find('=')
-            if index == -1:
-                found = False
-                continue
-            if line[index + 1] != ' ':
-                found = True
-                break
-    if found:
-        return line_index
-    else:
-        return 0
