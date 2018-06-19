@@ -24,7 +24,7 @@ class Climo(Job):
         Climo doesnt require any other jobs
         """
         return True
-    
+
     def prevalidate(self):
         """
         Prerun validation for Ncclimo
