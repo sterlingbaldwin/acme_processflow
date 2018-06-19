@@ -21,8 +21,6 @@ from jobs.timeseries import Timeseries
 from jobs.amwg import AMWG
 from jobs.e3smdiags import E3SMDiags
 from jobs.aprime import Aprime
-
-from lib.YearSet import YearSet, SetStatus
 from lib.JobStatus import JobStatus, StatusMap, ReverseMap
 
 job_map = {
@@ -37,7 +35,7 @@ job_map = {
 
 class RunManager(object):
 
-    def __init__(self, event_list, thread_list, event, config, filemanager):
+    def __init__(self, event_list, event, config, filemanager):
 
 
         self.config = config
@@ -56,7 +54,6 @@ class RunManager(object):
         self.cases = list()
 
         self.running_jobs = list()
-        self.thread_list = thread_list
         self.kill_event = event
         self._job_total = 0
         self._job_complete = 0

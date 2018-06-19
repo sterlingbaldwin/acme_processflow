@@ -11,7 +11,6 @@ from shutil import rmtree, copy
 from configobj import ConfigObj
 from shutil import copyfile
 
-from YearSet import YearSet, SetStatus
 from filemanager import FileManager
 from runmanager import RunManager
 from mailer import Mailer

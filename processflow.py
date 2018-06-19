@@ -47,9 +47,6 @@ def main(test=False, **kwargs):
     # The master configuration object
     config = {}
 
-    # A list of all the threads
-    thread_list = []
-
     # An event to kill the threads on terminal exception
     thread_kill_event = threading.Event()
     mutex = threading.Lock()
@@ -204,7 +201,6 @@ def main(test=False, **kwargs):
                     config=config,
                     event_list=event_list,
                     status=status,
-                    thread_list=thread_list,
                     kill_event=thread_kill_event,
                     runmanager=runmanager)
                 # SUCCESS EXIT
@@ -213,20 +209,11 @@ def main(test=False, **kwargs):
             sleep(loop_delay)
     except KeyboardInterrupt as e:
         print_message('\n----- KEYBOARD INTERRUPT -----')
-        print_message('----- cleaning up threads -------', 'ok')
         runmanager.write_job_sets(state_path)
-        thread_kill_event.set()
-        for thread in thread_list:
-            thread.join(timeout=1.0)
         print_message('-----  cleanup complete  -----', 'ok')
     except Exception as e:
         print_message('----- AN UNEXPECTED EXCEPTION OCCURED -----')
-        print_message('----- cleaning up threads -----', 'ok')
         runmanager.write_job_sets(state_path)
-        thread_kill_event.set()
-        for thread in thread_list:
-            thread.join(timeout=1.0)
-        print_message('-----  cleanup complete  ------', 'ok')
         print_debug(e)
 
 if __name__ == "__main__":

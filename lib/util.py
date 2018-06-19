@@ -11,7 +11,6 @@ from datetime import datetime
 from string import Formatter
 
 from lib.JobStatus import ReverseMap, JobStatus
-from YearSet import SetStatusMap
 from mailer import Mailer
 from models import DataFile
 
@@ -184,7 +183,6 @@ def write_human_state(event_list, job_sets, mutex, state_path='run_state.txt', p
 
     Paremeters
         event_list (EventList): The global list of all events
-        job_sets (list: YearSet): The global list of all YearSets
         state_path (str): The path to where to write the run_state
         ui_mode (bool): The UI mode, True if the UI is on, False if the UI is off
     """

@@ -6,7 +6,7 @@ from lib.mailer import Mailer
 from lib.util import print_message, print_line, print_debug
 
 
-def finalize(config, event_list, status, thread_list, kill_event, runmanager):
+def finalize(config, event_list, status, kill_event, runmanager):
     if status == 1 and config['global'].get('native_grid_cleanup') in [1, '1', 'true', 'True']:
         message = 'Performing post run cleanup'
         native_cleanup(config)
@@ -46,9 +46,6 @@ def finalize(config, event_list, status, thread_list, kill_event, runmanager):
             print_debug(e)
 
     logging.info("All processes complete")
-    kill_event.set()
-    for t in thread_list:
-        t.join(timeout=1.0)
 
 def native_cleanup(config):
     """
@@ -65,5 +62,5 @@ def native_cleanup(config):
                 rmtree(native_path)
             except OSError:
                 return False
-            else:
-                return True
+    
+    return True
