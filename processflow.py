@@ -111,6 +111,7 @@ def main(test=False, **kwargs):
     # check if the case_scripts directory is present
     # if its not, transfer it over
     if config['global'].get('get_scripts'):
+        pass
         # msg = 'transfering case_scripts from remote machine'
         # print_line(
         #     line=msg,

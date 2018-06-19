@@ -11,7 +11,7 @@ from enum import IntEnum
 from threading import Thread
 
 from models import DataFile
-from jobs.JobStatus import JobStatus
+from lib.JobStatus import JobStatus
 from lib.YearSet import SetStatus
 from lib.util import print_debug
 from lib.util import print_line
@@ -54,7 +54,7 @@ class FileManager(object):
         if DataFile.table_exists():
             DataFile.drop_table()
 
-        DataFile.create_table() 
+        DataFile.create_table()
         if self._mutex.locked():
             self._mutex.release()
 
@@ -63,23 +63,23 @@ class FileManager(object):
         return str({
             'db_path': self._db_path,
         })
-    
+
     def get_endpoints(self):
         """
         Return a list of globus endpoints for all cases
         """
         self._mutex.acquire()
         q = (DataFile
-                .select()
-                .where(
-                    DataFile.transfer_type == 'globus'))
+             .select()
+             .where(
+                 DataFile.transfer_type == 'globus'))
         endpoints = list()
         for x in q.execute():
             if x.remote_uuid not in endpoints:
                 endpoints.append(x.remote_uuid)
         self._mutex.release()
         return endpoints
-    
+
     def write_database(self):
         """
         Write out a human readable version of the database for debug purposes
@@ -98,16 +98,16 @@ class FileManager(object):
                     fp.write('\n\t{case}\t\n'.format(case=case))
                     fp.write('+++++++++++++++++++++++++++++++++++++++++++++\n')
                     q = (DataFile
-                            .select(DataFile.datatype)
-                            .where(DataFile.case == case)
-                            .distinct())
+                         .select(DataFile.datatype)
+                         .where(DataFile.case == case)
+                         .distinct())
                     for df_type in q.execute():
                         _type = df_type.datatype
                         fp.write('===================================\n')
                         fp.write('\t' + _type + ':\n')
                         datafiles = (DataFile
-                                        .select()
-                                        .where(
+                                     .select()
+                                     .where(
                                             (DataFile.datatype == _type) &
                                             (DataFile.case == case)))
                         for datafile in datafiles.execute():
@@ -129,8 +129,6 @@ class FileManager(object):
                             filestr += '\n\t     local_size: ' + \
                                 str(datafile.local_size)
                             filestr += '\n\t     local_path: ' + datafile.local_path
-                            filestr += '\n\t     remote_size: ' + \
-                                str(datafile.remote_size)
                             filestr += '\n\t     remote_path: ' + datafile.remote_path + '\n'
                             fp.write(filestr)
             except Exception as e:
@@ -148,6 +146,38 @@ class FileManager(object):
                 instring = instring.replace(string, val)
         return instring
 
+    def check_data_ready(self, data_required, case, start_year=None, end_year=None):
+        self._mutex.acquire()
+        try:
+            for datatype in data_required:
+                if start_year and end_year:
+                    q = (DataFile
+                            .select()
+                            .where(
+                                (DataFile.year >= start_year) &
+                                (DataFile.year <= end_year) &
+                                (DataFile.case == case) &
+                                (DataFile.datatype == datatype)))
+                else:
+                    q = (DataFile
+                            .select()
+                            .where(
+                                (DataFile.case == case) &
+                                (DataFile.datatype == datatype)))
+                datafiles = q.execute()
+                for df in datafiles:
+                    if not os.path.exists(df.local_path) and df.local_status == FileStatus.PRESENT.value:
+                        df.local_status = FileStatus.NOT_PRESENT.value
+                        df.save()
+                    elif os.path.exists(df.local_path) and df.local_status == FileStatus.NOT_PRESENT.value:
+                        df.local_status = FileStatus.PRESENT.value
+                        df.save()
+                    if df.local_status != FileStatus.PRESENT.value:
+                        return False
+            return True
+        finally:
+            self._mutex.release()
+
     def populate_file_list(self):
         """
         Populate the database with the required DataFile entries
@@ -164,9 +194,15 @@ class FileManager(object):
 
             # for each case
             for case in self._config['simulations']:
-                if case in ['start_year', 'end_year', 'comparisons']: continue
+                if case in ['start_year', 'end_year', 'comparisons']:
+                    continue
                 # for each data type
-                for _type in self._config['file_types']:
+                for _type in self._config['data_types']:
+                    data_types_for_case = self._config['simulations'][case]['data_types']
+                    if 'all' not in data_types_for_case:
+                        if _type not in data_types_for_case:
+                            continue
+                        
                     # setup the replacement dict
                     replace = {
                         'PROJECT_PATH': self._config['global']['project_path'],
@@ -176,32 +212,34 @@ class FileManager(object):
                         'START_YR': '{:04d}'.format(start_year),
                         'END_YR': '{:04d}'.format(end_year)
                     }
-                    # setup the base remote_path 
-                    if self._config['file_types'][_type].get(case):
+                    # setup the base remote_path
+                    if self._config['data_types'][_type].get(case):
                         # if this case has a special remote_path
-                        remote_path = self._config['file_types'][_type][case]['remote_path']
+                        remote_path = self._config['data_types'][_type][case]['remote_path']
                     else:
                         # normal case
-                        remote_path = self._config['file_types'][_type]['remote_path']
+                        remote_path = self._config['data_types'][_type]['remote_path']
                     # setup the base local_path
                     if self._config['simulations'][case]['transfer_type'] == 'local':
                         # if the data is already locally staged
                         local_path = os.path.join(
                             self._config['simulations'][case]['local_path'],
                             _type)
+                        remote_path = ''
                     else:
                         local_path = self.render_string(
-                            self._config['file_types'][_type]['local_path'],
+                            self._config['data_types'][_type]['local_path'],
                             **replace)
+
                     new_files = list()
-                    if self._config['file_types'][_type].get('monthly'):
+                    if self._config['data_types'][_type].get('monthly'):
                         # handle monthly data
                         for year in range(start_year, end_year + 1):
                             for month in range(1, 13):
                                 replace['YEAR'] = '{:04d}'.format(year)
                                 replace['MONTH'] = '{:02d}'.format(month)
                                 filename = self.render_string(
-                                    self._config['file_types'][_type]['file_format'],
+                                    self._config['data_types'][_type]['file_format'],
                                     **replace)
                                 r_path = self.render_string(
                                     remote_path,
@@ -216,7 +254,6 @@ class FileManager(object):
                                     'year': year,
                                     'month': month,
                                     'datatype': _type,
-                                    'remote_size': 0,
                                     'local_size': 0,
                                     'transfer_type': self._config['simulations'][case]['transfer_type'],
                                     'remote_uuid': self._config['simulations'][case].get('remote_uuid', ''),
@@ -225,7 +262,7 @@ class FileManager(object):
                     else:
                         # handle one-off data
                         filename = self.render_string(
-                            self._config['file_types'][_type]['file_format'],
+                            self._config['data_types'][_type]['file_format'],
                             **replace)
                         r_path = self.render_string(
                             remote_path,
@@ -240,7 +277,6 @@ class FileManager(object):
                             'year': 0,
                             'month': 0,
                             'datatype': _type,
-                            'remote_size': 0,
                             'local_size': 0,
                             'transfer_type': self._config['simulations'][case]['transfer_type'],
                             'remote_uuid': self._config['simulations'][case].get('remote_uuid', ''),
@@ -251,7 +287,8 @@ class FileManager(object):
                         os.makedirs(tail)
                     step = 50
                     for idx in range(0, len(new_files), step):
-                        DataFile.insert_many(new_files[idx: idx + step]).execute()
+                        DataFile.insert_many(
+                            new_files[idx: idx + step]).execute()
 
             if self._mutex.locked():
                 self._mutex.release()
@@ -269,13 +306,59 @@ class FileManager(object):
                 'name': df.name,
                 'local_path': df.local_path,
                 'remote_path': df.remote_path,
-                'transfer_tyoe': df.transfer_type,
+                'transfer_type': df.transfer_type,
             }
         self._mutex.release()
+    
+    def add_files(self, data_type, file_list):
+        """
+        Add files to the database
+        
+        Parameters:
+            data_type (str): the data_type of the new files
+            file_list (list): a list of dictionaries in the format
+                local_path (str): path to the file,
+                case (str): the case these files belong to
+                name (str): the filename
+                remote_path (str): the remote path of these files, optional
+                transfer_type (str): the transfer type of these files, optional
+                year (int): the year of the file, optional
+                month (int): the month of the file, optional
+                remote_uuid (str): remote globus endpoint id, optional
+                remote_hostname (str): remote hostname for sftp transfer, optional
+        """
+        self._mutex.acquire()
+        try:
+            new_files = list()
+            for file in file_list:
+                new_files.append({
+                    'name': file['name'],
+                    'local_path': file['local_path'],
+                    'local_status': file.get('local_status', FileStatus.NOT_PRESENT.value),
+                    'datatype': data_type,
+                    'case': file['case'],
+                    'year': file.get('year', 0),
+                    'month': file.get('month', 0),
+                    'remote_uuid': file.get('remote_uuid', ''),
+                    'remote_hostname': file.get('remote_hostname', ''),
+                    'remote_path': file.get('remote_path', ''),
+                    'remote_status': FileStatus.NOT_PRESENT.value,
+                    'local_size': 0,
+                    'transfer_type': file.get('transfer_type', 'local')
+                })
+            step = 50
+            for idx in range(0, len(new_files), step):
+                DataFile.insert_many(
+                    new_files[idx: idx + step]).execute()
+        finally:
+            self._mutex.release()
+        
 
     def update_local_status(self):
         """
         Update the database with the local status of the expected files
+
+        Return True if there was new local data found, False othewise
         """
         self._mutex.acquire()
         try:
@@ -284,21 +367,23 @@ class FileManager(object):
                      .where(
                             (DataFile.local_status == FileStatus.NOT_PRESENT.value) |
                             (DataFile.local_status == FileStatus.IN_TRANSIT.value)))
+            printed = False
+            change = False
             for datafile in query.execute():
                 marked = False
                 if os.path.exists(datafile.local_path):
-                    if datafile.transfer_type == 'local':
-                        if datafile.local_status == FileStatus.NOT_PRESENT.value:
-                            datafile.local_status = FileStatus.PRESENT.value
-                            marked = True
-                    else:
-                        local_size = os.path.getsize(datafile.local_path)
-                        if local_size == datafile.remote_size and local_size != 0:
-                            if datafile.local_status == FileStatus.NOT_PRESENT.value:
-                                datafile.local_status = FileStatus.PRESENT.value
-                                datafile.local_size = local_size
-                                marked = True
+                    if datafile.local_status == FileStatus.NOT_PRESENT.value or datafile.local_status == FileStatus.IN_TRANSIT.value:
+                        datafile.local_status = FileStatus.PRESENT.value
+                        marked = True
+                        change = True
                 else:
+                    if datafile.transfer_type == 'local':
+                        msg = '{case} transfer_type is local, but {filename} is not present'.format(
+                            case=datafile.case, filename=datafile.name)
+                        logging.error(msg)
+                        if not printed:
+                            print_line(msg, self._event_list)
+                            printed = True
                     if datafile.local_status == FileStatus.PRESENT.value:
                         datafile.local_status = FileStatus.NOT_PRESENT.value
                         marked = True
@@ -313,6 +398,7 @@ class FileManager(object):
         finally:
             if self._mutex.locked():
                 self._mutex.release()
+        return change
 
     def all_data_local(self):
         """
@@ -349,47 +435,73 @@ class FileManager(object):
         # required files dont exist locally, do exist remotely
         # or if they do exist locally have a different local and remote size
         thread_list = list()
+        target_files = list()
         self._mutex.acquire()
         try:
             q = (DataFile
-                    .select(DataFile.case)
-                    .where(
-                        (DataFile.local_status == FileStatus.NOT_PRESENT.value) |
-                        (DataFile.local_size != DataFile.remote_size)))
-            cases = [x.case for x in q.execute()]
+                 .select(DataFile.case)
+                 .where(
+                     DataFile.local_status == FileStatus.NOT_PRESENT.value))
+            caselist = [x.case for x in q.execute()]
+            if not caselist or len(caselist) == 0:
+                return
+            cases = list()
+            for case in caselist:
+                if case not in cases:
+                    cases.append(case)
+
             for case in cases:
                 q = (DataFile
-                        .select()
-                        .where(
+                     .select()
+                     .where(
                             (DataFile.case == case) &
-                            ((DataFile.local_status == FileStatus.NOT_PRESENT.value) |
-                             (DataFile.local_size != DataFile.remote_size))))
+                            (DataFile.local_status == FileStatus.NOT_PRESENT.value)))
                 required_files = [x for x in q.execute()]
-                if len(required_files) == 0:
-                    msg = 'No new files needed for case: {}'.format(case)
-                    logging.info(msg)
-                    continue
+                for file in required_files:
+                    if file.transfer_type == 'local':
+                        required_files.remove(file)
+                if not required_files:
+                    msg = 'ERROR: all missing files are marked as local'
+                    print_line(msg, self._event_list)
+                    return
+                # mark files as in-transit so we dont double-copy
+                q = (DataFile
+                     .update({DataFile.local_status: FileStatus.IN_TRANSIT})
+                     .where(DataFile.name << [x.name for x in required_files]))
+                q.execute()
 
                 for file in required_files:
                     target_files.append({
                         'local_path': file.local_path,
                         'remote_path': file.remote_path,
                     })
-                if required_files[0]['transfer_type'] == 'globus':
-                    client = globus_sdk.get_client()
-                    remote_uuid = required_files[0]['remote_uuid']
-                    local_uuid = required_files[0]['local_uuid']
-                    _args = (client, remote_uuid, local_uuid, target_files, event)
-                    thread = Threading.Thread(
+
+                if required_files[0].transfer_type == 'globus':
+                    msg = 'Starting globus file transfer of {} files'.format(
+                        len(required_files))
+                    print_line(msg, self._event_list)
+                    msg = 'See https://www.globus.org/app/activity for transfer details'
+                    print_line(msg, self._event_list)
+
+                    client = get_client()
+                    remote_uuid = required_files[0].remote_uuid
+                    local_uuid = self._config['global']['local_globus_uuid']
+                    _args = (client, remote_uuid,
+                             local_uuid, target_files, event)
+                    thread = Thread(
                         target=globus_transfer,
                         name='filenamager_globus_transfer',
                         args=_args)
                     thread_list.append(thread)
                     thread.start()
-                elif required_files[0]['transfer_type'] == 'sftp':
-                    client = get_ssh_client(required_files[0]['hostname'])
+                elif required_files[0].transfer_type == 'sftp':
+                    msg = 'Starting sftp file transfer of {} files'.format(
+                        len(required_files))
+                    print_line(msg, self._event_list)
+
+                    client = get_ssh_client(required_files[0].remote_hostname)
                     _args = (target_files, client, event)
-                    thread = Threading.Thread(
+                    thread = Thread(
                         target=self._ssh_transfer,
                         name='filenamager_ssh_transfer',
                         args=_args)
@@ -402,19 +514,23 @@ class FileManager(object):
             if self._mutex.locked():
                 self._mutex.release()
 
-
     def _ssh_transfer(self, target_files, client, event):
-        sftp_client = client.get_ssh_client()
+        sftp_client = client.open_sftp()
         for file in target_files:
             if event.is_set():
                 return
-            msg = 'sftp transfer from {} to {}'.format(file['remote_path'], file['local_path'])
+            _, filename = os.path.split(file['local_path'])
+            msg = 'sftp transfer from {} to {}'.format(
+                file['remote_path'], file['local_path'])
             logging.info(msg)
-            ssh_transfer(sftp_client, file)
 
-    def years_ready(self, start_year, end_year):
+            ssh_transfer(sftp_client, file)
+            msg = '{} transfer complete'.format(filename)
+            print_line(msg, self._event_list)
+
+    def years_ready(self, data_type, start_year, end_year):
         """
-        Checks if atm files exist from start year to end of endyear
+        Checks if data_type files exist from start year to end of endyear
 
         Parameters:
             start_year (int): the first year to start checking
@@ -432,7 +548,7 @@ class FileManager(object):
             query = (DataFile
                      .select()
                      .where(
-                            (DataFile.datatype == 'atm') &
+                            (DataFile.datatype == data_type) &
                             (DataFile.year >= start_year) &
                             (DataFile.year <= end_year)))
             for datafile in query.execute():
@@ -453,84 +569,58 @@ class FileManager(object):
         elif not data_ready and not non_zero_data:
             return -1
 
-    def get_file_paths_by_year(self, start_year, end_year, _type):
+    def report_files_local(self):
+        """
+        Return a string in the format 'X of Y files availabe locally' where X is the number here, and Y is the total
+        """
+        q = (DataFile
+             .select(DataFile.local_status)
+             .where(DataFile.local_status == FileStatus.PRESENT.value))
+        local = len([x.local_status for x in q.execute()])
+
+        q = (DataFile.select(DataFile.local_status))
+        total = len([x.local_status for x in q.execute()])
+
+        msg = '{local}/{total} files available locally or {prec:.2f}%'.format(
+            local=local, total=total, prec=((local*1.0)/total)*100)
+        return msg
+
+    def get_file_paths_by_year(self, datatype, case, start_year=None, end_year=None):
         """
         Return paths to files that match the given type, start, and end year
-        
+
         Parameters:
+            datatype (str): the type of data
+            case (str): the name of the case to return files for
+            monthly (bool): is this datatype monthly frequency
             start_year (int): the first year to return data for
             end_year (int): the last year to return data for
-            _type (str): the type of data
         """
-        monthly = ['atm', 'ocn', 'ice']
         self._mutex.acquire()
         try:
-            if _type not in monthly:
+            if start_year and end_year:
                 query = (DataFile
                          .select()
                          .where(
-                                (DataFile.datatype == _type) &
+                                (DataFile.year <= end_year) &
+                                (DataFile.year >= start_year) &
+                                (DataFile.case == case) &
+                                (DataFile.datatype == datatype) &
                                 (DataFile.local_status == FileStatus.PRESENT.value)))
             else:
                 query = (DataFile
                          .select()
                          .where(
-                                (DataFile.datatype == _type) &
-                                (DataFile.year >= start_year) &
-                                (DataFile.year <= end_year) &
+                                (DataFile.case == case) &
+                                (DataFile.datatype == datatype) &
                                 (DataFile.local_status == FileStatus.PRESENT.value)))
             datafiles = query.execute()
             if datafiles is None or len(datafiles) == 0:
-                files = []
-            else:
-                files = [x.local_path for x in datafiles]
+                return None
+            return [x.local_path for x in datafiles]
         except Exception as e:
             print_debug(e)
-            files = []
         finally:
             if self._mutex.locked():
                 self._mutex.release()
-        return files
 
-    def check_year_sets(self, job_sets):
-        """
-        Checks the file_list, and sets the year_set status to ready if all the files are in place,
-        otherwise, checks if there is partial data, or zero data
-        """
-        incomplete_job_sets = [s for s in job_sets
-                               if s.status != SetStatus.COMPLETED
-                               and s.status != SetStatus.RUNNING
-                               and s.status != SetStatus.FAILED]
-
-        for job_set in incomplete_job_sets:
-            data_ready = self.years_ready(
-                start_year=job_set.set_start_year,
-                end_year=job_set.set_end_year)
-
-            if data_ready == 1:
-                if job_set.status != SetStatus.DATA_READY:
-                    job_set.status = SetStatus.DATA_READY
-                    msg = "{start:04d}-{end:04d} is ready".format(
-                        start=job_set.set_start_year,
-                        end=job_set.set_end_year)
-                    print_line(
-                        line=msg,
-                        event_list=self._event_list)
-            elif data_ready == 0:
-                if job_set.status != SetStatus.PARTIAL_DATA:
-                    job_set.status = SetStatus.PARTIAL_DATA
-                    msg = "{start:04d}-{end:04d} has partial data".format(
-                        start=job_set.set_start_year,
-                        end=job_set.set_end_year)
-                    print_line(
-                        line=msg,
-                        event_list=self._event_list)
-            elif data_ready == -1:
-                if job_set.status != SetStatus.NO_DATA:
-                    job_set.status = SetStatus.NO_DATA
-                    msg = "{start:04d}-{end:04d} has no data".format(
-                        start=job_set.set_start_year,
-                        end=job_set.set_end_year)
-                    print_line(
-                        line=msg,
-                        event_list=self._event_list)
