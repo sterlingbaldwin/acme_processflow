@@ -1,4 +1,5 @@
 import sys
+import os
 import logging
 import paramiko
 
@@ -77,10 +78,21 @@ def get_ssh_client(hostname):
         None otherwise
     """
     username = raw_input('Username for {}: '.format(hostname))
-    password = getpass(prompt='Password for {}: '.format(hostname))
 
     client = paramiko.SSHClient()
     client.load_system_host_keys()
     client.set_missing_host_key_policy(paramiko.WarningPolicy)
-    client.connect(hostname, port=22, username=username, password=password)
+    connected = False
+    for _ in range(3):
+        try:
+            password = getpass(prompt='Password for {}: '.format(hostname))
+            client.connect(hostname, port=22, username=username, password=password)
+        except Exception as e:
+            print 'Pnvalid password'
+        else:
+            connected = True
+            break
+    if not connected:
+        print 'Unable to open ssh connection for {}'.format(hostname)
+        sys.exit(1)
     return client
