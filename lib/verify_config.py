@@ -26,8 +26,9 @@ def verify_config(config):
     # check simulations
     # ------------------------------------------------------------------------
     if not config['simulations'].get('comparisons'):
-        msg = 'no comparisons specified'
-        messages.append(msg)
+        if config.get('diags'):
+            msg = 'no comparisons specified'
+            messages.append(msg)
     else:
         for comp in config['simulations']['comparisons']:
             if not isinstance(config['simulations']['comparisons'][comp], list):
