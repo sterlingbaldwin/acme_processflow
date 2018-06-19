@@ -171,11 +171,13 @@ def setup_globus(endpoints, event_list):
             logging.info(msg)
             try:
                 r = client.endpoint_autoactivate(endpoint, if_expires_in=3600)
+                logging.info(r['code'])
             except Exception as e:
                 print_debug(e)
-                continue
-            finally:
-                logging.info(r['code'])
+                if e.code == 'ClientError.NotFound':
+                    return False
+                else:
+                    continue
             
             if r["code"] == "AutoActivationFailed":
                 activated = False
