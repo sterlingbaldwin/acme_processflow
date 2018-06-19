@@ -53,7 +53,6 @@ def main(test=False, **kwargs):
     # An event to kill the threads on terminal exception
     thread_kill_event = threading.Event()
     mutex = threading.Lock()
-    display_event = threading.Event()
 
     # A flag to tell if we have all the data locally
     all_data = False
@@ -73,7 +72,6 @@ def main(test=False, **kwargs):
             version=__version__,
             branch=__branch__,
             event_list=event_list,
-            thread_list=thread_list,
             kill_event=thread_kill_event,
             mutex=mutex,
             testing=True)
@@ -83,7 +81,6 @@ def main(test=False, **kwargs):
             version=__version__,
             branch=__branch__,
             event_list=event_list,
-            thread_list=thread_list,
             kill_event=thread_kill_event,
             mutex=mutex)
 
@@ -218,7 +215,6 @@ def main(test=False, **kwargs):
         print_message('\n----- KEYBOARD INTERRUPT -----')
         print_message('----- cleaning up threads -------', 'ok')
         runmanager.write_job_sets(state_path)
-        display_event.set()
         thread_kill_event.set()
         for thread in thread_list:
             thread.join(timeout=1.0)
