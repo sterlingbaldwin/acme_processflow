@@ -37,29 +37,6 @@ def print_line(line, event_list, ignore_text=False):
         print msg
         sys.stdout.flush()
 
-def strfdelta(tdelta, fmt):
-    """
-    Turn a time delta into a string
-
-    Parameters:
-        tdelta (time.delta): the delta time to convert
-        fmt (str): the format string to convert to
-    Returns:
-        A string with the formatted delta
-    """
-    f = Formatter()
-    d = {}
-    l = {'D': 86400, 'H': 3600, 'M': 60, 'S': 1}
-    k = map(lambda x: x[1], list(f.parse(fmt)))
-    rem = int(tdelta.total_seconds())
-
-    for i in ('D', 'H', 'M', 'S'):
-        if i in k and i in l.keys():
-            d[i], rem = divmod(rem, l[i])
-
-    return f.format(fmt, **d)
-
-
 def get_climo_output_files(input_path, start_year, end_year):
     """
     Return a list of ncclimo climatologies from start_year to end_year
@@ -121,30 +98,6 @@ def get_data_output_files(input_path, case, start_year, end_year):
                     break
     return data_list
 
-def path_exists(config_items):
-    """
-    Checks the config for any netCDF file paths and validates that they exist
-
-    Parameters:
-        config_items (dict): The config to be checked
-    Returns:
-        bool, True if all netCDF files are present, False otherwise
-    """
-    for _, options in config_items.items():
-        if not isinstance(options, dict):
-            continue
-        for key, val in options.items():
-            if not isinstance(val, str):
-                continue
-            if val.endswith('.nc') and not os.path.exists(val):
-                print "File {key}: {value} does not exist, exiting.".format(key=key, value=val)
-                return False
-    return True
-
-
-def cmd_exists(cmd):
-    return any(os.access(os.path.join(path, cmd), os.X_OK) for path in os.environ["PATH"].split(os.pathsep))
-
 def print_debug(e):
     """
     Print an exceptions relavent information
@@ -176,91 +129,6 @@ def format_debug(e):
     exec_1=sys.exc_info()[1],
     lineno=traceback.tb_lineno(sys.exc_info()[2]),
     stack=traceback.print_tb(tb))
-
-def write_human_state(event_list, job_sets, mutex, state_path='run_state.txt', print_file_list=False):
-    """
-    Writes out a human readable representation of the current execution state
-
-    Paremeters
-        event_list (EventList): The global list of all events
-        state_path (str): The path to where to write the run_state
-        ui_mode (bool): The UI mode, True if the UI is on, False if the UI is off
-    """
-    try:
-        with open(state_path, 'w') as outfile:
-            line = "Execution state as of {0}\n".format(
-                datetime.now().strftime('%d, %b %Y %I:%M'))
-            out_str = line
-            out_str += 'Running under process {0}\n\n'.format(os.getpid())
-
-            for year_set in job_sets:
-                line = 'Year_set {num}: {start} - {end}\n'.format(
-                    num=year_set.set_number,
-                    start=year_set.set_start_year,
-                    end=year_set.set_end_year)
-                out_str += line
-
-                line = 'status: {status}\n'.format(
-                    status=SetStatusMap[year_set.status])
-                out_str += line
-
-                for job in year_set.jobs:
-                    msg = ''
-                    if job.status == JobStatus.COMPLETED:
-                        if job.config.get('host_url'):
-                            msg += '    > {job} - COMPLETED  :: output hosted :: {url}\n'.format(
-                                url=job.config['host_url'],
-                                job=job.type)
-                        else:
-                            msg += '    > {job} - COMPLETED  :: output located :: {output}\n'.format(
-                                output=job.output_path,
-                                job=job.type)
-                    elif job.status in [JobStatus.FAILED, JobStatus.CANCELLED]:
-                        output_path = os.path.join(
-                            job.config['run_scripts_path'],
-                            '{job}_{start:04d}_{end:04d}.out'.format(
-                                job=job.type,
-                                start=job.start_year,
-                                end=job.end_year))
-                        msg += '    > {job} - {status} :: console output :: {output}\n'.format(
-                            output=output_path,
-                            job=job.type,
-                            status=ReverseMap[job.status])
-                    else:
-                        msg += '    > {job} - {state}\n'.format(
-                            job=job.type,
-                            state=ReverseMap[job.status])
-
-                    out_str += msg
-
-                out_str += '\n'
-
-            out_str += '\n'
-            for line in event_list.list:
-                if 'Transfer' in line.message:
-                    continue
-                if 'hosted' in line.message:
-                    continue
-                out_str += line.message + '\n'
-
-            # out_str += line.message + '\n'
-            for line in event_list.list:
-                if 'Transfer' not in line.message:
-                    continue
-                out_str += line.message + '\n'
-
-            for line in event_list.list:
-                if 'hosted' not in line.message:
-                    continue
-                out_str += line.message + '\n'
-            outfile.write(out_str)
-            # if not ui_mode:
-            #     print '\n'
-            #     print out_str
-            #     print '\n================================================\n'
-    except Exception as e:
-        logging.error(format_debug(e))
-        return
 
 class colors:
     HEADER = '\033[95m'
@@ -371,14 +239,3 @@ def create_symlink_dir(src_dir, src_list, dst):
         except Exception as e:
             msg = format_debug(e)
             logging.error(msg)
-
-def thread_sleep(seconds, event):
-    """
-    Allows a thread to sleep for one second at at time, and cancel when if the
-    thread event is set
-    """
-    for _ in range(seconds):
-        if event and event.is_set():
-            return 1
-        sleep(1)
-    return 0
