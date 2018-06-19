@@ -10,24 +10,22 @@ from time import sleep
 from datetime import datetime
 from string import Formatter
 
-from jobs.JobStatus import ReverseMap, JobStatus
+from lib.JobStatus import ReverseMap, JobStatus
 from YearSet import SetStatusMap
 from mailer import Mailer
 from models import DataFile
 
 
-def print_line(line, event_list, current_state=False, ignore_text=False):
+def print_line(line, event_list, ignore_text=False):
     """
     Prints a message to either the console, the event_list, or the current event
 
     Parameters:
-        ui (bool): The UI mode, either False for text-only, or True for GUI,
         line (str): The message to print
         event_list (EventList): the event list
-        current_state (bool): should this print to the current state or not
         ignore_text (bool): should this be printed to the console if in text mode
     """
-    logging.debug(line)
+    logging.info(line)
     if not ignore_text:
         now = datetime.now()
         timestr = '{hour}:{min}:{sec}'.format(
@@ -77,11 +75,52 @@ def get_climo_output_files(input_path, start_year, end_year):
     if not os.path.exists(input_path):
         return None
     contents = [s for s in os.listdir(input_path) if not os.path.isdir(s)]
-    pattern = r'_{start:04d}\d\d_{end:04d}\d\d_'.format(
+    pattern = r'_{start:04d}\d\d_{end:04d}\d\d_climo\.nc'.format(
         start=start_year,
         end=end_year)
     return [x for x in contents if re.search(pattern=pattern, string=x)]
 
+def get_ts_output_files(input_path, var_list, start_year, end_year):
+    """
+    Return a list of ncclimo timeseries files from a list of variables, start_year to end_year
+
+    Parameters:
+        input_path (str): the directory to look in
+        var_list (list): a list of strings of variable names
+        start_year (int): the first year of climos to add to the list
+        end_year (int): the last year
+    Returns:
+        ts_list (list): A list of the ts files
+    """
+    if not os.path.exists(input_path):
+        return None
+    contents = [s for s in os.listdir(input_path) if not os.path.isdir(s)]
+    ts_list = list()
+    for var in var_list:
+        pattern = r'{var}_{start:04d}01_{end:04d}12\.nc'.format(
+            var=var,
+            start=start_year,
+            end=end_year)
+        for item in contents:
+            if re.search(pattern, item):
+                ts_list.append(item)
+                break
+    return ts_list
+
+def get_data_output_files(input_path, case, start_year, end_year):
+    if not os.path.exists(input_path):
+        return None
+    contents = [s for s in os.listdir(input_path) if not os.path.isdir(s)]
+    contents.sort()
+    data_list = list()
+    for year in range(start_year, end_year + 1):
+        for month in range(1, 13):
+            pattern = r'%s.*\.%04d-%02d.nc' % (case, year, month)
+            for item in contents:
+                if re.match(pattern, item):
+                    data_list.append(item)
+                    break
+    return data_list
 
 def path_exists(config_items):
     """
@@ -312,6 +351,11 @@ def render(variables, input_path, output_path, delimiter='%%'):
 def create_symlink_dir(src_dir, src_list, dst):
     """
     Create a directory, and fill it with symlinks to all the items in src_list
+
+    Parameters:
+        src_dir (str): the path to the source directory
+        src_list (list): a list of strings of filenames
+        dst (str): the path to the directory that should hold the symlinks
     """
     if not src_list:
         return
@@ -340,17 +384,3 @@ def thread_sleep(seconds, event):
             return 1
         sleep(1)
     return 0
-
-def native_cleanup(output_path, native_grid_name):
-    """
-    Remove non-regridded files after run completion
-    """
-    native_path = os.path.join(
-        output_path, 'pp', native_grid_name)
-    if os.path.exists(native_path):
-        try:
-            rmtree(native_path)
-        except OSError:
-            return False
-        else:
-            return True
