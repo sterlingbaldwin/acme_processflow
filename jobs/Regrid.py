@@ -2,6 +2,7 @@ import json
 import os
 import re
 import logging
+
 from jobs.job import Job
 from lib.JobStatus import JobStatus
 from lib.slurm import Slurm
@@ -82,7 +83,7 @@ class Regrid(Job):
 
         # clean up the input directory to make sure there's only nc files
         for item in os.listdir(input_path):
-            if not item.endsWith('.nc'):
+            if not item[-3:] == '.nc':
                 os.remove(os.path.join(input_path, item))
         self._slurm_args['working_dir'] = '-D {}'.format(input_path)
         cmd.extend([
