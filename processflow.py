@@ -210,10 +210,12 @@ def main(test=False, **kwargs):
     except KeyboardInterrupt as e:
         print_message('\n----- KEYBOARD INTERRUPT -----')
         runmanager.write_job_sets(state_path)
+        filemanager.terminate_transfers()
         print_message('-----  cleanup complete  -----', 'ok')
     except Exception as e:
         print_message('----- AN UNEXPECTED EXCEPTION OCCURED -----')
         runmanager.write_job_sets(state_path)
+        filemanager.terminate_transfers()
         print_debug(e)
 
 if __name__ == "__main__":

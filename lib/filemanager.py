@@ -56,6 +56,9 @@ class FileManager(object):
         DataFile.create_table()
         if self._mutex.locked():
             self._mutex.release()
+        
+        self.thread_list = list()
+        self.kill_event = threading.Event()
 
     def __str__(self):
         # TODO: make this better
@@ -295,6 +298,13 @@ class FileManager(object):
             print_line(
                 line=msg,
                 event_list=self._event_list)
+    
+    def terminate_transfers(self):
+        self.kill_event.set()
+        for thread in self.thread_list:
+            msg = 'terminating {}, this may take a moment'.format(thread.name)
+            print_line(msg, self._event_list)
+            thread.join(0.5)
 
     def print_db(self):
         self._mutex.acquire()
@@ -433,7 +443,6 @@ class FileManager(object):
 
         # required files dont exist locally, do exist remotely
         # or if they do exist locally have a different local and remote size
-        thread_list = list()
         target_files = list()
         self._mutex.acquire()
         try:
@@ -485,13 +494,15 @@ class FileManager(object):
                     client = get_client()
                     remote_uuid = required_files[0].remote_uuid
                     local_uuid = self._config['global']['local_globus_uuid']
+                    thread_name = '{}_globus_transfer'.format(required_files[0].case)
                     _args = (client, remote_uuid,
-                             local_uuid, target_files, event)
+                             local_uuid, target_files,
+                             self.kill_event)
                     thread = Thread(
                         target=globus_transfer,
-                        name='filenamager_globus_transfer',
+                        name=thread_name,
                         args=_args)
-                    thread_list.append(thread)
+                    self.thread_list.append(thread)
                     thread.start()
                 elif required_files[0].transfer_type == 'sftp':
                     msg = 'Starting sftp file transfer of {} files'.format(
@@ -499,12 +510,13 @@ class FileManager(object):
                     print_line(msg, self._event_list)
 
                     client = get_ssh_client(required_files[0].remote_hostname)
-                    _args = (target_files, client, event)
+                    thread_name = '{}_sftp_transfer'.format(required_files[0].case)
+                    _args = (target_files, client, self.kill_event)
                     thread = Thread(
                         target=self._ssh_transfer,
-                        name='filenamager_ssh_transfer',
+                        name=thread_name,
                         args=_args)
-                    thread_list.append(thread)
+                    self.thread_list.append(thread)
                     thread.start()
         except Exception as e:
             print_debug(e)
@@ -523,8 +535,15 @@ class FileManager(object):
                 file['remote_path'], file['local_path'])
             logging.info(msg)
 
+            msg = 'starting sftp transfer for {}'.format(filename)
+            print_line(msg, self._event_list)
+
             ssh_transfer(sftp_client, file)
-            msg = '{} transfer complete'.format(filename)
+            
+            msg = 'sftp transfer complete for {}'.format(filename)
+            print_line(msg, self._event_list)
+
+            msg = self.report_files_local()
             print_line(msg, self._event_list)
 
     def years_ready(self, data_type, start_year, end_year):
