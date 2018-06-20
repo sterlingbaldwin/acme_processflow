@@ -130,6 +130,13 @@ Please add a space and run again.'''.format(num=line_index)
             print_message(message)
         return False, False, False
     
+    try:
+        setup_directories(pargs, config)
+    except Exception as e:
+        print_message('Failed to setup directories')
+        print_debug(e)
+        sys.exit(1)
+    
     if pargs.resource_path:
         config['global']['resource_path'] = pargs.resource_path
     else:
@@ -191,13 +198,6 @@ Please add a space and run again.'''.format(num=line_index)
         kwargs['version'],
         kwargs['branch'])
     logging.info(msg)
-
-    try:
-        setup_directories(pargs, config)
-    except Exception as e:
-        print_message('Failed to setup directories')
-        print_debug(e)
-        sys.exit(1)
 
     # Copy the config into the input directory for safe keeping
     input_config_path = os.path.join(
