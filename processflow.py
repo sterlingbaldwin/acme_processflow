@@ -23,15 +23,6 @@ from lib.util import print_debug
 __version__ = '2.0.0'
 __branch__ = 'manymodel'
 
-# check for NCL
-if not os.environ.get('NCARG_ROOT'):
-    ncar_path = '/usr/local/src/NCL-6.3.0'
-    if os.path.exists(ncar_path):
-        os.environ['NCARG_ROOT'] = ncar_path
-    else:
-        print 'No NCARG_ROOT found in environment variables, make sure NCL installed on the machine and add its path to your ~/.bashrc'
-        sys.exit()
-
 # set variable to make vcs shut up
 os.environ['UVCDAT_ANONYMOUS_LOG'] = 'False'
 
@@ -214,9 +205,9 @@ def main(test=False, **kwargs):
         print_message('-----  cleanup complete  -----', 'ok')
     except Exception as e:
         print_message('----- AN UNEXPECTED EXCEPTION OCCURED -----')
+        print_debug(e)
         runmanager.write_job_sets(state_path)
         filemanager.terminate_transfers()
-        print_debug(e)
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
