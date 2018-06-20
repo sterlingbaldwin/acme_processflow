@@ -3,7 +3,7 @@ import re
 import json
 import logging
 
-from subprocess import call
+from subprocess import call, check_output
 from bs4 import BeautifulSoup
 
 from jobs.diag import Diag
@@ -98,6 +98,12 @@ class AMWG(Diag):
             variables['cntl_path_history'] = input_path + os.sep
             variables['cntl_path_climo'] = input_path + os.sep
         
+        # get environment path to use as NCARG_ROOT
+        conda_info = json.loads(
+            check_output(['conda', 'info', '--json']))
+        env_path = conda_info['default_prefix']
+        variables['NCARG_ROOT'] = env_path
+
         render(
             variables=variables,
             input_path=template_input_path,
@@ -117,7 +123,6 @@ class AMWG(Diag):
         self._change_input_file_names()
         # create the run command and submit it
         cmd = [
-            'export NCARG_ROOT=\'/usr/local/src/NCL-6.3.0\'\n',
             'csh', csh_template_out
         ]
         return self._submit_cmd_to_slurm(config, cmd)
