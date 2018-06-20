@@ -88,7 +88,7 @@ def get_ssh_client(hostname):
             password = getpass(prompt='Password for {}: '.format(hostname))
             client.connect(hostname, port=22, username=username, password=password)
         except Exception as e:
-            print 'Pnvalid password'
+            print 'Invalid password'
         else:
             connected = True
             break
