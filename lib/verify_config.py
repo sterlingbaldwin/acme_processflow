@@ -192,9 +192,6 @@ def verify_config(config):
         # check e3sm_diags
         # ------------------------------------------------------------------------
         if config['diags'].get('e3sm_diags'):
-            if config.get('img_hosting') and not config['diags']['e3sm_diags'].get('host_directory'):
-                msg = 'image hosting turned on, but no host_directory given for e3sm_diags'
-                messages.append(msg)
             if not config['diags']['e3sm_diags'].get('backend'):
                 msg = 'no backend given for e3sm_diags'
                 messages.append(msg)
@@ -237,9 +234,6 @@ def verify_config(config):
         if config['diags'].get('aprime'):
             if not config['diags']['aprime'].get('run_frequency'):
                 msg = 'no run_frequency given for aprime'
-                messages.append(msg)
-            if config.get('img_hosting') and not config['diags']['aprime'].get('host_directory'):
-                msg = 'img_hosting turned on but no host_directory given for aprime'
                 messages.append(msg)
             if not config['diags']['aprime'].get('aprime_code_path'):
                 msg = 'no aprime_code_path given for aprime'
