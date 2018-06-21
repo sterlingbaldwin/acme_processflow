@@ -24,7 +24,7 @@ requirements:
     - acme_diags >=1.2.1
     - markupsafe
     - matplotlib
-    - nco >=4.7.4
+    - nco ==4.7.3
     - ncurses
     - pip
     - python

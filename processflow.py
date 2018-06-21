@@ -25,6 +25,7 @@ __branch__ = 'manymodel'
 
 # set variable to make vcs shut up
 os.environ['UVCDAT_ANONYMOUS_LOG'] = 'False'
+os.environ['NCO_PATH_OVERRIDE'] = 'No'
 
 # create global EventList
 event_list = EventList()

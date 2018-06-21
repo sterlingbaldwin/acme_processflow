@@ -55,7 +55,7 @@ class Regrid(Job):
         else:
             self._dryrun = True
 
-        cmd = ['source deactivate\n', 'module use /usr/local/e3sm_unified/modulefiles\n', 'module load e3sm-unified/1.1.2-py2-x\n', 'ls |', '~zender1/bin/ncremap']
+        cmd = ['ls |', 'ncremap']
 
         if self.run_type == 'lnd':
             cmd.extend([
