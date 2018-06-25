@@ -139,14 +139,14 @@ class FileManager(object):
                 if self._mutex.locked():
                     self._mutex.release()
 
-    def render_string(self, instring, **kwargs):
-        """
-        take a list of keyword arguments and replace uppercase instances of them in the input string
-        """
-        for string, val in kwargs.items():
-            if string in instring:
-                instring = instring.replace(string, val)
-        return instring
+    # def render_string(self, instring, **kwargs):
+    #     """
+    #     take a list of keyword arguments and replace uppercase instances of them in the input string
+    #     """
+    #     for string, val in kwargs.items():
+    #         if string in instring:
+    #             instring = instring.replace(string, val)
+    #     return instring
 
     def check_data_ready(self, data_required, case, start_year=None, end_year=None):
         self._mutex.acquire()
@@ -180,6 +180,37 @@ class FileManager(object):
         finally:
             self._mutex.release()
 
+    def render_file_string(self, data_type, data_type_option, case, year=None, month=None):
+        """
+        Takes strings from the data_types dict and replaces the keywords with the appropriate values
+        """
+        # setup the replacement dict
+        start_year = int(self._config['simulations']['start_year'])
+        end_year = int(self._config['simulations']['end_year'])
+
+        replace = {
+            'PROJECT_PATH': self._config['global']['project_path'],
+            'REMOTE_PATH': self._config['simulations'][case].get('remote_path', ''),
+            'CASEID': case,
+            'REST_YR': '{:04d}'.format(start_year + 1),
+            'START_YR': '{:04d}'.format(start_year),
+            'END_YR': '{:04d}'.format(end_year)
+        }
+        if year is not None:
+            replace['YEAR'] = '{:04d}'.format(year)
+        if month is not None:
+            replace['MONTH'] = '{:02d}'.format(month)
+
+        instring = self._config['data_types'][data_type][data_type_option]
+        if self._config['data_types'][data_type].get(case):
+            if self._config['data_types'][data_type][case].get(data_type_option):
+                instring = self._config['data_types'][data_type][case][data_type_option]
+            
+        for string, val in replace.items():
+            if string in instring:
+                instring = instring.replace(string, val)
+        return instring
+
     def populate_file_list(self):
         """
         Populate the database with the required DataFile entries
@@ -204,23 +235,7 @@ class FileManager(object):
                     if 'all' not in data_types_for_case:
                         if _type not in data_types_for_case:
                             continue
-                        
-                    # setup the replacement dict
-                    replace = {
-                        'PROJECT_PATH': self._config['global']['project_path'],
-                        'REMOTE_PATH': self._config['simulations'][case].get('remote_path', 'data_local'),
-                        'CASEID': case,
-                        'REST_YR': '{:04d}'.format(start_year + 1),
-                        'START_YR': '{:04d}'.format(start_year),
-                        'END_YR': '{:04d}'.format(end_year)
-                    }
-                    # setup the base remote_path
-                    if self._config['data_types'][_type].get(case):
-                        # if this case has a special remote_path
-                        remote_path = self._config['data_types'][_type][case]['remote_path']
-                    else:
-                        # normal case
-                        remote_path = self._config['data_types'][_type]['remote_path']
+
                     # setup the base local_path
                     if self._config['simulations'][case]['transfer_type'] == 'local':
                         # if the data is already locally staged
@@ -229,23 +244,28 @@ class FileManager(object):
                             _type)
                         remote_path = ''
                     else:
-                        local_path = self.render_string(
-                            self._config['data_types'][_type]['local_path'],
-                            **replace)
+                        local_path = self.render_file_string(
+                            data_type=_type,
+                            data_type_option='local_path',
+                            case=case)
 
                     new_files = list()
                     if self._config['data_types'][_type].get('monthly'):
                         # handle monthly data
                         for year in range(start_year, end_year + 1):
                             for month in range(1, 13):
-                                replace['YEAR'] = '{:04d}'.format(year)
-                                replace['MONTH'] = '{:02d}'.format(month)
-                                filename = self.render_string(
-                                    self._config['data_types'][_type]['file_format'],
-                                    **replace)
-                                r_path = self.render_string(
-                                    remote_path,
-                                    **replace)
+                                filename = self.render_file_string(
+                                    data_type=_type,
+                                    data_type_option='file_format',
+                                    case=case,
+                                    year=year,
+                                    month=month)
+                                r_path = self.render_file_string(
+                                    data_type=_type,
+                                    data_type_option='remote_path',
+                                    case=case,
+                                    year=year,
+                                    month=month)
                                 new_files.append({
                                     'name': filename,
                                     'remote_path': os.path.join(r_path, filename),
@@ -263,12 +283,14 @@ class FileManager(object):
                                 })
                     else:
                         # handle one-off data
-                        filename = self.render_string(
-                            self._config['data_types'][_type]['file_format'],
-                            **replace)
-                        r_path = self.render_string(
-                            remote_path,
-                            **replace)
+                        filename = self.render_file_string(
+                                    data_type=_type,
+                                    data_type_option='file_format',
+                                    case=case)
+                        r_path = self.render_file_string(
+                                    data_type=_type,
+                                    data_type_option='remote_path',
+                                    case=case)
                         new_files.append({
                             'name': filename,
                             'remote_path': os.path.join(r_path, filename),
@@ -304,7 +326,7 @@ class FileManager(object):
         for thread in self.thread_list:
             msg = 'terminating {}, this may take a moment'.format(thread.name)
             print_line(msg, self._event_list)
-            thread.join(0.5)
+            thread.join()
 
     def print_db(self):
         self._mutex.acquire()
