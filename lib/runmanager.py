@@ -63,7 +63,7 @@ class RunManager(object):
         self.max_running_jobs = max_jobs if max_jobs else self.slurm.get_node_number() * 6
         while self.max_running_jobs == 0:
             sleep(1)
-            msg = 'no slurm nodes found, checking again'
+            msg = 'Unable to communication with scontrol, checking again'
             print_line(msg, event_list)
             logging.error(msg)
             self.max_running_jobs = self.slurm.get_node_number() * 6
@@ -246,7 +246,8 @@ class RunManager(object):
                     if len(self.running_jobs) >= self.max_running_jobs:
                         msg = 'running {} of {} jobs, waiting for queue to shrink'.format(
                             len(self.running_jobs), self.max_running_jobs)
-                        if self.debug: print_line(msg, self.event_list)
+                        if self.debug: 
+                            print_line(msg, self.event_list)
                         return
                     # if the job was finished by a previous run of the processflow
                     if job.postvalidate(self.config):
@@ -267,12 +268,26 @@ class RunManager(object):
                         continue
 
                     # the job is ready for submission
-                    if isinstance(job, Diag):
+                    if job.run_type is not None:
+                        msg = '{job}-{run_type}-{start:04d}-{end:04d}-{case}: Job ready, submitting to queue'.format(
+                            job=job.job_type,
+                            start=job.start_year,
+                            end=job.end_year,
+                            case=job.short_name,
+                            run_type=job.run_type)
+                    elif isinstance(job, Diag):
                         msg = '{job}-{start:04d}-{end:04d}-{case}-vs-{comp}: Job ready, submitting to queue'.format(
-                            job=job.job_type, start=job.start_year, end=job.end_year, case=job.short_name, comp=job._short_comp_name)
+                            job=job.job_type, 
+                            start=job.start_year, 
+                            end=job.end_year, 
+                            case=job.short_name, 
+                            comp=job._short_comp_name)
                     else:
                         msg = '{job}-{start:04d}-{end:04d}-{case}: Job ready, submitting to queue'.format(
-                            job=job.job_type, start=job.start_year, end=job.end_year, case=job.short_name)
+                            job=job.job_type, 
+                            start=job.start_year, 
+                            end=job.end_year, 
+                            case=job.short_name)
                     print_line(msg, self.event_list)
 
                     # set to pending before data setup so we dont double submit
@@ -293,8 +308,12 @@ class RunManager(object):
 
                     if slurmid is False:
                         msg = '{job}-{start:04d}-{end:04d}-{case}: Prevalidation FAILED'.format(
-                            job=job.job_type, start=job.start_year, end=job.end_year, case=job.short_name)
+                            job=job.job_type,
+                            start=job.start_year,
+                            end=job.end_year,
+                            case=job.short_name)
                         print_line(msg, self.event_list)
+                        job.status = JobStatus.FAILED
                     else:
                         self.running_jobs.append({
                             'slurm_id': slurmid,
