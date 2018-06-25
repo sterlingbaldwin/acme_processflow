@@ -22,6 +22,7 @@ class Job(object):
         self._depends_on = list()
         self._id = uuid4().hex[:10]
         self._job_id = 0
+        self._has_been_executed = False
         self._status = JobStatus.VALID
         self._case = case
         self._short_name = short_name
@@ -138,6 +139,9 @@ class Job(object):
         return
     # -----------------------------------------------
     def check_data_ready(self, filemanager):
+        """
+        Checks that the data needed for the job is present on the machine, in the input directory
+        """
         if self._data_ready == True:
             return
         else:
@@ -147,6 +151,31 @@ class Job(object):
                 start_year=self.start_year,
                 end_year=self.end_year)
         return
+    # -----------------------------------------------
+    def check_data_in_place(self):
+        """
+        Checks that the data needed for the job has been symlinked into the jobs temp directory
+
+        This assumes that the job.setup_data method worked correctly and all files needed are in 
+            the _input_file_paths list
+        """
+        if len(self._input_file_paths) == 0:
+            return False
+
+        for item in self._input_file_paths:
+            if not os.path.exists(item):
+                msg = '{type}-{start:04d}-{end:04d}-{case}: File not found in input temp directory {file}'.format(
+                    type=self.job_type,
+                    run_type=self._run_type,
+                    start=self.start_year,
+                    end=self.end_year,
+                    case=self.short_name,
+                    file=item)
+                logging.error(msg)
+                return False
+        # nothing was missing
+        return True
+        
     # -----------------------------------------------
     def _submit_cmd_to_slurm(self, config, cmd):
         """
@@ -209,8 +238,15 @@ class Job(object):
 
         # submit the run script to the slurm controller
         slurm = Slurm()
-        self._job_id = slurm.batch(run_script, '--oversubscribe')
+        self._job_id = slurm.batch(run_script)
         return self._job_id
+    # -----------------------------------------------
+    def prevalidate(self, *args, **kwargs):
+        if not self.data_ready:
+            return False
+        if not self.check_data_in_place():
+            return False
+        return True
     # -----------------------------------------------
     @property
     def short_name(self):
