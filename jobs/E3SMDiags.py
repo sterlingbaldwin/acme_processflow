@@ -23,7 +23,6 @@ class E3SMDiags(Diag):
             'num_cores': '-n 24',  # 16 cores
             'run_time': '-t 0-10:00',  # 5 hours run time
             'num_machines': '-N 1',  # run on one machine
-            'oversubscribe': '--oversubscribe'
         }
     # -----------------------------------------------
     def _dep_filter(self, job):
@@ -49,14 +48,6 @@ class E3SMDiags(Diag):
         else:
             climo, = filter(lambda job: self._dep_filter(job), jobs)
             self.depends_on.append(climo.id)
-    # -----------------------------------------------
-    def prevalidate(self, *args, **kwargs):
-        """
-        e3sm_diags requires that ncclimo be run before it on atm input
-        """
-        if self._dryrun:
-            return True
-        return self.data_ready
     # -----------------------------------------------
     def execute(self, config, dryrun=False):
         if self.comparison == 'obs':

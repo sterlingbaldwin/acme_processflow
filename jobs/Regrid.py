@@ -23,10 +23,9 @@ class Regrid(Job):
         self._job_type = 'regrid'
         self._data_required = [self._run_type]
         self._slurm_args = {
-            'num_cores': '-n 16',  # 16 cores
-            'run_time': '-t 0-10:00',  # 5 hours run time
+            'num_cores': '-n 2',  # 2 cores
+            'run_time': '-t 0-10:00',  # 10 hours run time
             'num_machines': '-N 1',  # run on one machine
-            'oversubscribe': '--oversubscribe'
         }
     # -----------------------------------------------
     def setup_dependencies(self, *args, **kwargs):
@@ -34,9 +33,6 @@ class Regrid(Job):
         Regrid doesnt require any other jobs
         """
         return True
-    # -----------------------------------------------
-    def prevalidate(self):
-        return self.data_ready
     # -----------------------------------------------
     def execute(self, config, dryrun=False):
         regrid_path = os.path.join(
@@ -55,11 +51,14 @@ class Regrid(Job):
         else:
             self._dryrun = True
 
-        cmd = ['ls |', 'ncremap']
+        cmd = ['export PATH=/export/zender1/bin:$PATH\n', 
+               'ncks --version\n',
+               'ncremap --version\n',
+               'ls |', 'ncremap']
 
         if self.run_type == 'lnd':
             cmd.extend([
-                '-P', 'alm',
+                '-P', 'sgs',
                 '-a', 'conserve',
                 '-s', config['post-processing']['regrid']['lnd']['source_grid_path'],
                 '-g', config['post-processing']['regrid']['lnd']['destination_grid_path']
@@ -92,12 +91,15 @@ class Regrid(Job):
 
         return self._submit_cmd_to_slurm(config, cmd)
     # -----------------------------------------------
-    def postvalidate(self, config):
-        regrid_path = os.path.join(
-            config['global']['project_path'], 'output', 'pp',
+    def postvalidate(self, config): 
+        self._output_path = os.path.join(
+            config['global']['project_path'], 
+            'output', 
+            'pp',
             config['post-processing']['regrid'][self.run_type]['destination_grid_name'],
-            self._short_name, self.job_type, self.run_type)
-        self._output_path = regrid_path
+            self._short_name, 
+            self.job_type, 
+            self.run_type)
 
         if not self._output_path or not os.path.exists(self._output_path):
             return False
@@ -106,13 +108,22 @@ class Regrid(Job):
         contents.sort()
         for year in range(self.start_year, self.end_year + 1):
             for month in range(1, 13):
-                pattern = r'%s.*\.%04d-%02d.nc' % (self.case, year, month)
+                pattern = r'%04d-%02d' % (year, month)
                 found = False
                 for item in contents:
-                    if re.match(pattern, item):
+                    if re.search(pattern, item):
                         found = True
                         break
                 if not found:
+                    msg = '{job}-{run_type}-{start:04d}-{end:04d}-{case}: Unable to find regridded output file for {yr}-{mon}'.format(
+                        job=self.job_type, 
+                        run_type=self.run_type,
+                        start=self.start_year,
+                        end=self.end_year,
+                        case=self._short_name,
+                        yr=year,
+                        mon=month)
+                    logging.error(msg)
                     return False
         return True
     # -----------------------------------------------

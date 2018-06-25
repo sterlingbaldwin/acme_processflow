@@ -17,7 +17,6 @@ class Timeseries(Job):
             'num_cores': '-n 16',  # 16 cores
             'run_time': '-t 0-10:00',  # 5 hours run time
             'num_machines': '-N 1',  # run on one machine
-            'oversubscribe': '--oversubscribe'
         }
 
     def setup_dependencies(self, *args, **kwargs):
@@ -25,12 +24,6 @@ class Timeseries(Job):
         Timeseries doesnt require any other jobs
         """
         return True
-    # -----------------------------------------------
-    def prevalidate(self, *args, **kwargs):
-        """
-        Timeseries is ready to run as soon as it has data
-        """
-        return self.data_ready
     # -----------------------------------------------
     def postvalidate(self, config):
         regrid_map_path = config['post-processing']['timeseries'].get('regrid_map_path')

@@ -3,7 +3,7 @@ import re
 import json
 import logging
 
-from subprocess import call, check_output
+from subprocess import call
 from bs4 import BeautifulSoup
 
 from jobs.diag import Diag
@@ -23,7 +23,6 @@ class AMWG(Diag):
             'num_cores': '-n 24',  # 16 cores
             'run_time': '-t 0-10:00',  # 5 hours run time
             'num_machines': '-N 1',  # run on one machine
-            'oversubscribe': '--oversubscribe'
         }
     # -----------------------------------------------
     def _dep_filter(self, job):
@@ -49,9 +48,6 @@ class AMWG(Diag):
         else:
             climo, = filter(lambda job: self._dep_filter(job), jobs)
             self.depends_on.append(climo.id)
-    # -----------------------------------------------
-    def prevalidate(self, *args, **kwargs):
-        return self.data_ready
     # -----------------------------------------------
     def execute(self, config, dryrun=False):
         if self.comparison == 'obs':
@@ -99,10 +95,7 @@ class AMWG(Diag):
             variables['cntl_path_climo'] = input_path + os.sep
         
         # get environment path to use as NCARG_ROOT
-        conda_info = json.loads(
-            check_output(['conda', 'info', '--json']))
-        env_path = conda_info['default_prefix']
-        variables['NCARG_ROOT'] = env_path
+        variables['NCARG_ROOT'] = os.environ['CONDA_PREFIX']
 
         render(
             variables=variables,
@@ -122,9 +115,8 @@ class AMWG(Diag):
 
         self._change_input_file_names()
         # create the run command and submit it
-        cmd = [
-            'csh', csh_template_out
-        ]
+        self._has_been_executed = True
+        cmd = ['csh', csh_template_out]
         return self._submit_cmd_to_slurm(config, cmd)
     # -----------------------------------------------
     def postvalidate(self, config):
@@ -151,14 +143,36 @@ class AMWG(Diag):
                     comp=self._short_comp_name))
         
         # check that there have been enough plots created to call this a successful run
-        enough_files = bool(sum(len(files) for r, d, files in os.walk(self._output_path)) > 1900)
+        num_found = sum(len(files) for r, d, files in os.walk(self._output_path))
+        num_expected = 1900 if self.comparison == 'obs' else 1500
+        enough_files = bool(num_found > num_expected)
         if not enough_files:
-            msg = '{job}-{start:04d}-{end:04d}-{case}-vs-{comp}: Not enough images generated'.format(
-                job=self.job_type, 
-                comp=self._short_comp_name,
-                start=self.start_year,
-                end=self.end_year,
-                case=self._short_name)
+            if not self._has_been_executed:
+                msg = '{job}-{start:04d}-{end:04d}-{case}-vs-{comp}: Job hasnt been run yet, starting from scratch'.format(
+                    job=self.job_type, 
+                    comp=self._short_comp_name,
+                    start=self.start_year,
+                    end=self.end_year,
+                    case=self._short_name)
+            else:
+                img_source = os.path.join(
+                    self._output_path,
+                    '{case}-vs-{comp}'.format(
+                        case=self.short_name,
+                        comp=self._short_comp_name))
+                if os.path.exists(img_source + '.tar'):
+                    self.extract_img_tar(img_source)
+                    num_found = sum(len(files) for r, d, files in os.walk(self._output_path))
+                    enough_files = bool(num_found > num_expected)
+                if not enough_files:
+                    msg = '{job}-{start:04d}-{end:04d}-{case}-vs-{comp}: Not enough images generated, only {num_found} but expected > {num_expected}'.format(
+                        job=self.job_type, 
+                        comp=self._short_comp_name,
+                        start=self.start_year,
+                        end=self.end_year,
+                        case=self._short_name,
+                        num_found=num_found,
+                        num_expected=num_expected)
             logging.info(msg)
             return False
         else:
@@ -212,15 +226,7 @@ class AMWG(Diag):
         
         if not os.path.exists(img_source):
             if os.path.exists(img_source + '.tar'):
-                msg = '{job}-{start:04d}-{end:04d}-{case}-vs-{comp}: extracting images from tar archive'.format(
-                    job=self.job_type, 
-                    comp=self._short_comp_name,
-                    start=self.start_year,
-                    end=self.end_year,
-                    case=self._short_name)
-                print_line(msg, event_list)
-                img_source_tail, _ = os.path.split(img_source)
-                call(['tar', '-xf', img_source + '.tar', '--directory', img_source_tail])
+                self.extract_img_tar(img_source)
             else:
                 msg = '{job}-{start:04d}-{end:04d}-{case}-vs-{comp}: Unable to find output directory or tar archive'.format(
                     job=self.job_type, 
@@ -241,6 +247,16 @@ class AMWG(Diag):
             start=self.start_year,
             end=self.end_year,
             comp=self._short_comp_name)
+    # -----------------------------------------------
+    def extract_img_tar(self, img_source):
+        msg = '{job}-{start:04d}-{end:04d}-{case}-vs-{comp}: extracting images from tar archive'.format(
+            job=self.job_type, 
+            comp=self._short_comp_name,
+            start=self.start_year,
+            end=self.end_year,
+            case=self._short_name)
+        print_line(msg, event_list)
+        call(['tar', '-xf', img_source + '.tar', '--directory', self._output_path])
     # -----------------------------------------------
     def _check_links(self, config):
         """

@@ -37,9 +37,6 @@ class Aprime(Diag):
         """
         return
     # -----------------------------------------------
-    def prevalidate(self, *args, **kwargs):
-        return self.data_ready
-    # -----------------------------------------------
     def execute(self, config, dryrun=False):
         if self.comparison == 'obs':
             self._short_comp_name = 'obs'
@@ -122,7 +119,7 @@ class Aprime(Diag):
         else:
             self._short_comp_name = config['simulations'][self.comparison]['short_name']
         if self.status != JobStatus.COMPLETED:
-            msg = '{job}-{start:04d}-{end:04d}-{case}-vs-{comp}: Job failed, not running completion handler'.format(
+            msg = '{job}-{start:04d}-{end:04d}-{case}-vs-{comp}: Job failed'.format(
                 job=self.job_type, 
                 comp=self._short_comp_name,
                 start=self.start_year,
@@ -130,7 +127,6 @@ class Aprime(Diag):
                 case=self._short_name)
             print_line(msg, event_list)
             logging.info(msg)
-            return
         else:
             msg = '{job}-{start:04d}-{end:04d}-{case}-vs-{comp}: Job complete'.format(
                 job=self.job_type, 
@@ -243,19 +239,29 @@ class Aprime(Diag):
         """
         Aprime has some hardcoded paths setup that have to be fixed or it will crash
         """
+        import ipdb; ipdb.set_trace()
         tail, head = os.path.split(self._input_file_paths[0])
         fixed_input_path = os.path.join(
             tail, self.case, 'run')
-        
+
         if not os.path.exists(fixed_input_path):
             os.makedirs(fixed_input_path)
-        
-        for item in self._input_file_paths:
+
+        for idx, item in enumerate(self._input_file_paths):
             # move the input file, then update the pointer
+            path, name = os.path.split(item)
             new_path = os.path.join(
-                item, fixed_input_path)
+                fixed_input_path, name)
             if os.path.exists(new_path):
+                self._input_file_paths[idx] = new_path
                 continue
+            msg = 'aprime-{start:04d}-{end:04d}-{case}-vs-{comp}: moving input file from {src} to {dst}'.format(
+                start=self.start_year,
+                end=self.end_year,
+                comp=self._short_comp_name,
+                case=self.short_name,
+                src=item,
+                dst=new_path)
+            logging.info(msg)
             move(item, fixed_input_path)
-            tail, head = os.path.split(item)
-            item = os.path.join(fixed_input_path, head)
+            self._input_file_paths[idx] = new_path

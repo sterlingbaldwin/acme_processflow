@@ -16,54 +16,14 @@ class Climo(Job):
             'num_cores': '-n 16',  # 16 cores
             'run_time': '-t 0-10:00',  # 5 hours run time
             'num_machines': '-N 1',  # run on one machine
-            'oversubscribe': '--oversubscribe'
         }
-    
+    # -----------------------------------------------
     def setup_dependencies(self, *args, **kwargs):
         """
         Climo doesnt require any other jobs
         """
         return True
-
-    def prevalidate(self):
-        """
-        Prerun validation for Ncclimo
-
-        Ncclimo just needs atm files, 12 for each year
-
-        Returns true if all the input files were found, False otherwise
-        """
-        if self._dryrun:
-            return True
-
-        for year in range(self.start_year, self.end_year + 1):
-            for month in range(1, 13):
-                # create the name of the file we're expecting
-                testname = '{exp}.cam.h0.{year:04d}-{month:02d}.nc'.format(
-                    exp=self.case, year=year, month=month)
-                found = False
-                for input_file in self._input_file_paths:
-                    tail, head = os.path.split(input_file)
-                    if testname in head:
-                        found = True
-                        break
-                if not found:
-                    msg = '{file} not found for {job}-{start:04d}-{end:04d}-{case}'.format(
-                        file=testname, job=self.job_type, start=self.start_year, end=self.end_year, case=self._short_name)
-                    logging.error(msg)
-                    self.status = JobStatus.INVALID
-                    return False
-                if not os.path.exists(input_file):
-                    msg = '{} does not exist'.format(input_file)
-                    logging.error(msg)
-                    self.status = JobStatus.INVALID
-                    return False
-        msg = '{job}-{start:04d}-{end:04d}-{case}: prevalidation successful'.format(
-            job=self.job_type, start=self.start_year, end=self.end_year, case=self._short_name)
-        logging.info(msg)
-        self.status = JobStatus.VALID
-        return True
-    
+    # -----------------------------------------------
     def postvalidate(self, config):
         """
         Postrun validation for Ncclimo
@@ -108,7 +68,7 @@ class Climo(Job):
 
         # nothing's gone wrong, so we must be done
         return True
-    
+    # -----------------------------------------------
     def execute(self, config, dryrun=False):
         regrid_path = os.path.join(
             config['global']['project_path'], 'output', 'pp',
@@ -152,7 +112,7 @@ class Climo(Job):
         slurm_command = ' '.join(cmd)
         
         return self._submit_cmd_to_slurm(config, cmd)
-    
+    # -----------------------------------------------
     def handle_completion(self, filemanager, event_list, config):
         if self.status != JobStatus.COMPLETED:
             msg = '{job}-{start:04d}-{end:04d}-{case}: Job failed, not running completion handler'.format(
@@ -209,4 +169,3 @@ class Climo(Job):
             job=self.job_type, start=self.start_year, end=self.end_year, case=self._short_name)
         print_line(msg, event_list)
         logging.info(msg)
-
