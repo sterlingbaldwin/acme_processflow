@@ -25,7 +25,6 @@ requirements:
     - markupsafe
     - matplotlib
     - nco ==4.7.3
-    - ncurses
     - pip
     - python
     - setuptools
