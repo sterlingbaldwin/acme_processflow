@@ -209,9 +209,9 @@ Please add a space and run again.'''.format(num=line_index)
         pass
 
     if config['global']['always_copy']:
-        msg = 'Running in forced-copy mode, all previous diagnostic output will be overwritten'
+        msg = 'Running in forced-copy mode, previously hosted diagnostic output will be replaced'
     else:
-        msg = 'Running without forced-copy, previous diagnostic output will be preserved'
+        msg = 'Running without forced-copy, previous hosted output will be preserved'
     print_line(
         line=msg,
         event_list=event_list)
