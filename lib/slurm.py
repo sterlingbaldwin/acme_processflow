@@ -44,10 +44,10 @@ class Slurm(object):
             try:
                 proc = Popen(cmd, shell=False, stderr=PIPE, stdout=PIPE)
                 out, err = proc.communicate()
-                if 'Transport endpoint is not connected' in err:
+                if 'Transport endpoint is not connected' in err or 'Socket timed out on send/recv operation' in err:
                     print 'unable to submit job, trying again'
                     tries += 1
-                    sleep(tries)
+                    sleep(tries * 2)
                     proc = Popen(['scontrol', 'show', 'jobs'],
                                 shell=False, stderr=PIPE, stdout=PIPE)
                     out, err = proc.communicate()
@@ -63,7 +63,7 @@ class Slurm(object):
                                 continue
                             jobinfo[j[:index]] = j[index + 1:]
                     for job in all_jobs:
-                        if job['Command'] == cmd[1]:
+                        if job.get('Command') == cmd[1]:
                             return 'Submitted batch job ' + job['JobId'], None
                 else:
                     break
@@ -85,7 +85,8 @@ class Slurm(object):
                 for job in all_jobs:
                     if job['Command'] == cmd[1]:
                         return ['Submitted', 'batch', 'job', job['JobId']], None
-                sleep(1)
+                tries += 1
+                sleep(tries * 2)
         if tries >= 10:
             raise Exception('SLURM ERROR: Transport endpoint is not connected')
         if 'Invalid job id specified' in err:
