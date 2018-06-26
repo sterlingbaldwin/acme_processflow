@@ -1,4 +1,5 @@
 import os
+import logging
 from time import sleep
 from subprocess import Popen, PIPE
 
@@ -44,6 +45,8 @@ class Slurm(object):
             try:
                 proc = Popen(cmd, shell=False, stderr=PIPE, stdout=PIPE)
                 out, err = proc.communicate()
+                if err:
+                    logging.error(err)
                 if 'Transport endpoint is not connected' in err or 'Socket timed out on send/recv operation' in err:
                     print 'unable to submit job, trying again'
                     tries += 1
