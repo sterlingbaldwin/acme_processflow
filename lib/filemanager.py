@@ -201,11 +201,15 @@ class FileManager(object):
         if month is not None:
             replace['MONTH'] = '{:02d}'.format(month)
 
-        instring = self._config['data_types'][data_type][data_type_option]
         if self._config['data_types'][data_type].get(case):
             if self._config['data_types'][data_type][case].get(data_type_option):
                 instring = self._config['data_types'][data_type][case][data_type_option]
-            
+                for item in self._config['simulations'][case]:
+                    if item.upper() in self._config['data_types'][data_type][case][data_type_option]:
+                        instring = instring.replace(item.upper(), self._config['simulations'][case][item])
+                return instring
+        
+        instring = self._config['data_types'][data_type][data_type_option]
         for string, val in replace.items():
             if string in instring:
                 instring = instring.replace(string, val)
@@ -237,17 +241,10 @@ class FileManager(object):
                             continue
 
                     # setup the base local_path
-                    if self._config['simulations'][case]['transfer_type'] == 'local':
-                        # if the data is already locally staged
-                        local_path = os.path.join(
-                            self._config['simulations'][case]['local_path'],
-                            _type)
-                        remote_path = ''
-                    else:
-                        local_path = self.render_file_string(
-                            data_type=_type,
-                            data_type_option='local_path',
-                            case=case)
+                    local_path = self.render_file_string(
+                        data_type=_type,
+                        data_type_option='local_path',
+                        case=case)
 
                     new_files = list()
                     if self._config['data_types'][_type].get('monthly'):
