@@ -115,12 +115,8 @@ class Regrid(Job):
                         found = True
                         break
                 if not found:
-                    msg = '{job}-{run_type}-{start:04d}-{end:04d}-{case}: Unable to find regridded output file for {yr}-{mon}'.format(
-                        job=self.job_type, 
-                        run_type=self.run_type,
-                        start=self.start_year,
-                        end=self.end_year,
-                        case=self._short_name,
+                    msg = '{prefix}: Unable to find regridded output file for {yr}-{mon}'.format(
+                        prefix=self.msg_prefix(),
                         yr=year,
                         mon=month)
                     logging.error(msg)
@@ -129,22 +125,14 @@ class Regrid(Job):
     # -----------------------------------------------
     def handle_completion(self, filemanager, event_list, config):
         if self.status != JobStatus.COMPLETED:
-            msg = '{job}-{run_type}-{start:04d}-{end:04d}-{case}: Job failed, not running completion handler'.format(
-                job=self.job_type, 
-                run_type=self.run_type,
-                start=self.start_year,
-                end=self.end_year,
-                case=self._short_name)
+            msg = '{prefix}: Job failed, not running completion handler'.format(
+                prefix=self.msg_prefix())
             print_line(msg, event_list)
             logging.info(msg)
             return
         else:
-            msg = '{job}-{run_type}-{start:04d}-{end:04d}-{case}: Job complete'.format(
-                job=self.job_type, 
-                run_type=self.run_type,
-                start=self.start_year,
-                end=self.end_year,
-                case=self._short_name)
+            msg = '{prefix}: Job complete'.format(
+                prefix=self.msg_prefix())
             print_line(msg, event_list)
             logging.info(msg)
         

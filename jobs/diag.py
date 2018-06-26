@@ -36,64 +36,42 @@ class Diag(Job):
     # -----------------------------------------------
     def setup_hosting(self, config, img_source, host_path, event_list):
         if config['global']['always_copy']:
-            if os.path.exists(host_path):
-                msg = '{job}-{start:04d}-{end:04d}-{case}-vs-{comp}: Removing previous output from host location'.format(
-                    job=self.job_type,
-                    start=self.start_year,
-                    end=self.end_year,
-                    case=self.short_name,
-                    comp=self._short_comp_name)
+            if os.path.exists(host_path) and self.job_type != 'aprime':
+                msg = '{prefix}: Removing previous output from host location'.format(
+                    prefix=self.msg_prefix())
                 print_line(msg, event_list)
                 rmtree(host_path)
         if not os.path.exists(host_path):
-            msg = '{job}-{start:04d}-{end:04d}-{case}-vs-{comp}: Moving files for web hosting'.format(
-                job=self.job_type,
-                start=self.start_year,
-                end=self.end_year,
-                case=self.short_name,
-                comp=self._short_comp_name)
+            msg = '{prefix}: Moving files for web hosting'.format(
+                prefix=self.msg_prefix())
             print_line(msg, event_list)
             copytree(
                 src=img_source,
                 dst=host_path)
             
             # fix permissions for apache
-            msg = '{job}-{start:04d}-{end:04d}-{case}-vs-{comp}: Fixing permissions'.format(
-                job=self.job_type,
-                start=self.start_year,
-                end=self.end_year,
-                case=self.short_name,
-                comp=self._short_comp_name)
+            msg = '{prefix}: Fixing permissions'.format(
+                prefix=self.msg_prefix())
             print_line(msg, event_list)
-            call(['chmod', '-R', 'a+rx', host_path])
-            tail, _ = os.path.split(host_path)
-            for _ in range(3):
-                call(['chmod', 'a+rx', tail])
-                tail, _ = os.path.split(tail)
         else:
-            msg = '{job}-{start:04d}-{end:04d}-{case}-vs-{comp}: Files already present at host location, skipping'.format(
-                job=self.job_type,
-                start=self.start_year,
-                end=self.end_year,
-                case=self.short_name,
-                comp=self._short_comp_name)
+            msg = '{prefix}: Files already present at host location, skipping'.format(
+                prefix=self.msg_prefix())
             print_line(msg, event_list)
+        call(['chmod', '-R', 'a+rx', host_path])
+        tail, _ = os.path.split(host_path)
+        for _ in range(3):
+            call(['chmod', 'a+rx', tail])
+            tail, _ = os.path.split(tail)
     # -----------------------------------------------
     def get_report_string(self):
         if self.status == JobStatus.COMPLETED:
-            msg = '{job}-{start:04d}-{end:04d}-vs-{comp} :: {status} :: {url}'.format(
-                job=self.job_type,
-                start=self.start_year,
-                end=self.end_year,
+            msg = '{prefix} :: {status} :: {url}'.format(
+                prefix=self.msg_prefix(),
                 status=self.status.name,
-                comp=self._short_comp_name,
                 url=self._host_url)
         else:
-            msg = '{job}-{start:04d}-{end:04d}-vs-{comp} :: {status} :: {console_path}'.format(
-                job=self.job_type,
-                start=self.start_year,
-                end=self.end_year,
+            msg = '{prefix} :: {status} :: {console_path}'.format(
+                prefix=self.msg_prefix(),
                 status=self.status.name,
-                comp=self._short_comp_name,
                 console_path=self._console_output_path)
         return msg

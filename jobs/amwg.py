@@ -148,12 +148,8 @@ class AMWG(Diag):
         enough_files = bool(num_found > num_expected)
         if not enough_files:
             if not self._has_been_executed:
-                msg = '{job}-{start:04d}-{end:04d}-{case}-vs-{comp}: Job hasnt been run yet, starting from scratch'.format(
-                    job=self.job_type, 
-                    comp=self._short_comp_name,
-                    start=self.start_year,
-                    end=self.end_year,
-                    case=self._short_name)
+                msg = '{prefix}: Job hasnt been run yet, starting from scratch'.format(
+                    prefix=self.msg_prefix())
             else:
                 img_source = os.path.join(
                     self._output_path,
@@ -165,12 +161,8 @@ class AMWG(Diag):
                     num_found = sum(len(files) for r, d, files in os.walk(self._output_path))
                     enough_files = bool(num_found > num_expected)
                 if not enough_files:
-                    msg = '{job}-{start:04d}-{end:04d}-{case}-vs-{comp}: Not enough images generated, only {num_found} but expected > {num_expected}'.format(
-                        job=self.job_type, 
-                        comp=self._short_comp_name,
-                        start=self.start_year,
-                        end=self.end_year,
-                        case=self._short_name,
+                    msg = '{prefix}: Not enough images generated, only {num_found} but expected > {num_expected}'.format(
+                        prefix=self.msg_prefix(),
                         num_found=num_found,
                         num_expected=num_expected)
             logging.info(msg)
@@ -185,21 +177,13 @@ class AMWG(Diag):
         else:
             self._short_comp_name = config['simulations'][self.comparison]['short_name']
         if self.status != JobStatus.COMPLETED:
-            msg = '{job}-{start:04d}-{end:04d}-{case}-vs-{comp}: Job failed'.format(
-                job=self.job_type, 
-                comp=self._short_comp_name,
-                start=self.start_year,
-                end=self.end_year,
-                case=self._short_name)
+            msg = '{prefix}: Job failed'.format(
+                prefix=self.msg_prefix())
             print_line(msg, event_list)
             logging.info(msg)
         else:
-            msg = '{job}-{start:04d}-{end:04d}-{case}-vs-{comp}: Job complete'.format(
-                job=self.job_type, 
-                comp=self._short_comp_name,
-                start=self.start_year,
-                end=self.end_year,
-                case=self._short_name)
+            msg = '{prefix}: Job complete'.format(
+                prefix=self.msg_prefix())
             print_line(msg, event_list)
             logging.info(msg)
 
@@ -228,12 +212,8 @@ class AMWG(Diag):
             if os.path.exists(img_source + '.tar'):
                 self.extract_img_tar(img_source)
             else:
-                msg = '{job}-{start:04d}-{end:04d}-{case}-vs-{comp}: Unable to find output directory or tar archive'.format(
-                    job=self.job_type, 
-                    comp=self._short_comp_name,
-                    start=self.start_year,
-                    end=self.end_year,
-                    case=self._short_name)
+                msg = '{prefix}: Unable to find output directory or tar archive'.format(
+                    prefix=self.msg_prefix())
                 print_line(msg, event_list)
                 self.status = JobStatus.FAILED
                 logging.info(msg)
@@ -249,12 +229,8 @@ class AMWG(Diag):
             comp=self._short_comp_name)
     # -----------------------------------------------
     def extract_img_tar(self, img_source):
-        msg = '{job}-{start:04d}-{end:04d}-{case}-vs-{comp}: extracting images from tar archive'.format(
-            job=self.job_type, 
-            comp=self._short_comp_name,
-            start=self.start_year,
-            end=self.end_year,
-            case=self._short_name)
+        msg = '{prefix}: extracting images from tar archive'.format(
+            prefix=self.msg_prefix())
         print_line(msg, event_list)
         call(['tar', '-xf', img_source + '.tar', '--directory', self._output_path])
     # -----------------------------------------------
@@ -281,11 +257,8 @@ class AMWG(Diag):
             'index.html')
         page_tail, page_head = os.path.split(page_path)
         if not os.path.exists(page_path):
-            msg = 'amwg-{start:04d}-{end:04d}-{case}-vs-{comp}: No output page found'.format(
-                start=self.start_year,
-                end=self.end_year,
-                comp=self._short_comp_name,
-                case=self.short_name)
+            msg = '{prefix}: No output page found'.format(
+                prefix=self.msg_prefix())
             logging.error(msg)
             return False
 
@@ -304,11 +277,8 @@ class AMWG(Diag):
                 missing_subpage_links = list()
                 if not os.path.exists(subpage_path):
                     link.replace_with_children()
-                    msg = 'amwg-{start:04d}-{end:04d}-{case}-vs-{comp}: web page missing {page}'.format(
-                        start=self.start_year,
-                        end=self.end_year,
-                        comp=self._short_comp_name,
-                        case=self.short_name,
+                    msg = '{prefix}: web page missing {page}'.format(
+                        prefix=self.msg_prefix(),
                         page=subpage_head)
                     logging.error(msg)
                     missing_links.append(subpage_path)
@@ -336,11 +306,8 @@ class AMWG(Diag):
                 outfile.write(str(output_page))
             return True
         else:
-            msg = 'amwg-{start:04d}-{end:04d}-{case}-vs-{comp}: all links found'.format(
-                start=self.start_year,
-                end=self.end_year,
-                case=self.short_name,
-                comp=self.comparison)
+            msg = '{prefix}: all links found'.format(
+                prefix=self.msg_prefix())
             logging.info(msg)
             return True
     # -----------------------------------------------

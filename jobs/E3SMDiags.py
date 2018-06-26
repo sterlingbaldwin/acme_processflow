@@ -123,21 +123,13 @@ class E3SMDiags(Diag):
         else:
             self._short_comp_name = config['simulations'][self.comparison]['short_name']
         if self.status != JobStatus.COMPLETED:
-            msg = '{job}-{start:04d}-{end:04d}-{case}-vs-{comp}: Job failed'.format(
-                job=self.job_type, 
-                comp=self._short_comp_name,
-                start=self.start_year,
-                end=self.end_year,
-                case=self._short_name)
+            msg = '{prefix}: Job failed'.format(
+                prefix=self.msg_prefix())
             print_line(msg, event_list)
             logging.info(msg)
         else:
-            msg = '{job}-{start:04d}-{end:04d}-{case}-vs-{comp}: Job complete'.format(
-                job=self.job_type, 
-                comp=self._short_comp_name,
-                start=self.start_year,
-                end=self.end_year,
-                case=self._short_name)
+            msg = '{prefix}: Job complete'.format(
+                prefix=self.msg_prefix())
             print_line(msg, event_list)
             logging.info(msg)
 
@@ -208,20 +200,14 @@ class E3SMDiags(Diag):
                                 if not os.path.exists(sublink_path):
                                     missing_links.append(sublink_path)
         if missing_links:
-            msg = 'e3sm_diags-{start:04d}-{end:04d}-{case}-vs-{comp}: missing the following links'.format(
-                start=self.start_year,
-                end=self.end_year,
-                case=self.short_name,
-                comp=self.comparison)
+            msg = '{prefix}: missing the following links'.format(
+                prefix=self.msg_prefix())
             logging.error(msg)
             logging.error(missing_links)
             return False
         else:
-            msg = 'e3sm_diags-{start:04d}-{end:04d}-{case}-vs-{comp}: all links found'.format(
-                start=self.start_year,
-                end=self.end_year,
-                case=self.short_name,
-                comp=self.comparison)
+            msg = '{prefix}: all links found'.format(
+                prefix=self.msg_prefix())
             logging.info(msg)
             return True
     # -----------------------------------------------

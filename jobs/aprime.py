@@ -18,7 +18,7 @@ class Aprime(Diag):
         self._requires = ''
         self._host_path = ''
         self._host_url = ''
-        self._short_comp_name = ''
+        self._input_base_path = ''
         self._slurm_args = {
             'num_cores': '-n 24',  # 24 cores
             'run_time': '-t 0-10:00',  # 10 hours run time
@@ -30,6 +30,11 @@ class Aprime(Diag):
                                'ocn_streams', 'cice_streams', 
                                'ocn_in', 'cice_in', 
                                'meridionalHeatTransport']
+        if self.comparison == 'obs':
+            self._short_comp_name = 'obs'
+        else:
+            self._short_comp_name = config['simulations'][self.comparison]['short_name']
+        
     # -----------------------------------------------
     def setup_dependencies(self, *args, **kwargs):
         """
@@ -38,10 +43,6 @@ class Aprime(Diag):
         return
     # -----------------------------------------------
     def execute(self, config, dryrun=False):
-        if self.comparison == 'obs':
-            self._short_comp_name = 'obs'
-        else:
-            self._short_comp_name = config['simulations'][self.comparison]['short_name']
         self._output_path = os.path.join(
             config['global']['project_path'],
             'output', 'diags', self.short_name, 'aprime',
@@ -61,11 +62,7 @@ class Aprime(Diag):
         self._host_path = os.path.join(
             config['img_hosting']['host_directory'],
             self.case,
-            'aprime',
-            '{start:04d}_{end:04d}_vs_{comp}'.format(
-                start=self.start_year,
-                end=self.end_year,
-                comp=self._short_comp_name))
+            'aprime')
         
         # setup template
         template_out = os.path.join(
@@ -76,10 +73,9 @@ class Aprime(Diag):
                 case=self.short_name,
                 comp=self._short_comp_name))
         variables = dict()
-        input_path, _ = os.path.split(self._input_file_paths[0])
         variables['test_casename'] = self.case
         variables['output_base_dir'] = self._output_path
-        variables['test_archive_dir'] = input_path + os.sep
+        variables['test_archive_dir'] = self._input_base_path + os.sep
         variables['test_atm_res'] = config['simulations'][self.case]['native_grid_name']
         variables['test_mpas_mesh_name'] = config['simulations'][self.case]['native_mpas_grid_name']
         variables['test_begin_yr_climo'] = self.start_year
@@ -103,15 +99,32 @@ class Aprime(Diag):
             self._short_comp_name = 'obs'
         else:
             self._short_comp_name = config['simulations'][self.comparison]['short_name']
-        self._host_path = os.path.join(
-            config['img_hosting']['host_directory'],
-            self.case,
-            'aprime',
+        if not self._output_path:
+            self._output_path = os.path.join(
+            config['global']['project_path'],
+            'output', 'diags', self.short_name, 'aprime',
             '{start:04d}_{end:04d}_vs_{comp}'.format(
                 start=self.start_year,
                 end=self.end_year,
                 comp=self._short_comp_name))
-        return self._check_links(config)
+            if not os.path.exists(self._output_path):
+                os.makedirs(self._output_path)
+
+        self._host_path = os.path.join(
+            config['img_hosting']['host_directory'],
+            self.case,
+            'aprime')
+        num_missing = self._check_links(config)
+
+        if num_missing is not None and num_missing <= 5:
+            return True
+        else:
+            if self._has_been_executed:
+                msg = '{prefix}: Job completed but missing {num_missing} plots'.format(
+                    prefix=self.msg_prefix(),
+                    num_missing=num_missing)
+                logging.error(msg)
+            return False
     # -----------------------------------------------
     def handle_completion(self, filemanager, event_list, config):
         if self.comparison == 'obs':
@@ -119,20 +132,14 @@ class Aprime(Diag):
         else:
             self._short_comp_name = config['simulations'][self.comparison]['short_name']
         if self.status != JobStatus.COMPLETED:
-            msg = '{job}-{start:04d}-{end:04d}-{case}-vs-{comp}: Job failed'.format(
-                job=self.job_type, 
-                comp=self._short_comp_name,
-                start=self.start_year,
-                end=self.end_year,
+            msg = '{prefix}: Job failed'.format(
+                prefix=self.msg_prefix(),
                 case=self._short_name)
             print_line(msg, event_list)
             logging.info(msg)
         else:
-            msg = '{job}-{start:04d}-{end:04d}-{case}-vs-{comp}: Job complete'.format(
-                job=self.job_type, 
-                comp=self._short_comp_name,
-                start=self.start_year,
-                end=self.end_year,
+            msg = '{prefix}: Job complete'.format(
+                prefix=self.msg_prefix(),
                 case=self._short_name)
             print_line(msg, event_list)
             logging.info(msg)
@@ -156,15 +163,15 @@ class Aprime(Diag):
         self._host_path = os.path.join(
             config['img_hosting']['host_directory'],
             self.case,
-            'aprime',
-            '{start:04d}_{end:04d}_vs_{comp}'.format(
-                start=self.start_year,
-                end=self.end_year,
-                comp=self._short_comp_name))
+            'aprime')
+
+        self.setup_hosting(
+            config,
+            img_source,
+            self._host_path,
+            event_list)
         
-        self.setup_hosting(config, img_source, self._host_path, event_list)
-        
-        self._host_url = 'https://{server}/{prefix}/{case}/aprime/{start:04d}_{end:04d}_vs_{comp}/{case}_years{start}-{end}_vs_{comp}/index.html'.format(
+        self._host_url = 'https://{server}/{prefix}/{case}/aprime/{case}_years{start}-{end}_vs_{comp}/index.html'.format(
             server=config['img_hosting']['img_host_server'],
             prefix=config['img_hosting']['host_prefix'],
             case=self.case,
@@ -191,19 +198,14 @@ class Aprime(Diag):
         page_path = os.path.join(web_dir, 'index.html')
 
         if not os.path.exists(page_path):
-            msg = 'aprime-{start:04d}-{end:04d}-{case}-vs-{comp}: No output page found'.format(
-                start=self.start_year,
-                end=self.end_year,
-                comp=self._short_comp_name,
+            msg = '{prefix}: No output page found'.format(
+                prefix=self.msg_prefix(),
                 case=self.short_name)
             logging.error(msg)
-            return False
+            return None
         else:
-            msg = 'aprime-{start:04d}-{end:04d}-{case}-vs-{comp}: found output index.html at {page}'.format(
-                start=self.start_year,
-                end=self.end_year,
-                comp=self._short_comp_name,
-                case=self.short_name,
+            msg = '{prefix}: found output index.html at {page}'.format(
+                prefix=self.msg_prefix(),
                 page=page_path)
             logging.info(msg)
 
@@ -217,30 +219,23 @@ class Aprime(Diag):
                     missing_pages.append(link.attrs['href'])
 
         if missing_pages:
-            msg = 'aprime-{start:04d}-{end:04d}-{case}-vs-{comp}: missing plots'.format(
-                start=self.start_year,
-                end=self.end_year,
-                comp=self._short_comp_name,
-                case=self.short_name,
-                page=page_path)
+            msg = '{prefix}: missing some output images'.format(
+                prefix=self.msg_prefix())
             logging.error(msg)
             logging.error(missing_pages)
-            return False
+            return len(missing_pages)
         else:
-            msg = 'aprime-{start:04d}-{end:04d}-{case}-vs-{comp}: all links found'.format(
-                start=self.start_year,
-                end=self.end_year,
-                case=self.short_name,
-                comp=self.comparison)
+            msg = '{prefix}: all links found'.format(
+                prefix=self.msg_prefix())
             logging.info(msg)
-            return True
+            return 0
     # -----------------------------------------------
     def _fix_input_paths(self):
         """
         Aprime has some hardcoded paths setup that have to be fixed or it will crash
         """
-        import ipdb; ipdb.set_trace()
         tail, head = os.path.split(self._input_file_paths[0])
+        self._input_base_path = tail
         fixed_input_path = os.path.join(
             tail, self.case, 'run')
 
@@ -255,11 +250,8 @@ class Aprime(Diag):
             if os.path.exists(new_path):
                 self._input_file_paths[idx] = new_path
                 continue
-            msg = 'aprime-{start:04d}-{end:04d}-{case}-vs-{comp}: moving input file from {src} to {dst}'.format(
-                start=self.start_year,
-                end=self.end_year,
-                comp=self._short_comp_name,
-                case=self.short_name,
+            msg = '{prefix}: moving input file from {src} to {dst}'.format(
+                prefix=self.msg_prefix(),
                 src=item,
                 dst=new_path)
             logging.info(msg)

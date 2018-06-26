@@ -52,8 +52,8 @@ class Climo(Job):
             start_year=self.start_year,
             end_year=self.end_year)
         if len(file_list) < 17: # number of months plus seasons and annual
-            msg = '{}-{:04d}-{:04d}-{}: Failed to produce all regridded climos'.format(
-                self.job_type, self.start_year, self.end_year, self._short_name)
+            msg = '{prefix}: Failed to produce all regridded climos'.format(
+                prefix=self.msg_prefix())
             logging.error(msg)
             return False
         file_list = get_climo_output_files(
@@ -61,8 +61,8 @@ class Climo(Job):
             start_year=self.start_year,
             end_year=self.end_year)
         if len(file_list) < 17: # number of months plus seasons and annual
-            msg = '{}-{:04d}-{:04d}-{}: Failed to produce all native grid climos'.format(
-                    self.job_type, self.start_year, self.end_year, self._short_name)
+            msg = '{prefix}: Failed to produce all native grid climos'.format(
+                prefix=self.msg_prefix())
             logging.error(msg)
             return False
 
@@ -115,14 +115,14 @@ class Climo(Job):
     # -----------------------------------------------
     def handle_completion(self, filemanager, event_list, config):
         if self.status != JobStatus.COMPLETED:
-            msg = '{job}-{start:04d}-{end:04d}-{case}: Job failed, not running completion handler'.format(
-                job=self.job_type, start=self.start_year, end=self.end_year, case=self._short_name)
+            msg = '{prefix}: Job failed, not running completion handler'.format(
+                prefix=self.msg_prefix())
             print_line(msg, event_list)
             logging.info(msg)
             return
         else:
-            msg = '{job}-{start:04d}-{end:04d}-{case}: Job complete'.format(
-                job=self.job_type, start=self.start_year, end=self.end_year, case=self._short_name)
+            msg = '{prefix}: Job complete'.format(
+                prefix=self.msg_prefix())
             print_line(msg, event_list)
             logging.info(msg)
 
@@ -165,7 +165,7 @@ class Climo(Job):
         if not config['data_types'].get('climo_native'):
             config['data_types']['climo_native'] = {'monthly': True}
         
-        msg = '{job}-{start:04d}-{end:04d}-{case}: Job completion handler done'.format(
-            job=self.job_type, start=self.start_year, end=self.end_year, case=self._short_name)
+        msg = '{prefix}: Job completion handler done'.format(
+            prefix=self.msg_prefix())
         print_line(msg, event_list)
         logging.info(msg)

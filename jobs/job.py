@@ -61,23 +61,10 @@ class Job(object):
             return self._console_output_path
     # -----------------------------------------------
     def get_report_string(self):
-        if self._run_type:
-            msg = '{job}-{run_type}-{start:04d}-{end:04d} :: {status} :: '.format(
-                job=self.job_type,
-                run_type=self.run_type,
-                start=self.start_year,
-                end=self.end_year,
-                status=self.status.name)
-        else:
-            msg = '{job}-{start:04d}-{end:04d} :: {status} :: '.format(
-                job=self.job_type,
-                start=self.start_year,
-                end=self.end_year,
-                status=self.status.name)
-        output_path = self.get_output_path()
-        if output_path:
-            msg += output_path
-        return msg
+        return '{prefix} :: {status} :: {output}'.format(
+            prefix=self.msg_prefix(),
+            status=self.status.name,
+            output=self.get_output_path())
     # -----------------------------------------------
     def setup_data(self, config, filemanager, case):
         """
@@ -97,6 +84,12 @@ class Job(object):
                 files = filemanager.get_file_paths_by_year(
                     datatype=datatype,
                     case=case)
+            if not files or len(files) == 0:
+                msg = '{prefix}: filemanager cant find input files for datatype {datatype}'.format(
+                    prefix=self.msg_prefix(),
+                    datatype=datatype)
+                logging.error(msg)
+                continue
             
             # setup the temp directory to hold symlinks
             if self._run_type is not None:
@@ -164,18 +157,35 @@ class Job(object):
 
         for item in self._input_file_paths:
             if not os.path.exists(item):
-                msg = '{type}-{start:04d}-{end:04d}-{case}: File not found in input temp directory {file}'.format(
-                    type=self.job_type,
-                    run_type=self._run_type,
-                    start=self.start_year,
-                    end=self.end_year,
-                    case=self.short_name,
+                msg = '{prefix}: File not found in input temp directory {file}'.format(
+                    prefix=self.msg_prefix(),
                     file=item)
                 logging.error(msg)
                 return False
         # nothing was missing
         return True
-        
+    # -----------------------------------------------
+    def msg_prefix(self):
+        if self._run_type:
+            return '{type}-{run_type}-{start:04d}-{end:04d}-{case}'.format(
+                type=self.job_type,
+                run_type=self._run_type,
+                start=self.start_year,
+                end=self.end_year,
+                case=self.short_name)
+        elif isinstance(self, Diag):
+            return '{type}-{start:04d}-{end:04d}-{case}-vs-{comp}'.format(
+                type=self.job_type,
+                start=self.start_year,
+                end=self.end_year,
+                case=self.short_name,
+                comp=self._short_comp_name)
+        else:
+            return '{type}-{start:04d}-{end:04d}-{case}'.format(
+                type=self.job_type,
+                start=self.start_year,
+                end=self.end_year,
+                case=self.short_name)
     # -----------------------------------------------
     def _submit_cmd_to_slurm(self, config, cmd):
         """
@@ -239,6 +249,7 @@ class Job(object):
         # submit the run script to the slurm controller
         slurm = Slurm()
         self._job_id = slurm.batch(run_script)
+        self._has_been_executed = True
         return self._job_id
     # -----------------------------------------------
     def prevalidate(self, *args, **kwargs):

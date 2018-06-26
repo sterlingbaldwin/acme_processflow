@@ -123,22 +123,14 @@ class Timeseries(Job):
     def handle_completion(self, filemanager, event_list, config):
         
         if self.status != JobStatus.COMPLETED:
-            msg = '{job}-{run_type}-{start:04d}-{end:04d}-{case}: Job failed, not running completion handler'.format(
-                job=self.job_type, 
-                run_type=self.run_type,
-                start=self.start_year,
-                end=self.end_year,
-                case=self._short_name)
+            msg = '{prefix}: Job failed, not running completion handler'.format(
+                prefix=self.msg_prefix())
             print_line(msg, event_list)
             logging.info(msg)
             return
         else:
-            msg = '{job}-{run_type}-{start:04d}-{end:04d}-{case}: Job complete'.format(
-                job=self.job_type, 
-                run_type=self.run_type,
-                start=self.start_year,
-                end=self.end_year,
-                case=self._short_name)
+            msg = '{prefix}: Job complete'.format(
+                prefix=self.msg_prefix())
             print_line(msg, event_list)
             logging.info(msg)
 
@@ -187,8 +179,8 @@ class Timeseries(Job):
             if not config['data_types'].get('ts_regrid'):
                 config['data_types']['ts_regrid'] = {'monthly': False}
         
-        msg = '{job}-{start:04d}-{end:04d}-{case}: Job completion handler done'.format(
-            job=self.job_type, start=self.start_year, end=self.end_year, case=self._short_name)
+        msg = '{prefix}: Job completion handler done'.format(
+            prefix=self.msg_prefix())
         print_line(msg, event_list)
         logging.info(msg)
     # -----------------------------------------------
