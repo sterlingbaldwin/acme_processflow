@@ -163,7 +163,10 @@ class AMWG(Diag):
                         case=self.short_name,
                         comp=self._short_comp_name))
                 if os.path.exists(img_source + '.tar'):
-                    self.extract_img_tar(img_source)
+                    msg = '{prefix}: extracting images from tar archive'.format(
+                        prefix=self.msg_prefix())
+                    print_line(msg, event_list)
+                    call(['tar', '-xf', img_source + '.tar', '--directory', self._output_path])
                     num_found = sum(len(files) for r, d, files in os.walk(self._output_path))
                     enough_files = bool(num_found > num_expected)
                 if not enough_files:
@@ -230,12 +233,6 @@ class AMWG(Diag):
             start=self.start_year,
             end=self.end_year,
             comp=self._short_comp_name)
-    # -----------------------------------------------
-    def extract_img_tar(self, img_source):
-        msg = '{prefix}: extracting images from tar archive'.format(
-            prefix=self.msg_prefix())
-        print_line(msg, event_list)
-        call(['tar', '-xf', img_source + '.tar', '--directory', self._output_path])
     # -----------------------------------------------
     def _check_links(self, config):
         """
