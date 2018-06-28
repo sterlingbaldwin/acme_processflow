@@ -167,7 +167,7 @@ class Aprime(Diag):
         
         self._host_url = 'https://{server}/{prefix}/{case}/aprime/{case}_years{start}-{end}_vs_{comp}/index.html'.format(
             server=config['img_hosting']['img_host_server'],
-            prefix=config['img_hosting']['host_prefix'],
+            prefix=config['img_hosting']['url_prefix'],
             case=self.case,
             start=self.start_year,
             end=self.end_year,

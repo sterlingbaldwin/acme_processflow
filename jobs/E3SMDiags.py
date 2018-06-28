@@ -20,8 +20,8 @@ class E3SMDiags(Diag):
         self._host_url = ''
         self._short_comp_name = ''
         self._slurm_args = {
-            'num_cores': '-n 24',  # 16 cores
-            'run_time': '-t 0-10:00',  # 5 hours run time
+            'num_cores': '-n 24',  # 24 cores
+            'run_time': '-t 0-10:00',  # 10 hours run time
             'num_machines': '-N 1',  # run on one machine
         }
         if self.comparison == 'obs':
@@ -159,7 +159,7 @@ class E3SMDiags(Diag):
         
         self._host_url = 'https://{server}/{prefix}/{case}/e3sm_diags/{start:04d}_{end:04d}_vs_{comp}/viewer/index.html'.format(
             server=config['img_hosting']['img_host_server'],
-            prefix=config['img_hosting']['host_prefix'],
+            prefix=config['img_hosting']['url_prefix'],
             case=self.case,
             start=self.start_year,
             end=self.end_year,
