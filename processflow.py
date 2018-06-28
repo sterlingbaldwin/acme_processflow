@@ -25,7 +25,7 @@ __branch__ = 'manymodel'
 
 # set variable to make vcs shut up
 os.environ['UVCDAT_ANONYMOUS_LOG'] = 'False'
-os.environ['NCO_PATH_OVERRIDE'] = 'No'
+os.environ['NCO_PATH_OVERRIDE'] = 'Yes'
 
 # create global EventList
 event_list = EventList()
@@ -72,7 +72,6 @@ def main(test=False, **kwargs):
             event_list=event_list,
             kill_event=thread_kill_event,
             mutex=mutex)
-
     # setup returned an error code
     if isinstance(config, int):
         print "Error in setup, exiting"
