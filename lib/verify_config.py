@@ -86,6 +86,16 @@ def verify_config(config):
             if data_type not in config['data_types']:
                 msg = '{} is set to use data_type {}, but this data type is not in the data_types config option'.format(sim, data_type)
                 messages.append(msg)
+        if config['simulations'][sim].get('job_types'):
+            if not isinstance(config['simulations'][sim]['job_types'], list):
+                config['simulations'][sim]['job_types'] = [config['simulations'][sim]['job_types']]
+            for job_type in config['simulations'][sim]['job_types']:
+                if job_type == 'all':
+                    continue
+                if job_type not in config['post-processing'] and job_type not in config['diags']:
+                    msg = '{} is set to run job {}, but this run type is not in either the post-processing or diags config sections'.format(sim, job_type)
+                    messages.append(msg)
+        
     # ------------------------------------------------------------------------
     # check data_types
     # ------------------------------------------------------------------------
@@ -136,7 +146,11 @@ def verify_config(config):
                         msg = 'no regrid_map_path given for {} regrid'.format(item)
                         messages.append(msg)
                 for sim in config['simulations']:
-                    if sim in ['start_year', 'end_year', 'comparisons']: continue
+                    if sim in ['start_year', 'end_year', 'comparisons']: 
+                        continue
+                    if config['simulations'][sim].get('job_types') and 'all' not in config['simulations'][sim].get('job_types'):
+                        if item not in config['simulations'][sim].get('job_types'):
+                            continue
                     if 'all' not in config['simulations'][sim].get('data_types'):
                         if item not in config['simulations'][sim].get('data_types'):
                             msg = 'regrid is set to run on data_type {}, but this type is not set in simulation {}'.format(item, sim)
@@ -179,6 +193,9 @@ def verify_config(config):
                 if item not in ['atm', 'lnd', 'ocn']:
                     msg = '{} is an unsupported timeseries data type'.format(item)
                     message.append(msg)
+                if config['simulations'][sim].get('job_types') and 'all' not in config['simulations'][sim].get('job_types'):
+                    if item not in config['simulations'][sim].get('job_types'):
+                        continue
                 if not isinstance(config['post-processing']['timeseries'][item], list):
                     config['post-processing']['timeseries'][item] = [config['post-processing']['timeseries'][item]]
                 for sim in config['simulations']:

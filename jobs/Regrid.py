@@ -159,15 +159,3 @@ class Regrid(Job):
     def data_type(self):
         return self._data_type
     # -----------------------------------------------
-    def __str__(self):    
-        return json.dumps({
-            'type': self._job_type,
-            'run_type': self._run_type,
-            'start_year': self._start_year,
-            'end_year': self._end_year,
-            'data_required': self._data_required,
-            'depends_on': self._depends_on,
-            'id': self._id,
-            'status': self._status.name,
-            'case': self.short_name
-        }, sort_keys=True, indent=4)

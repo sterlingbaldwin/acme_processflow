@@ -59,7 +59,7 @@ class Diag(Job):
             print_line(msg, event_list)
         call(['chmod', '-R', 'a+rx', host_path])
         tail, _ = os.path.split(host_path)
-        for _ in range(3):
+        for _ in range(2):
             call(['chmod', 'a+rx', tail])
             tail, _ = os.path.split(tail)
     # -----------------------------------------------

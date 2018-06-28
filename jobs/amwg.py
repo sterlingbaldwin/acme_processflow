@@ -24,6 +24,10 @@ class AMWG(Diag):
             'run_time': '-t 0-10:00',  # 5 hours run time
             'num_machines': '-N 1',  # run on one machine
         }
+        if self.comparison == 'obs':
+            self._short_comp_name = 'obs'
+        else:
+            self._short_comp_name = kwargs['config']['simulations'][self.comparison]['short_name']
     # -----------------------------------------------
     def _dep_filter(self, job):
         """
@@ -42,18 +46,23 @@ class AMWG(Diag):
         jobs = kwargs['jobs']
         if self.comparison != 'obs':
             other_jobs = kwargs['comparison_jobs']
-            self_climo, = filter(lambda job: self._dep_filter(job), jobs)
-            comparison_climo, = filter(lambda job: self._dep_filter(job), other_jobs)
+            try:
+                self_climo, = filter(lambda job: self._dep_filter(job), jobs)
+            except ValueError:
+                raise Exception('Unable to find climo for {}, is this case set to generate climos?'.format(self.msg_prefix()))
+            try:
+                comparison_climo, = filter(lambda job: self._dep_filter(job), other_jobs)
+            except ValueError:
+                raise Exception('Unable to find climo for {}, is that case set to generates climos?'.format(self.comparison))
             self.depends_on.extend((self_climo.id, comparison_climo.id))
         else:
-            climo, = filter(lambda job: self._dep_filter(job), jobs)
-            self.depends_on.append(climo.id)
+            try:
+                self_climo, = filter(lambda job: self._dep_filter(job), jobs)
+            except ValueError:
+                raise Exception('Unable to find climo for {}, is this case set to generate climos?'.format(self.msg_prefix()))
+            self.depends_on.append(self_climo.id)
     # -----------------------------------------------
     def execute(self, config, dryrun=False):
-        if self.comparison == 'obs':
-            self._short_comp_name = 'obs'
-        else:
-            self._short_comp_name = config['simulations'][self.comparison]['short_name']
         self._output_path = os.path.join(
             config['global']['project_path'],
             'output', 'diags', self.short_name, 'amwg',
@@ -120,10 +129,7 @@ class AMWG(Diag):
         return self._submit_cmd_to_slurm(config, cmd)
     # -----------------------------------------------
     def postvalidate(self, config):
-        if self.comparison == 'obs':
-            self._short_comp_name = 'obs'
-        else:
-            self._short_comp_name = config['simulations'][self.comparison]['short_name']
+        
         if not self._output_path:
             self._output_path = os.path.join(
                 config['global']['project_path'],
@@ -172,10 +178,7 @@ class AMWG(Diag):
             return True
     # -----------------------------------------------
     def handle_completion(self, filemanager, event_list, config):
-        if self.comparison == 'obs':
-            self._short_comp_name = 'obs'
-        else:
-            self._short_comp_name = config['simulations'][self.comparison]['short_name']
+        
         if self.status != JobStatus.COMPLETED:
             msg = '{prefix}: Job failed'.format(
                 prefix=self.msg_prefix())
@@ -313,8 +316,8 @@ class AMWG(Diag):
     # -----------------------------------------------
     def _change_input_file_names(self):
         """
-        change 20180129.DECKv1b_piControl.ne30_oEC.edison_01_000101_000201_climo.nc to 
-               20180129.DECKv1b_piControl.ne30_oEC.edison_01_climo.nc
+        change case_01_000101_000201_climo.nc to 
+               case_01_climo.nc
         """
         input_path, _ = os.path.split(self._input_file_paths[0])
         pattern = r'\d{6}_\d{6}_'

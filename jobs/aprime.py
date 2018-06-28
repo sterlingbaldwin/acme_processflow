@@ -33,7 +33,7 @@ class Aprime(Diag):
         if self.comparison == 'obs':
             self._short_comp_name = 'obs'
         else:
-            self._short_comp_name = config['simulations'][self.comparison]['short_name']
+            self._short_comp_name = kwargs['config']['simulations'][self.comparison]['short_name']
         
     # -----------------------------------------------
     def setup_dependencies(self, *args, **kwargs):
@@ -95,10 +95,7 @@ class Aprime(Diag):
         return self._submit_cmd_to_slurm(config, cmd)
     # -----------------------------------------------
     def postvalidate(self, config):
-        if self.comparison == 'obs':
-            self._short_comp_name = 'obs'
-        else:
-            self._short_comp_name = config['simulations'][self.comparison]['short_name']
+        
         if not self._output_path:
             self._output_path = os.path.join(
             config['global']['project_path'],
@@ -116,7 +113,7 @@ class Aprime(Diag):
             'aprime')
         num_missing = self._check_links(config)
 
-        if num_missing is not None and num_missing <= 5:
+        if num_missing is not None and num_missing == 0:
             return True
         else:
             if self._has_been_executed:
@@ -127,10 +124,7 @@ class Aprime(Diag):
             return False
     # -----------------------------------------------
     def handle_completion(self, filemanager, event_list, config):
-        if self.comparison == 'obs':
-            self._short_comp_name = 'obs'
-        else:
-            self._short_comp_name = config['simulations'][self.comparison]['short_name']
+        
         if self.status != JobStatus.COMPLETED:
             msg = '{prefix}: Job failed'.format(
                 prefix=self.msg_prefix(),

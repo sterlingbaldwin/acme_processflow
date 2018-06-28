@@ -87,16 +87,17 @@ class RunManager(object):
                     return True
             return False
 
-    def add_pp_type_to_cases(self, freqs, job_type, start, end, run_type=None):
+    def add_pp_type_to_cases(self, freqs, job_type, start, end, case, run_type=None):
         """
         Add post processing jobs to the case.jobs list
         
         Parameters:
             freqs (list, int, None): the year length frequency to add this job
             job_type (str): what type of job to add
-            start (int): the first year to run the job on
-            end (int): the last year to run the job on
+            start (int): the first year of simulated data
+            end (int): the last year of simulated data
             data_type (str): what type of data to run this job on (regrid atm or lnd only)
+            case (dict): the case to add this job to
             """
         if not freqs:
             freqs = end - start + 1
@@ -106,57 +107,66 @@ class RunManager(object):
             for freq in freqs:
                 freq = int(freq)
                 if (year - start) % freq == 0:
-                    for idx, val in enumerate(self.cases):
-                        new_job = job_map[job_type](
-                            short_name=val['short_name'],
-                            case=val['case'],
-                            start=year,
-                            end=year + freq - 1,
-                            run_type=run_type)
-                        val['jobs'].append(new_job)
+                    new_job = job_map[job_type](
+                        short_name=case['short_name'],
+                        case=case['case'],
+                        start=year,
+                        end=year + freq - 1,
+                        run_type=run_type)
+                    case['jobs'].append(new_job)
     
-    def add_diag_type_to_cases(self, freqs, job_type, start, end):
+    def add_diag_type_to_cases(self, freqs, job_type, start, end, case):
+        """
+        Add diagnostic jobs to the case.jobs list
+        
+        Parameters:
+            freqs (list): a list of year lengths to add this job for
+            job_type (str): the name of the job type to add
+            start (int): the first year of simulated data
+            end (int): the last year of simulated data
+            case (dict): the case to add this job to
+        """
         if not isinstance(freqs, list): freqs = [freqs]
         for year in range(start, end + 1):
             for freq in freqs:
                 freq = int(freq)
                 if (year - start) % freq == 0:
-                    for idx, val in enumerate(self.cases):
-                        for comp in self.config['simulations']['comparisons']:
-                            if comp != self.cases[idx]['case']: continue
-                            if job_type == 'aprime':
-                                comparisons = ['obs']
-                            else:
-                                comparisons = self.config['simulations']['comparisons'][comp]
-                            for item in comparisons:
-                                if item == 'all':
-                                    for other_case in self.config['simulations']:
-                                        if other_case in ['start_year', 'end_year', 'comparisons']: continue
-                                        if other_case == comp: continue
+                    # get the comparisons from the config                    
+                    comparisons = self.config['simulations']['comparisons'][case['case']]
+                    if job_type == 'aprime':
+                        comparisons = ['obs']
+                    # for each comparison, add a job to this case
+                    for item in comparisons:
+                        if item == 'all':
+                            for other_case in self.config['simulations']:
+                                if other_case in ['start_year', 'end_year', 'comparisons', case['case']]: continue
 
-                                        new_diag = job_map[job_type](
-                                            short_name=val['short_name'],
-                                            case=val['case'],
-                                            start=year,
-                                            end=year + freq - 1,
-                                            comparison=other_case)
-                                        val['jobs'].append(new_diag)
+                                new_diag = job_map[job_type](
+                                    short_name=case['short_name'],
+                                    case=case['case'],
+                                    start=year,
+                                    end=year + freq - 1,
+                                    comparison=other_case,
+                                    config=self.config)
+                                case['jobs'].append(new_diag)
 
-                                    new_diag = job_map[job_type](
-                                        short_name=val['short_name'],
-                                        case=val['case'],
-                                        start=year,
-                                        end=year + freq - 1,
-                                        comparison='obs')
-                                    val['jobs'].append(new_diag)
-                                else:
-                                    new_diag = job_map[job_type](
-                                        short_name=val['short_name'],
-                                        case=val['case'],
-                                        start=year,
-                                        end=year + freq - 1,
-                                        comparison=item)
-                                    val['jobs'].append(new_diag)
+                            new_diag = job_map[job_type](
+                                short_name=case['short_name'],
+                                case=case['case'],
+                                start=year,
+                                end=year + freq - 1,
+                                comparison='obs',
+                                config=self.config)
+                            case['jobs'].append(new_diag)
+                        else:
+                            new_diag = job_map[job_type](
+                                short_name=case['short_name'],
+                                case=case['case'],
+                                start=year,
+                                end=year + freq - 1,
+                                comparison=item,
+                                config=self.config)
+                            case['jobs'].append(new_diag)
 
     def setup_cases(self):
         """
@@ -175,29 +185,49 @@ class RunManager(object):
         pp = self.config.get('post-processing')
         if pp:
             for key, val in pp.items():
+                cases_to_add = list()
+                for case in self.cases:
+                    if not self.config['simulations'][case['case']].get('job_types'): 
+                        continue
+                    if 'all' in self.config['simulations'][case['case']]['job_types'] or key in self.config['simulations'][case['case']]['job_types']: 
+                        cases_to_add.append(case)
                 if key in ['regrid', 'timeseries']:
                     for dtype in val:
-                        if dtype in ['run_frequency', 'regrid_map_path', 'destination_grid_name']: continue
+                        if dtype not in self.config['data_types']: 
+                            continue
+                        for case in cases_to_add:
+                            if 'all' in self.config['simulations'][case['case']]['data_types'] or dtype in self.config['simulations'][case['case']]['data_types']:
+                                self.add_pp_type_to_cases(
+                                    freqs=val.get('run_frequency'),
+                                    job_type=key,
+                                    start=start,
+                                    end=end,
+                                    run_type=dtype,
+                                    case=case)
+                else:
+                    for case in cases_to_add:
                         self.add_pp_type_to_cases(
                             freqs=val.get('run_frequency'),
                             job_type=key,
                             start=start,
                             end=end,
-                            run_type=dtype)
-                else:
-                    self.add_pp_type_to_cases(
-                        freqs=val.get('run_frequency'),
-                        job_type=key,
-                        start=start,
-                        end=end)
+                            case=case)
         diags = self.config.get('diags')
         if diags:
             for key, val in diags.items():
-                self.add_diag_type_to_cases(
-                    freqs=diags[key]['run_frequency'],
-                    job_type=key,
-                    start=start,
-                    end=end)
+                # cases_to_add = list()
+                for case in self.cases:
+                    if not self.config['simulations'][case['case']].get('job_types'): 
+                        continue
+                    if 'all' in self.config['simulations'][case['case']]['job_types'] or key in self.config['simulations'][case['case']]['job_types']:
+                        # cases_to_add.append(case)
+                        self.add_diag_type_to_cases(
+                            freqs=diags[key]['run_frequency'],
+                            job_type=key,
+                            start=start,
+                            end=end,
+                            case=case)
+
         self._job_total = 0
         for case in self.cases:
             self._job_total += len(case['jobs'])
