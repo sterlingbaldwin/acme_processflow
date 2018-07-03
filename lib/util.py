@@ -10,7 +10,7 @@ from time import sleep
 from datetime import datetime
 from string import Formatter
 
-from lib.JobStatus import ReverseMap, JobStatus
+from lib.jobstatus import ReverseMap, JobStatus
 from mailer import Mailer
 from models import DataFile
 

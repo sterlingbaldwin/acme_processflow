@@ -6,7 +6,7 @@ import os
 import logging
 from uuid import uuid4
 from lib.slurm import Slurm
-from lib.JobStatus import JobStatus
+from lib.jobstatus import JobStatus
 from lib.util import create_symlink_dir, print_line
 
 

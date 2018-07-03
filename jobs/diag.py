@@ -7,7 +7,7 @@ from shutil import copytree, rmtree
 from subprocess import call
 
 from lib.slurm import Slurm
-from lib.JobStatus import JobStatus
+from lib.jobstatus import JobStatus
 from lib.util import create_symlink_dir, print_line
 from jobs.job import Job
 

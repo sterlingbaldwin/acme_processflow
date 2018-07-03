@@ -8,7 +8,7 @@ from shutil import copytree, rmtree
 
 from jobs.diag import Diag
 from lib.util import render, print_line
-from lib.JobStatus import JobStatus
+from lib.jobstatus import JobStatus
 
 class E3SMDiags(Diag):
     def __init__(self, *args, **kwargs):
@@ -124,7 +124,7 @@ class E3SMDiags(Diag):
         cmd = ['acme_diags_driver.py', '-p', param_template_out]
         return self._submit_cmd_to_slurm(config, cmd)
     # -----------------------------------------------
-    def postvalidate(self, config):
+    def postvalidate(self, config, *args, **kwargs):
         return self._check_links(config)
     # -----------------------------------------------
     def handle_completion(self, filemanager, event_list, config):

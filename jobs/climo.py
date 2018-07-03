@@ -1,7 +1,7 @@
 import logging
 import os
 from jobs.job import Job
-from lib.JobStatus import JobStatus
+from lib.jobstatus import JobStatus
 from lib.filemanager import FileStatus
 from lib.util import get_climo_output_files, print_line
 from lib.slurm import Slurm
@@ -24,7 +24,7 @@ class Climo(Job):
         """
         return True
     # -----------------------------------------------
-    def postvalidate(self, config):
+    def postvalidate(self, config, *args, **kwargs):
         """
         Postrun validation for Ncclimo
         

@@ -8,7 +8,7 @@ from bs4 import BeautifulSoup
 
 from jobs.diag import Diag
 from lib.util import render, print_line
-from lib.JobStatus import JobStatus
+from lib.jobstatus import JobStatus
 
 class AMWG(Diag):
     def __init__(self, *args, **kwargs):
@@ -128,7 +128,7 @@ class AMWG(Diag):
         cmd = ['csh', csh_template_out]
         return self._submit_cmd_to_slurm(config, cmd)
     # -----------------------------------------------
-    def postvalidate(self, config):
+    def postvalidate(self, config, *args, **kwargs):
         
         if not self._output_path:
             self._output_path = os.path.join(
@@ -156,6 +156,8 @@ class AMWG(Diag):
             if not self._has_been_executed:
                 msg = '{prefix}: Job hasnt been run yet, starting from scratch'.format(
                     prefix=self.msg_prefix())
+                logging.info(msg)
+                return False
             else:
                 img_source = os.path.join(
                     self._output_path,
@@ -165,17 +167,22 @@ class AMWG(Diag):
                 if os.path.exists(img_source + '.tar'):
                     msg = '{prefix}: extracting images from tar archive'.format(
                         prefix=self.msg_prefix())
-                    print_line(msg, event_list)
+                    print_line(msg, kwargs['event_list'])
                     call(['tar', '-xf', img_source + '.tar', '--directory', self._output_path])
                     num_found = sum(len(files) for r, d, files in os.walk(self._output_path))
                     enough_files = bool(num_found > num_expected)
-                if not enough_files:
-                    msg = '{prefix}: Not enough images generated, only {num_found} but expected > {num_expected}'.format(
-                        prefix=self.msg_prefix(),
-                        num_found=num_found,
-                        num_expected=num_expected)
-            logging.info(msg)
-            return False
+                    if not enough_files:
+                        msg = '{prefix}: Not enough images generated, only {num_found} but expected > {num_expected}'.format(
+                            prefix=self.msg_prefix(),
+                            num_found=num_found,
+                            num_expected=num_expected)
+                        logging.error(msg)
+                        return False
+                    else:
+                        msg = '{prefix}: Found expected output after extracting archive'.format(prefix=self.msg_prefix())
+                        logging.info(msg)
+                        self._check_links(config)
+                        return True
         else:
             self._check_links(config)
             return True

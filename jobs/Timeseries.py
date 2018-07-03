@@ -2,7 +2,7 @@ import json
 import os
 import logging
 from jobs.job import Job
-from lib.JobStatus import JobStatus
+from lib.jobstatus import JobStatus
 from lib.slurm import Slurm
 from lib.util import get_ts_output_files, print_line
 from lib.filemanager import FileStatus
@@ -25,7 +25,7 @@ class Timeseries(Job):
         """
         return True
     # -----------------------------------------------
-    def postvalidate(self, config):
+    def postvalidate(self, config, *args, **kwargs):
         regrid_map_path = config['post-processing']['timeseries'].get('regrid_map_path')
         if regrid_map_path:
             regrid_path = os.path.join(

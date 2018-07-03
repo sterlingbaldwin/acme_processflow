@@ -21,7 +21,7 @@ from jobs.timeseries import Timeseries
 from jobs.amwg import AMWG
 from jobs.e3smdiags import E3SMDiags
 from jobs.aprime import Aprime
-from lib.JobStatus import JobStatus, StatusMap, ReverseMap
+from lib.jobstatus import JobStatus, StatusMap, ReverseMap
 
 job_map = {
     'climo': Climo,
@@ -266,6 +266,12 @@ class RunManager(object):
             for job in case['jobs']:
                 if job.status != JobStatus.VALID:
                     continue
+                if len(self.running_jobs) >= self.max_running_jobs:
+                    msg = 'running {} of {} jobs, waiting for queue to shrink'.format(
+                        len(self.running_jobs), self.max_running_jobs)
+                    if self.debug: 
+                        print_line(msg, self.event_list)
+                    return
                 deps_ready = True
                 for depjobid in job.depends_on:
                     depjob = self.get_job_by_id(depjobid)
@@ -273,14 +279,10 @@ class RunManager(object):
                         deps_ready = False
                         break
                 if deps_ready and job.data_ready:
-                    if len(self.running_jobs) >= self.max_running_jobs:
-                        msg = 'running {} of {} jobs, waiting for queue to shrink'.format(
-                            len(self.running_jobs), self.max_running_jobs)
-                        if self.debug: 
-                            print_line(msg, self.event_list)
-                        return
+                    
                     # if the job was finished by a previous run of the processflow
-                    if job.postvalidate(self.config):
+                    valid = job.postvalidate(self.config, event_list=self.event_list)
+                    if valid:
                         job.status = JobStatus.COMPLETED
                         self._job_complete += 1
                         job.handle_completion(
@@ -366,15 +368,16 @@ class RunManager(object):
                 out_str += '==' + '='*len(case['case']) + '==\n'
                 for job in case['jobs']:
                     out_str += '\n\tname: ' + job.job_type
+                    out_str += '\n\tperiod: {:04d}-{:04d}'.format(job.start_year, job.end_year)
                     if job._run_type:
                         out_str += '\n\trun_type: ' + job._run_type
-                    out_str += '\n\tperiod: {:04d}-{:04d}'.format(job.start_year, job.end_year)
-                    out_str += '\n\tid: ' + job.id 
                     out_str += '\n\tstatus: ' + job.status.name
                     deps_jobs = [self.get_job_by_id(x) for x in job.depends_on]
-                    out_str += '\n\tdependent_on: ' + str(
-                        ['{}-{:04d}-{:04d}-{}'.format(x.job_type, x.start_year, x.end_year, x.short_name) for x in deps_jobs])
+                    if deps_jobs: 
+                        out_str += '\n\tdependent_on: ' + str(
+                            ['{}'.format(x.msg_prefix()) for x in deps_jobs])
                     out_str += '\n\tdata_ready: ' + str(job.data_ready)
+                    out_str += '\n\tid: ' + job.id 
                     if case['jobs'].index(job) != len(case['jobs']) - 1:
                         out_str += '\n------------------------------------'
                     else:
@@ -435,7 +438,8 @@ class RunManager(object):
                 self._job_complete += 1
                 for_removal.append(item)
                 
-                if job.postvalidate(self.config):
+                valid = job.postvalidate(self.config, event_list=self.event_list)
+                if valid:
                     job.status = JobStatus.COMPLETED
                     job.handle_completion(
                         self.filemanager,
@@ -483,7 +487,8 @@ class RunManager(object):
 
                 if status in [JobStatus.COMPLETED, JobStatus.FAILED, JobStatus.CANCELLED]:
                     self._job_complete += 1
-                    if not job.postvalidate(self.config):
+                    valid = job.postvalidate(self.config, event_list=self.event_list)
+                    if not valid:
                         job.status = JobStatus.FAILED
                     job.handle_completion(
                         self.filemanager,

@@ -9,7 +9,7 @@ from shutil import move
 
 from jobs.diag import Diag
 from lib.util import render, print_line
-from lib.JobStatus import JobStatus
+from lib.jobstatus import JobStatus
 
 class Aprime(Diag):
     def __init__(self, *args, **kwargs):
@@ -94,7 +94,7 @@ class Aprime(Diag):
         cmd = ['bash', template_out]
         return self._submit_cmd_to_slurm(config, cmd)
     # -----------------------------------------------
-    def postvalidate(self, config):
+    def postvalidate(self, config, *args, **kwargs):
         
         if not self._output_path:
             self._output_path = os.path.join(

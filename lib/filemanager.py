@@ -11,7 +11,7 @@ from enum import IntEnum
 from threading import Thread
 
 from models import DataFile
-from lib.JobStatus import JobStatus
+from lib.jobstatus import JobStatus
 from lib.util import print_debug
 from lib.util import print_line
 

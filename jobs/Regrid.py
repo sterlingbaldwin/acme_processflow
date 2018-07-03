@@ -4,7 +4,7 @@ import re
 import logging
 
 from jobs.job import Job
-from lib.JobStatus import JobStatus
+from lib.jobstatus import JobStatus
 from lib.slurm import Slurm
 from lib.util import print_line, get_data_output_files
 from lib.filemanager import FileStatus
@@ -91,7 +91,7 @@ class Regrid(Job):
 
         return self._submit_cmd_to_slurm(config, cmd)
     # -----------------------------------------------
-    def postvalidate(self, config): 
+    def postvalidate(self, config, *args, **kwargs): 
         self._output_path = os.path.join(
             config['global']['project_path'], 
             'output', 
@@ -115,11 +115,12 @@ class Regrid(Job):
                         found = True
                         break
                 if not found:
-                    msg = '{prefix}: Unable to find regridded output file for {yr}-{mon}'.format(
-                        prefix=self.msg_prefix(),
-                        yr=year,
-                        mon=month)
-                    logging.error(msg)
+                    if not self._has_been_executed:
+                        msg = '{prefix}: Unable to find regridded output file for {yr}-{mon}'.format(
+                            prefix=self.msg_prefix(),
+                            yr=year,
+                            mon=month)
+                        logging.error(msg)
                     return False
         return True
     # -----------------------------------------------
