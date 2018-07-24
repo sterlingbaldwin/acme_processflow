@@ -1,4 +1,5 @@
 import os
+import logging
 from time import sleep
 from subprocess import Popen, PIPE
 
@@ -36,23 +37,6 @@ class Slurm(object):
         job_id = int(out[-1])
         return job_id
 
-    # def run(self, cmd, sargs=False):
-    #     """
-    #     Submit to slurm controller in interactive mode
-
-    #     NOTE: THIS IS A BLOCKING CALL. Control will not return until the command completes
-
-    #     Parameters:
-    #         cmd (str): the command to run
-    #     Returns:
-    #         the output of the job (str)
-    #     """
-    #     out, err = self._submit('srun', cmd, sargs)
-    #     if 'error' in out:
-    #         return False, err
-    #     else:
-    #         return True, out
-
     def _submit(self, subtype, cmd, sargs=None):
 
         cmd = [subtype, cmd, sargs] if sargs else [subtype, cmd]
@@ -61,14 +45,52 @@ class Slurm(object):
             try:
                 proc = Popen(cmd, shell=False, stderr=PIPE, stdout=PIPE)
                 out, err = proc.communicate()
-                if 'Transport endpoint is not connected' in err:
+                if err:
+                    logging.error(err)
+                if 'Transport endpoint is not connected' in err or 'Socket timed out on send/recv operation' in err:
+                    print 'unable to submit job, trying again'
                     tries += 1
-                    sleep(tries)
+                    sleep(tries * 2)
+                    proc = Popen(['scontrol', 'show', 'jobs'],
+                                shell=False, stderr=PIPE, stdout=PIPE)
+                    out, err = proc.communicate()
+                    all_jobs = list()
+                    jobinfo = dict()
+                    for item in out.split('\n'):
+                        if item == '':
+                            all_jobs.append(jobinfo)
+                            jobinfo = dict()
+                        for j in item.split(' '):
+                            index = j.find('=')
+                            if index <= 0:
+                                continue
+                            jobinfo[j[:index]] = j[index + 1:]
+                    for job in all_jobs:
+                        if job.get('Command') == cmd[1]:
+                            return 'Submitted batch job ' + job['JobId'], None
                 else:
                     break
             except:
-                sleep(1)
-        if tries == 10:
+                proc = Popen(['scontrol', 'show', 'jobs'],
+                            shell=False, stderr=PIPE, stdout=PIPE)
+                out, err = proc.communicate()
+                all_jobs = list()
+                jobinfo = dict()
+                for item in out.split('\n'):
+                    if item == '':
+                        all_jobs.append(jobinfo)
+                        jobinfo = dict()
+                    for j in item.split(' '):
+                        index = j.find('=')
+                        if index <= 0:
+                            continue
+                        jobinfo[j[:index]] = j[index + 1:]
+                for job in all_jobs:
+                    if job['Command'] == cmd[1]:
+                        return ['Submitted', 'batch', 'job', job['JobId']], None
+                tries += 1
+                sleep(tries * 2)
+        if tries >= 10:
             raise Exception('SLURM ERROR: Transport endpoint is not connected')
         if 'Invalid job id specified' in err:
             raise Exception('SLURM ERROR: ' + err)

@@ -104,13 +104,16 @@ setenv DIAG_VERSION 140804  # version number YYMMDD
 #
 # Don t forget the trailing / when setting the paths
 
+setenv NCARG_ROOT %%NCARG_ROOT%%
+
 set test_casename  = %%test_casename%%
 set test_filetype = monthly_history 
+#set test_filetype = time_series
 
-set test_path_history =  %%test_path_history%%
-set test_path_climo   =  %%test_path_climo%%
-set test_path_diag    =  %%test_path_diag%%
-set test_path_HPSS    =  NONE
+set test_path_history = %%test_path_history%%
+set test_path_climo   = %%test_path_climo%%
+set test_path_diag    = %%test_path_diag%%
+set test_path_HPSS    = NONE
 
 #******************************************************************
 
@@ -121,8 +124,7 @@ set test_path_HPSS    =  NONE
 # Select the type of control case to be compared with your model
 # test case (select one). 
 
-set CNTL = OBS            # observed data (reanalysis etc)
-#set CNTL = USER           # user defined model control (see below)
+set CNTL = USER           # user defined model control (see below)
 
 #------------------------------------------------------------------
 # FOR CNTL == USER ONLY (otherwise skip this section)
@@ -135,13 +137,12 @@ set CNTL = OBS            # observed data (reanalysis etc)
 
 # Don t forget the trailing / when setting the paths
 
-set cntl_casename   =  OBS
-set cntl_filetype   =  monthly_history 
-#set cntl_filetype = time_series
+set cntl_casename   = %%cntl_casename%%
+set cntl_filetype = monthly_history 
 
-set cntl_path_history = /glade/scratch/hannay/archive/$cntl_casename/atm/hist/ 
-set cntl_path_climo   = /glade/scratch/hannay/amwg/climo/$cntl_casename/  
-#set cntl_path_HPSS    = NONE
+set cntl_path_history = %%cntl_path_history%%
+set cntl_path_climo   = %%cntl_path_climo%%
+set cntl_path_HPSS    = NONE
 
 #******************************************************************
 
@@ -156,7 +157,7 @@ set cntl_path_climo   = /glade/scratch/hannay/amwg/climo/$cntl_casename/
 # Turn on/off the computation of climatologies 
       
 set test_compute_climo = 1  # (0=ON,1=OFF) 
-set cntl_compute_climo = 1  # (0=ON,1=OFF) 
+set cntl_compute_climo = 1    # (0=ON,1=OFF) 
 
 #-----------------------------------------------------------------
 
@@ -166,22 +167,22 @@ set cntl_compute_climo = 1  # (0=ON,1=OFF)
 # First year of data is: $test_first_yr     (must be >= 1)
 # Number of years is: $test_nyrs         (must be >= 1)
 
-set test_first_yr = 1851           # first year (must be >= 1)
-set test_nyrs     = 2           # number of yrs (must be >= 1)
+set test_first_yr = 1           # first year (must be >= 1)
+set test_nyrs     = 1           # number of yrs (must be >= 1)
 
 # FOR CNTL == USER ONLY (otherwise skip this section)
 # First year of data is: $cntl_first_yr     (must be >= 1)
 # Number of years is: $cntl_nyrs         (must be >= 1)
 
-set cntl_first_yr = 2        # first year (must be >= 1)
-set cntl_nyrs     = 4        # number of yrs (must be >= 1)
+set cntl_first_yr = 1        # first year (must be >= 1)
+set cntl_nyrs     = 1        # number of yrs (must be >= 1)
 
 #-----------------------------------------------------------------
 # Strip off all the variables that are not required by the AMWG package
 # in the computation of the climatology
 # set to OFF for running with Chemistry
 
-set strip_off_vars = 0     # (0=ON,1=OFF)
+set strip_off_vars = 1     # (0=ON,1=OFF)
 
 #-----------------------------------------------------------------
 # Weight the months by their number of days when computing
@@ -189,7 +190,7 @@ set strip_off_vars = 0     # (0=ON,1=OFF)
 # the climatologies. Many users might not care about the small
 # differences and leave this turned off.
 
-set weight_months = 0     # (0=ON,1=OFF)
+set weight_months = 1     # (0=ON,1=OFF)
 
 #******************************************************************
 
@@ -200,35 +201,35 @@ set weight_months = 0     # (0=ON,1=OFF)
 # Select the diagnostic sets to be done. You can do one at a
 # time or as many as you want at one time, or all at once.
 
-set all_sets = 0  # (0=ON,1=OFF)  Do all the CAM sets (1-16)
+set all_sets = 1  # (0=ON,1=OFF)  Do all the CAM sets (1-16)
 set set_1  = 0    # (0=ON,1=OFF)  tables of global,regional means
-set set_2  = 1    # (0=ON,1=OFF)  implied transport plots 
-set set_3  = 1    # (0=ON,1=OFF)  zonal mean line plots
-set set_4  = 1    # (0=ON,1=OFF)  vertical zonal mean contour plots
-set set_4a = 1    # (0=ON,1=OFF)  vertical zonal mean contour plots
-set set_5  = 1    # (0=ON,1=OFF)  2D-field contour plots
-set set_6  = 1    # (0=ON,1=OFF)  2D-field vector plots
-set set_7  = 1    # (0=ON,1=OFF)  2D-field polar plots
-set set_8  = 1    # (0=ON,1=OFF)  annual cycle (vs lat) contour plots
-set set_9  = 1    # (0=ON,1=OFF)  DJF-JJA difference plots
-set set_10 = 1    # (0=ON,1=OFF)  annual cycle line plots    
-set set_11 = 1    # (0=ON,1=OFF)  miscellaneous plots
+set set_2  = 0    # (0=ON,1=OFF)  implied transport plots 
+set set_3  = 0    # (0=ON,1=OFF)  zonal mean line plots
+set set_4  = 0    # (0=ON,1=OFF)  vertical zonal mean contour plots
+set set_4a = 0    # (0=ON,1=OFF)  vertical zonal mean contour plots
+set set_5  = 0    # (0=ON,1=OFF)  2D-field contour plots
+set set_6  = 0    # (0=ON,1=OFF)  2D-field vector plots
+set set_7  = 0    # (0=ON,1=OFF)  2D-field polar plots
+set set_8  = 0    # (0=ON,1=OFF)  annual cycle (vs lat) contour plots
+set set_9  = 0    # (0=ON,1=OFF)  DJF-JJA difference plots
+set set_10 = 0    # (0=ON,1=OFF)  annual cycle line plots    
+set set_11 = 0    # (0=ON,1=OFF)  miscellaneous plots
 set set_12 = 1    # (0=selected stations: 1=NONE, 2=ALL stations
-set set_13 = 1    # (0=ON,1=OFF)  COSP cloud simulator plots
-set set_14 = 1    # (0=ON,1=OFF)  Taylor diagram plots 
+set set_13 = 0    # (0=ON,1=OFF)  COSP cloud simulator plots
+set set_14 = 0    # (0=ON,1=OFF)  Taylor diagram plots 
 set set_15 = 1    # (0=ON,1=OFF)  Annual Cycle Plots for Select stations
 set set_16 = 1    # (0=ON,1=OFF)  Budget Terms for Select stations
 
 set all_waccm_sets = 1 # (0=ON,1=OFF)  Do all the WACCM sets
-set all_chem_sets = 1  # (0=ON,1=OFF)  Do all the CHEM sets
-set wset_1 = 0         # (0=ON,1=OFF)  vertical zonal mean contour plots (log scale)
-set cset_1 = 0         # (0=ON,1=OFF)  tables of global budgets 
-set cset_2 = 0         # (0=ON,1=OFF)  vertical zonal mean contour plots (log scale)
-set cset_3 = 0         # (0=ON,1=OFF)  Ozonesonde comparisions 
-set cset_4 = 0         # (0=ON,1=OFF)  Column Ozone/CO Comparisons
-set cset_5 = 0         # (0=ON,1=OFF)  NOAA Aircraft comparisons
-set cset_6 = 0         # (0=ON,1=OFF)  Emmons Aircraft climatology 
-set cset_7 = 0         # (0=ON,1=OFF)  surface comparisons (ozone, co, improve)
+set all_chem_sets = 1 # (0=ON,1=OFF)   Do all the CHEM sets
+set wset_1 = 1         # (0=ON,1=OFF)  vertical zonal mean contour plots (log scale)
+set cset_1 = 1         # (0=ON,1=OFF)  tables of global budgets 
+set cset_2 = 1         # (0=ON,1=OFF)  vertical zonal mean contour plots (log scale)
+set cset_3 = 1         # (0=ON,1=OFF)  Ozonesonde comparisions 
+set cset_4 = 1         # (0=ON,1=OFF)  Column Ozone/CO Comparisons
+set cset_5 = 1         # (0=ON,1=OFF)  NOAA Aircraft comparisons
+set cset_6 = 1         # (0=ON,1=OFF)  Emmons Aircraft climatology 
+set cset_7 = 1         # (0=ON,1=OFF)  surface comparisons (ozone, co, improve)
 
 # Select the control case to compare against for Taylor Diagrams
 # Cam run select cam3_5; coupled run select ccsm3_5  
@@ -251,7 +252,7 @@ setenv TAYLOR_BASECASE ccsm3_5  # Base case to compare against
 # Note:  four_seasons is not currently supported for model vs OBS diagnostics.
 # if ($CNTL == OBS) then four_seasons is turned OFF.
 
-set four_seasons = 1            # (0=ON; 1=OFF)
+set four_seasons = 2            # (0=ON; 1=OFF)
 
 #------------------------------------------------------------------
 # For four_seasons == 2 (otherwise skip this section)
@@ -269,8 +270,8 @@ endif
 #-----------------------------------------------------------------
 # Select the output file type and style for plots.
 
-set p_type = ps      # postscript
-#set p_type = png     # portable document format (ncl ver 4.2.0.a028)
+set p_type = ps     # postscript
+#set p_type = pdf    # portable document format (ncl ver 4.2.0.a028)
 #set p_type = eps    # encapsulated postscript
 #set p_type = epsi   # encapsulated postscript with bitmap 
 #set p_type = ncgm   # ncar computer graphics metadata
@@ -278,16 +279,15 @@ set p_type = ps      # postscript
 #-------------------------------------------------------------------
 # Select the output color type for plots.
 
-set c_type = COLOR       # color
-#set c_type = MONO        # black and white
+ set c_type = COLOR      # color
 
 # If needed select one of the following color schemes,
 # you can see the colors by clicking on the links from
 # http://www.cgd.ucar.edu/cms/diagnostics
 
- set color_bar = default           # the usual colors
- set color_bar = blue_red          # blue,red 
-#set color_bar = blue_yellow_red   # blue,yellow,red (nice!) 
+#set color_bar = default           # the usual colors
+# set color_bar = blue_red          # blue,red 
+set color_bar = blue_yellow_red   # blue,yellow,red (nice!) 
 
 #----------------------------------------------------------------
 # Turn ON/OFF date/time stamp at bottom of plots.
@@ -310,8 +310,8 @@ set tick_marks = 1       # (0=ON,1=OFF)
 set custom_names = 0     # (0=ON,1=OFF)
 
 # if needed set the names
-set test_name = %%short_name%%            # test case name 
-set cntl_name = cam3_5_cntl               # control case name
+set test_name = %%short_name%%         # test case name 
+set cntl_name = %%cntl_short_name%%         # control case name
 
 #----------------------------------------------------------------
 # Convert output postscript files to GIF, JPG or PNG image files 
@@ -341,7 +341,7 @@ set density   = 85   # pixels/inch, use larger number for higher
 # after the plots are made. If you want to save the 
 # netcdf files for your own uses then switch to ON. 
 
-set save_ncdfs = 0       # (0=ON,1=OFF)
+set save_ncdfs = 1       # (0=ON,1=OFF)
 #----------------------------------------------------------------
 
 # Compute whether the means of the test case and control case 
@@ -372,19 +372,8 @@ set sig_lvl = 0.05           # level of significance
 # The obs data in $DIAG_HOME/obs_data
 # The cam3.5 data in $DIAG_HOME/cam35_data 
 
-# CGD machines (tramhill, leehill...)
-#setenv DIAG_HOME /project/amp/amwg/amwg_diagnostics 
+setenv DIAG_HOME %%diag_home%%
 
-# CSIL machines (geyser, caldeira, ...)
-#setenv DIAG_HOME /lustre/atlas1/cli112/proj-shared/golaz/AMWG/amwg_diag
-#setenv DIAG_HOME /scratch1/scratchdirs/golaz/amwg/amwg_diag
-setenv DIAG_HOME   %%diag_home%%
-
-# NERSC (euclid)
-#setenv DIAG_HOME /global/homes/h/hannay/amwg/amwg_diagnostics
-
-# NCSS (lens)
-#setenv DIAG_HOME  /ccs/home/hannay/amwg/amwg_diagnostics
 
 #*****************************************************************
 
@@ -395,7 +384,7 @@ setenv DIAG_HOME   %%diag_home%%
 # Send yourself an e-mail message when everything is done. 
 
 set email = 1        # (0=ON,1=OFF) 
-set email_address = ${LOGNAME}@ucar.edu
+set email_address = donahue5@llnl.gov
 
 #*****************************************************************
 #*****************************************************************
@@ -536,7 +525,7 @@ set diff_plots = 1      # make difference plots for different
 # Morrison-Gettleman Microphysics plots (beginning in CAM3.5, with MG 
 # microphysics on)
 # NOTE: for model-to-model only
-set microph = 1          # (0=ON,1=OFF) 
+set microph = 0          # (0=ON,1=OFF) 
 
 
 #******************************************************************
@@ -579,7 +568,7 @@ endif
 limit stacksize unlimited
 limit datasize  unlimited
 
-setenv WKDIR      $test_path_diag/
+setenv WKDIR      $test_path_diag 
 setenv OBS_DATA   $DIAG_HOME/obs_data 
 setenv CAM35_DATA $DIAG_HOME/cam35_data 
 setenv MAP_DATA   $DIAG_HOME/map_files 
@@ -590,7 +579,7 @@ setenv COLORTYPE  $c_type
 setenv DELETEPS   $delete_ps
 setenv MG_MICRO   $microph
 setenv HTML_HOME  $DIAG_HOME/html
-
+     
 #-----------------------------------------------------------------
 
 # Turn off four_seasons if comparing against OBS b/c
@@ -714,17 +703,6 @@ if (! -e ${test_path_climo}) then
   if (! -e ${test_path_climo}) then
     echo ERROR: Unable to create \$test_path_climo: ${test_path_climo} 
     echo ERROR: Please create ${test_path_climo} 
-   exit
-  endif
-endif
-
-if (! -e ${test_path_diag}) then
-  echo The directory \$test_path_diag ${test_path_diag} does not exist
-  echo Trying to create \$test_path_diag ${test_path_diag} 
-  mkdir -p ${test_path_diag} 
-  if (! -e ${test_path_diag}) then
-    echo ERROR: Unable to create \$test_path_diag: ${test_path_diag} 
-    echo ERROR: Please create ${test_path_diag} 
    exit
   endif
 endif
@@ -858,12 +836,6 @@ if ($CNTL == USER) then
     echo WARNING: THE TEST AND CNTL AND CASENAME NAMES ARE IDENTICAL
     ##exit  ## ++ hannay  =>want to change script to allow to compare two 2 time-periods of the same run
   endif
-endif   
-
-if ($test_path_history == $cntl_path_history) then
-    echo ERROR: THE TEST PATH AND CNTL PATH ARE IDENTICAL
-    echo THEY MUST BE DIFFERENT TO RECEIVE HPSS DOWNLOADS!
-    exit  
 endif
 
 #*****************************************************************
@@ -1441,19 +1413,19 @@ if ($web_pages == 0) then
     exit
   endif
   if ($CNTL == OBS) then
-    setenv WEBDIR ${test_path_diag}$test_casename-obs
+    setenv WEBDIR ${test_path_diag}/${test_name}-vs-obs
     if (! -e $WEBDIR) mkdir $WEBDIR
     cd $WEBDIR
     $HTML_HOME/setup_obs $test_casename $image
     cd $test_path_diag
-    set tarfile = ${test_casename}-obs.tar
+    set tarfile = ${test_name}-vs-obs.tar
   else          # model-to-model 
-    setenv WEBDIR ${test_path_diag}$test_casename-$cntl_casename
+    setenv WEBDIR ${test_path_diag}/${test_name}-vs-${cntl_name}
     if (! -e $WEBDIR) mkdir $WEBDIR
     cd $WEBDIR
     $HTML_HOME/setup_2models $test_casename $cntl_casename $image
     cd $test_path_diag
-    set tarfile = $test_casename-${cntl_casename}.tar
+    set tarfile = ${test_name}-vs-${cntl_name}.tar
   endif
 endif
 
@@ -3172,7 +3144,7 @@ if ($web_pages == 0) then
   set tardir = $tarfile:r
   echo MAKING TAR FILE OF DIRECTORY $tardir
   tar -cf ${test_path_diag}$tarfile $tardir
-#  \rm -fr $WEBDIR
+  \rm -fr $WEBDIR
 endif
 # send email message
 if ($email == 0) then
@@ -3181,7 +3153,7 @@ if ($email == 0) then
   echo THE PLOTS FOR $tardir ARE NOW READY! >> email_msg
   mail -s 'DIAG plots' $email_address < email_msg
   echo E-MAIL SENT
-#  \rm -f email_msg
+  \rm -f email_msg
 endif  
 # cleanup
 if ($weight_months == 0) then

@@ -1,244 +1,187 @@
-# pylint: disable=C0103
-# pylint: disable=C0111
-# pylint: disable=C0301
-import os
-import re
 import json
-import sys
+import os
 import logging
-import cdms2
-
-from pprint import pformat
-from subprocess import Popen, PIPE
-from time import sleep
-from datetime import datetime
-
-from lib.events import EventList
+from jobs.job import Job
+from lib.jobstatus import JobStatus
 from lib.slurm import Slurm
-from JobStatus import JobStatus
-from lib.util import (print_debug,
-                      print_message,
-                      cmd_exists,
-                      print_line)
+from lib.util import get_ts_output_files, print_line
+from lib.filemanager import FileStatus
 
-
-class Timeseries(object):
-    """
-    A wrapper around ncclimo, used to compute the climotologies from raw output data
-    """
-
-    def __init__(self, config, event_list):
-        self.event_list = event_list
-        self.config = {}
-        self._status = JobStatus.INVALID
-        self._type = 'timeseries'
-        self.filemanager = config['filemanager']
-        self.year_set = config.get('year_set', 0)
-        self.start_year = config['start_year']
-        self.end_year = config['end_year']
-        self.job_id = 0
-        self.depends_on = []
-        self.start_time = None
-        self.end_time = None
-        self.output_path = None
-        self.inputs = {
-            'account': '',
-            'ui': '',
-            'year_set': '',
-            'annual_mode': '',
-            'start_year': '',
-            'end_year': '',
-            'native_output_directory': '',
-            'regrid_output_directory': '',
-            'var_list': '',
-            'caseId': '',
-            'run_scripts_path': '',
-            'regrid_map_path': '',
-            'file_list': '',
-        }
-        self.slurm_args = {
+class Timeseries(Job):
+    def __init__(self, *args, **kwargs):
+        super(Timeseries, self).__init__(*args, **kwargs)
+        self._job_type = 'timeseries'
+        self._data_required = [self._run_type]
+        self._regrid = False
+        self._slurm_args = {
             'num_cores': '-n 16',  # 16 cores
-            'run_time': '-t 0-12:00',  # 12 hours run time
+            'run_time': '-t 0-10:00',  # 5 hours run time
             'num_machines': '-N 1',  # run on one machine
-            'oversubscribe': '--oversubscribe'
         }
-        self.prevalidate(config)
 
-    def prevalidate(self, config):
+    def setup_dependencies(self, *args, **kwargs):
         """
-        Prerun validation for inputs
+        Timeseries doesnt require any other jobs
         """
-        if self.status == JobStatus.VALID:
-            return 0
-        invalid = False
-        for i in config:
-            if i in self.inputs:
-                self.config[i] = config.get(i)
-
-        account = self.config.get('account')
-        if account:
-            self.slurm_args['account'] = '-A {}'.format(account)
-
-        # make sure the run_scripts_path is setup
-        if not os.path.exists(self.config.get('run_scripts_path')):
-            os.makedirs(self.config.get('run_scripts_path'))
-        # make sure the var_list is setup
-        if not self.config.get('var_list'):
-            invalid = True
-        if not isinstance(self.config.get('var_list'), list):
-            self.config['var_list'] = [self.config.get('var_list')]
-        # make sure the job has been added to a year_set
-        if self.year_set == 0:
-            invalid = True
-            return
-        self.output_path = self.config['regrid_output_directory']
-
-        if invalid:
-            self.status = JobStatus.INVALID
+        return True
+    # -----------------------------------------------
+    def postvalidate(self, config, *args, **kwargs):
+        regrid_map_path = config['post-processing']['timeseries'].get('regrid_map_path')
+        if regrid_map_path:
+            regrid_path = os.path.join(
+                config['global']['project_path'], 'output', 'pp',
+                config['post-processing']['timeseries']['destination_grid_name'],
+                self._short_name, 'ts', '{length}yr'.format(length=self.end_year-self.start_year+1))
+            self._regrid = True
+            self._output_path = regrid_path
         else:
-            self.status = JobStatus.VALID
+            self._regrid = False
+            self._output_path = ts_path
 
-    def __str__(self):
-        return json.dumps({
-            'type': self.type,
-            'config': self.config,
-            'status': self.status,
-            'depends_on': self.depends_on,
-            'job_id': self.job_id,
-            'year_set': self.year_set
-        }, sort_keys=True, indent=4)
-    
-    def check_variables(self):
-        """
-        Check that all the variables asked to be extracted are present in the files,
-        if a variable is missing remove it from the variable list and keep going
-        """
-        file_list = self.filemanager.get_file_paths_by_year(
-            start_year=self.start_year,
-            end_year=self.end_year,
-            _type='atm')
+        if self._dryrun:
+            return True
 
-        datafile = cdms2.open(file_list[0])
-        variables = datafile.variables
-        var_list = list()
-        for variable in self.config['var_list']:
-            if variable in variables.keys():
-                var_list.append(variable)
-            else:
-                msg = 'variable {var} not found in file {file}'.format(
-                    var=variable, file=file_list[0])
-                logging.error(msg)
-        self.config['var_list'] = var_list
+        # First check that all the native grid ts files were created
+        ts_path = os.path.join(
+            config['global']['project_path'], 'output', 'pp',
+            config['simulations'][self.case]['native_grid_name'],
+            self._short_name, 'ts', '{length}yr'.format(length=self.end_year-self.start_year+1))
+        self._output_path = ts_path
 
-    def execute(self, dryrun=False):
-        """
-        Submits ncclimo to slurm after checking if it had been previously run
-        """
-        if self.postvalidate():
-            self.status = JobStatus.COMPLETED
-            return 0
-        
-        self.check_variables()
+        for var in config['post-processing']['timeseries'][self._run_type]:
+            file_name = "{var}_{start:04d}01_{end:04d}12.nc".format(
+                var=var, start=self.start_year, end=self.end_year)
+            file_path = os.path.join(ts_path, file_name)
+            if not os.path.exists(file_path):
+                return False
 
-        file_list = self.filemanager.get_file_paths_by_year(
-            start_year=self.start_year,
-            end_year=self.end_year,
-            _type='atm')
-        file_list.sort()
-        list_string = ' '.join(file_list)
-        slurm_command = ' '.join([
-            '~zender1/bin/ncclimo',
-            '-a', self.config['annual_mode'],
-            '-c', self.config['caseId'],
-            '-v', ','.join(self.config['var_list']),
-            '-s', str(self.config['start_year']),
-            '-e', str(self.config['end_year']),
-            '--ypf={}'.format(self.end_year - self.start_year + 1),
-            '-O', self.config['regrid_output_directory'],
-            '-o', self.config['native_output_directory'],
-            '--map={}'.format(self.config.get('regrid_map_path')),
-            list_string
-        ])
-
-        # Submitting the job to SLURM
-        expected_name = '{type}_{start:04d}_{end:04d}'.format(
-            start=self.config.get('start_year'),
-            end=self.config.get('end_year'),
-            type=self.type)
-        run_script = os.path.join(
-            self.config.get('run_scripts_path'),
-            expected_name)
-        if os.path.exists(run_script):
-            os.remove(run_script)
-
-        self.slurm_args['output_file'] = '-o {output_file}'.format(
-            output_file=run_script + '.out')
-        slurm_prefix = '\n'.join(['#SBATCH ' + self.slurm_args[s]
-                                  for s in self.slurm_args]) + '\n'
-
-        with open(run_script, 'w') as batchfile:
-            batchfile.write('#!/bin/bash\n')
-            batchfile.write(slurm_prefix)
-            batchfile.write(slurm_command)
-        
-        if dryrun:
-            self.status = JobStatus.COMPLETED
-            return
-
-        slurm = Slurm()
-        msg = 'Submitting to queue {type}: {start:04d}-{end:04d}'.format(
-            type=self.type,
-            start=self.start_year,
-            end=self.end_year)
-        print_line(
-            ui=self.config.get('ui', False),
-            line=msg,
-            event_list=self.event_list,
-            current_state=True)
-        self.job_id = slurm.batch(run_script, '--oversubscribe')
-
-        return self.job_id
-
-    def _find_year(self, filename):
-        pattern = r'\d{6}_\d{6}'
-        match = re.search(pattern=pattern, string=filename)
-        if not match:
-            return False, False
-        start = int(filename[match.start(): match.start() + 4])
-        end = int(filename[match.start() + 7: match.start() + 11])
-        return start, end
-
-    def postvalidate(self):
-        """
-        Post execution validation
-        """
-        msg = 'starting postvalidation for {job}-{start:04d}-{end:04d}'.format(
-            job=self.type, start=self.start_year, end=self.end_year)
-        logging.info(msg)
-        found_all = True
-        missing_list = list()
-        # self.config.get('native_output_directory'), 
-        for path in [self.config.get('regrid_output_directory')]:
-            for var in self.config['var_list']:
+        # next, if regridding is turned on check that all regrid ts files were created
+        if self._regrid:
+            regrid_path = os.path.join(
+                config['global']['project_path'], 'output', 'pp',
+                config['post-processing']['timeseries']['destination_grid_name'],
+                self._short_name, 'ts', '{length}yr'.format(length=self.end_year-self.start_year+1))
+            for var in config['post-processing']['timeseries'][self._run_type]:
                 file_name = "{var}_{start:04d}01_{end:04d}12.nc".format(
-                    var=var, start=self.start_year, end=self.end_year)
-                file_path = os.path.join(path, file_name)
+                var=var, start=self.start_year, end=self.end_year)
+                file_path = os.path.join(regrid_path, file_name)
                 if not os.path.exists(file_path):
-                    found_all = False
-                    missing_list.append(file_path)
-        if not found_all:
-            msg = 'missing timeseries output files: {}'.format(json.dumps(missing_list))
-            logging.error(msg)
-        return found_all
+                    return False
 
-    @property
-    def type(self):
-        return self._type
+        # if nothing was missing then we must be done
+        return True
+    # -----------------------------------------------
+    def execute(self, config, dryrun=False):
+        
+        # setup the ts output path
+        ts_path = os.path.join(
+            config['global']['project_path'], 'output', 'pp',
+            config['simulations'][self.case]['native_grid_name'],
+            self._short_name, 'ts', '{length}yr'.format(length=self.end_year-self.start_year+1))
+        if not os.path.exists(ts_path):
+            os.makedirs(ts_path)
 
-    @property
-    def status(self):
-        return self._status
+        regrid_map_path = config['post-processing']['timeseries'].get('regrid_map_path')
+        if regrid_map_path:
+            regrid_path = os.path.join(
+                config['global']['project_path'], 'output', 'pp',
+                config['post-processing']['timeseries']['destination_grid_name'],
+                self._short_name, 'ts', '{length}yr'.format(length=self.end_year-self.start_year+1))
+            self._regrid = True
+            self._output_path = regrid_path
+        else:
+            self._regrid = False
+            self._output_path = ts_path
 
-    @status.setter
-    def status(self, status):
-        self._status = status
+        # sort the input files
+        self._input_file_paths.sort()
+        list_string = ' '.join(self._input_file_paths)
+
+        # create the ncclimo command string
+        var_list = config['post-processing']['timeseries'][self._run_type]
+        cmd = [
+            'ncclimo',
+            '-a', 'sdd',
+            '-c', self.case,
+            '-v', ','.join(var_list),
+            '-s', str(self.start_year),
+            '-e', str(self.end_year),
+            '--ypf={}'.format(self.end_year - self.start_year + 1),
+            '-o', ts_path
+        ]
+        if self._regrid:
+            cmd.extend([
+                '-O', regrid_path,
+                '--map={}'.format(regrid_map_path),
+            ])
+        cmd.append(list_string)
+        slurm_command = ' '.join(cmd)
+
+        return self._submit_cmd_to_slurm(config, cmd)
+            
+    # -----------------------------------------------
+    def handle_completion(self, filemanager, event_list, config):
+        
+        if self.status != JobStatus.COMPLETED:
+            msg = '{prefix}: Job failed, not running completion handler'.format(
+                prefix=self.msg_prefix())
+            print_line(msg, event_list)
+            logging.info(msg)
+            return
+        else:
+            msg = '{prefix}: Job complete'.format(
+                prefix=self.msg_prefix())
+            print_line(msg, event_list)
+            logging.info(msg)
+
+        var_list = config['post-processing']['timeseries'][self._run_type]
+
+        # add native timeseries files to the filemanager db
+        ts_path = os.path.join(
+            config['global']['project_path'], 'output', 'pp',
+            config['simulations'][self.case]['native_grid_name'],
+            self._short_name, 'ts', '{length}yr'.format(length=self.end_year-self.start_year+1))
+
+        new_files = list()
+        for ts_file in get_ts_output_files(ts_path, var_list, self.start_year, self.end_year):
+            new_files.append({
+                'name': ts_file,
+                'local_path': os.path.join(ts_path, ts_file),
+                'case': self.case,
+                'year': self.start_year,
+                'local_status': FileStatus.PRESENT.value
+            })
+        filemanager.add_files(
+            data_type='ts_native',
+            file_list=new_files)
+        if not config['data_types'].get('ts_native'):
+            config['data_types']['ts_native'] = {'monthly': False}
+        
+        if self._regrid:
+            # add regridded timeseries files to the filemanager db
+            regrid_path = os.path.join(
+                config['global']['project_path'], 'output', 'pp',
+                config['post-processing']['timeseries']['destination_grid_name'],
+                self._short_name, 'ts', '{length}yr'.format(length=self.end_year-self.start_year+1))
+
+            new_files = list()
+            for regrid_file in get_ts_output_files(ts_path, var_list, self.start_year, self.end_year):
+                new_files.append({
+                    'name': regrid_file,
+                    'local_path': os.path.join(regrid_path, regrid_file),
+                    'case': self.case,
+                    'year': self.start_year,
+                    'local_status': FileStatus.PRESENT.value
+                })
+            filemanager.add_files(
+                data_type='ts_regrid',
+                file_list=new_files)
+            if not config['data_types'].get('ts_regrid'):
+                config['data_types']['ts_regrid'] = {'monthly': False}
+        
+        msg = '{prefix}: Job completion handler done'.format(
+            prefix=self.msg_prefix())
+        print_line(msg, event_list)
+        logging.info(msg)
+    # -----------------------------------------------
+

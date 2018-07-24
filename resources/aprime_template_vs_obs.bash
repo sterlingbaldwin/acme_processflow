@@ -7,9 +7,9 @@
 # in the LICENSE file in the top level a-prime directory
 #
 #
-# Template driver script to generate A-Prime coupled diagnostics on ACME machines
-#  (Supported machines/HPC centers as of June 2017 are: Edison, OLCF, aims4/acme1
-#   and LANL)
+# Template driver script to generate A-Prime coupled diagnostics on E3SM machines
+#  (Supported machines/HPC centers as of June 2018 are: Edison/Cori, Rhea/Titan,
+#   Blues/Anvil, Theta, aims4/acme1, and LANL)
 #
 # Basic usage (also see README for specific instructions on running on different machines):
 #       1. copy this template to something like run_aprime_$user.bash
@@ -30,6 +30,7 @@
 #            ref_case_v0: baseline ACME v0 case for comparsion to POP/CICE ocn/ice
 #                         (pre-processed diagnostics)
 #            generate_atm_diags: flag to produce atm diagnostics
+#            generate_atm_enso_diags: flag to produce additional, ENSO-related, atm diagnostics
 #            generate_ocnice_diags: flag to produce ocn/ice diagnostics
 #            run_batch_script: flag to submit to batch queue or not
 #       3. execute: ./run_aprime_$user.bash 
@@ -38,7 +39,7 @@
 #       - atmosphere files:
 #              *.cam.h0.*.nc
 #       - mpas-o files:
-#               mpaso.hist.am.timeSeriesStatsMonthly.*.nc (Note: since OHC
+#              *.mpaso.hist.am.timeSeriesStatsMonthly.*.nc (Note: since OHC
 #                   anomalies are computed wrt the first year of the simulation,
 #                   if OHC diagnostics is activated, the analysis will need the
 #                   first full year of mpaso.hist.am.timeSeriesStatsMonthly.*.nc
@@ -47,20 +48,23 @@
 #                   used in the run to analyze: in that case, set short_term_archive
 #                   to 1 and choose begin_yr_ts, end_yr_ts to include only data
 #                   that have been short-term-archived).
-#               mpaso.rst.0002-01-01_00000.nc (or any other restart file)
+#               *.mpaso.rst.0002-01-01_00000.nc (or any other restart file)
 #               streams.ocean
-#       - mpas-cice files:
-#               mpascice.hist.am.timeSeriesStatsMonthly.*.nc
-#               streams.cice
+#               mpaso_in (or mpas-o_in)
+#       - mpas-seaice files: (note the name change from mpas-cice. As of May 2018,
+#                             we are supporting *both* mpas-cice and mpas-seaice
+#                             names, since many E3SM-v1 simulations were run with the
+#                             old name)
+#               *.mpassi.hist.am.timeSeriesStatsMonthly.*.nc (or mpascice.hist.am.timeSeriesStatsMonthly.*.nc)
+#               *.mpassi.rst.0002-01-01_00000.nc (or mpascice.rst.0002-01-01_00000.nc or any other mpas-seaice restart file)
+#               streams.seaice (or streams.cice)
+#               mpassi_in (or mpas-cice_in)
 #
 # Meaning of acronyms/words used in variable names below:
 #	test:		 Test case
 #	ref:		 Reference case or 'obs'
 #	ts: 		 Time series; e.g. test_begin_yr_ts
-#       climateIndex_ts: Time series for climate indexes such as Nino3.4.
-#                        NB: if begin_yr_climateIndex_ts=1 and end_yr_climateIndex_ts=9999,
-#                        the climate index time series is computed over the full
-#                        available data set
+#       climateIndex_ts: Time series for climate indexes such as Nino3.4
 #	climo: 		 Climatology
 #	begin_yr: 	 Model year to start analysis 
 #	end_yr:		 Model year to end analysis
@@ -104,15 +108,15 @@ export test_atm_res=%%test_atm_res%%
 #  used for beta1 and newer runs.
 export test_mpas_mesh_name=%%test_mpas_mesh_name%%
 #  Year start/end for climatologies
-export test_begin_yr_climo=%%begin_yr%%
-export test_end_yr_climo=%%end_yr%%
+export test_begin_yr_climo=%%test_begin_yr_climo%%
+export test_end_yr_climo=%%test_end_yr_climo%%
 #  Year start/end for time series
-export test_begin_yr_ts=%%begin_yr%%
-export test_end_yr_ts=%%end_yr%%
+export test_begin_yr_ts=%%test_begin_yr_climo%%
+export test_end_yr_ts=%%test_end_yr_climo%%
 #  Year start/end for ocean Nino3.4 index diagnostics (both ocn/ice and
 #  atm diagnostics)
-export test_begin_yr_climateIndex_ts=%%begin_yr%%
-export test_end_yr_climateIndex_ts=%%end_yr%%
+export test_begin_yr_climateIndex_ts=%%test_begin_yr_climo%%
+export test_end_yr_climateIndex_ts=%%test_end_yr_climo%%
 
 #  Atmosphere switches (True(1)/False(0)) to condense variables, compute climos, remap climos and condensed time series file
 #  If no pre-processing is done (climatology, remapping), all the switches below should be 1
@@ -144,26 +148,31 @@ elif [ ${HOSTNAME:0:5} == "acme1" ]; then
   export machname="acme1"
 elif [ ${HOSTNAME:0:4} == "wolf" ]; then
   export machname="lanl"
+elif [ ${HOSTNAME:0:6} == "blogin" ] || ([ ${HOSTNAME:0:1} == "b" ] && [[ ${HOSTNAME:1:2} =~ [0-9] ]]); then
+  export machname="anvil"
+elif [ ${HOSTNAME:0:5} == "theta" ]; then
+  export machname="theta"
 else
   echo "Unsupported host $HOSTNAME. Exiting."
   exit 1
 fi
+
 # Define project and www directories
 if [ $machname == "nersc" ]; then
-  # Project directory
   projdir=/global/project/projectdirs/acme
-  # Location of website directory to host the webpage
-  export www_dir=%%www_dir%%/$USER
 elif [ $machname == "olcf" ]; then
   projdir=$PROJWORK/cli115
-  export www_dir=%%www_dir%%/$USER
 elif [ $machname == "aims4" ] || [ $machname == "acme1" ]; then
   projdir=/space2
-  export www_dir=%%www_dir%%/$USER
 elif [ $machname == "lanl" ]; then
   projdir=/usr/projects/climate/SHARED_CLIMATE
-  export www_dir=$output_base_dir/www
+elif [ $machname == "anvil" ]; then
+  projdir=/lcrc/group/acme/lvanroe/APrime_Files
+elif [ $machname == "theta" ]; then
+  projdir=/projects/ClimateEnergy_2
 fi
+
+export www_dir=%%www_dir%%
 
 # ** Reference case variables (similar to test_case variables) **
 export ref_case=obs
@@ -175,7 +184,16 @@ elif [ $machname == "aims4" ] || [ $machname == "acme1" ]; then
   export ref_archive_dir=$projdir/diagnostics/observations/Atm
 elif [ $machname == "lanl" ]; then
   export ref_archive_dir=$projdir/obs_for_diagnostics
+elif [ $machname == "anvil" ]; then
+  export ref_archive_dir=$projdir/obs_for_diagnostics
+elif [ $machname == "theta" ]; then
+  export ref_archive_dir=$projdir/observations/Atm
 fi
+# Set begin_yr, end_yr of SST observations to be used to compute
+# obs climatologies to compare with the model results. Choose
+# 1870-1900 for pre-industrial runs, or 1950-2011 for present-day runs.
+export sstObs_begin_yr=1870
+export sstObs_end_yr=1900
 #export ref_case=casename
 #export ref_archive_dir=dir/to/refcase_data	# $ref_case will be appended to this
 export ref_short_term_archive=0
@@ -194,6 +212,12 @@ elif [ $machname == "aims4" ] || [ $machname == "acme1" ]; then
   export ref_archive_v0_ocndir=/space2/diagnostics/ACMEv0_lowres/${ref_case_v0}/ocn/postprocessing
   export ref_archive_v0_seaicedir=/space2/diagnostics/ACMEv0_lowres/${ref_case_v0}/ice/postprocessing
 elif [ $machname == "lanl" ]; then
+  export ref_archive_v0_ocndir=$projdir/ACMEv0_lowres/${ref_case_v0}/ocn/postprocessing
+  export ref_archive_v0_seaicedir=$projdir/ACMEv0_lowres/${ref_case_v0}/ice/postprocessing
+elif [ $machname == "anvil" ]; then
+  export ref_archive_v0_ocndir=$projdir/ACMEv0_lowres/${ref_case_v0}/ocn/postprocessing
+  export ref_archive_v0_seaicedir=$projdir/ACMEv0_lowres/${ref_case_v0}/ice/postprocessing
+elif [ $machname == "theta" ]; then
   export ref_archive_v0_ocndir=$projdir/ACMEv0_lowres/${ref_case_v0}/ocn/postprocessing
   export ref_archive_v0_seaicedir=$projdir/ACMEv0_lowres/${ref_case_v0}/ice/postprocessing
 fi
@@ -229,6 +253,8 @@ export generate_sst_trends=1
 export generate_sst_climo=1
 export generate_sss_climo=1
 export generate_mld_climo=1
+export generate_ArgoTemperature_climo=1
+export generate_ArgoSalinity_climo=1
 export generate_mht=1
 # Setting MOC diagnostics to false by default, because of current (Sep 2017) problems in
 # running the MOC scripts on high-resolution MPAS data. The user can switch generate_moc=1
@@ -245,20 +271,18 @@ export generate_html=1
 #   If run_batch_script=false, aprime_atm_diags.bash and aprime_ocnice_diags.bash are called directly.
 #   If run_batch_script=true, aprime_atm_diags.bash and aprime_ocnice_diags.bash are called within
 #     a machine-specific batch script (one script for atm and one for ocn/ice diags). In this case,
-#     atmosphere diagnostics are run in background mode onto a single compute node. Ocean/ice
-#     diagnostics, on the other hand, grab a number of compute nodes set by 'mpas_analysis_tasks':
-#     each ocn/ice task is run on a different node. If all ocn/ice diagnostics are run (by activating
-#     all the 'generate' options above), the total number of tasks is equal to 10, hence the default
-#     here is 10. The user can decide to reduce mpas_analysis_tasks accordingly, if asking to compute
-#     a reduced set of ocn/ice diagnostics. Finally, the user can set the walltime (default is 1hr
-#     for atm and 1hr for ocn/ice diags, which is fine to compute ~20 year climatology at low-resolution).
-#   Finally, choose whether to run ncclimo in parallel mode. In that case, set ncclimoParallelMode to
-#   "bck", and nclimo will launch 12 parallel tasks on a single node to compute 12 monthly
-#   climatologies. Otherwise, leave ncclimoParallelMode="serial".
+#     both atmosphere and ocn/ice diagnostics are run in background mode onto a single compute node
+#     each, using a number of tasks equal to 'mpas_analysis_tasks'. We have determined that
+#     mpas_analysis_tasks=12 is a good choice for most systems, and therefore the user should
+#     NOT change this setting. Parameters that could be set by the user are instead:
+#     -) the walltime (default is 1hr for atm and 1hr for ocn/ice diags)
+#     -) whether to run ncclimo in parallel mode. In that case, set ncclimoParallelMode to
+#        "bck", and nclimo will launch 12 parallel tasks on a single node to compute 12 monthly
+#        climatologies. Otherwise, leave ncclimoParallelMode="serial".
 export run_batch_script=false
-export mpas_analysis_tasks=10
 export batch_walltime="01:00:00" # HH:MM:SS
 export ncclimoParallelMode="bck"
+export mpas_analysis_tasks=10
 ###############################################################################################
 
 ########################################################################
@@ -286,19 +310,6 @@ export GPCP_regrid_wgt_file=$projdir/mapping/maps/$test_atm_res-to-GPCP.conserva
 export CERES_EBAF_regrid_wgt_file=$projdir/mapping/maps/$test_atm_res-to-CERES-EBAF.conservative.wgts.nc
 export ERS_regrid_wgt_file=$projdir/mapping/maps/$test_atm_res-to-ERS.conservative.wgts.nc
 
-# Set ocn/ice specific paths to mapping and region masking file locations
-#     remap from MPAS mesh to regular 0.5degx0.5deg grid
-#     NB: if this file does not exist, it will be generated by the analysis
-export mpas_remapfile=$projdir/mpas_analysis/mapping/map_${test_mpas_mesh_name}_to_0.5x0.5degree_bilinear.nc
-#     MPAS-O region mask files containing masking information for the Atlantic basin
-#     needed for the MOC diagnostics.
-#     NB: this file, instead, *needs* to be present 
-if [ $machname == "lanl" ] || [ $machname == "aims4" ] || [ $machname == "acme1" ]; then
-  export mpaso_regions_file=$projdir/mpas_analysis/region_masks/${test_mpas_mesh_name}_Atlantic_region_and_southern_transect.nc
-else
-  export mpaso_regions_file=$projdir/mapping/grids/${test_mpas_mesh_name}_SingleRegionAtlanticWTransportTransects_masks.nc
-fi
-
 # Set ocn/ice specific paths to data file names and locations
 if [ $machname == "nersc" ]; then
   export obs_ocndir=$projdir/observations/Ocean
@@ -312,12 +323,19 @@ elif [ $machname == "aims4" ] || [ $machname == "acme1" ]; then
 elif [ $machname == "lanl" ]; then
   export obs_ocndir=$projdir/observations
   export obs_seaicedir=$projdir/observations/SeaIce
+elif [ $machname == "anvil" ]; then
+  export obs_ocndir=$projdir/observations/Ocean
+  export obs_seaicedir=$projdir/observations/SeaIce
+elif [ $machname == "theta" ]; then
+  export obs_ocndir=$projdir/observations/Ocean
+  export obs_seaicedir=$projdir/observations/SeaIce
 fi
 export obs_sstdir=$obs_ocndir/SST
 export obs_sssdir=$obs_ocndir/SSS
 export obs_mlddir=$obs_ocndir/MLD
 export obs_ninodir=$obs_ocndir/Nino
 export obs_mhtdir=$obs_ocndir/MHT
+export obs_argodir=$obs_ocndir/ARGO
 export obs_iceareaNH=$obs_seaicedir/IceArea_timeseries/iceAreaNH_climo.nc
 export obs_iceareaSH=$obs_seaicedir/IceArea_timeseries/iceAreaSH_climo.nc
 export obs_icevolNH=$obs_seaicedir/PIOMAS/PIOMASvolume_monthly_climo.nc
@@ -333,12 +351,19 @@ export coupled_diags_home=$PWD
 # and batch scripts
 export uniqueID=`date +%Y-%m-%d_%H%M%S`
 
-# Check on www_dir, permissions included
-# Create www_dir if it does not exist, purge it if it does
+# Check on www_dir: create it if it does not exist, purge it if it does
 if [ ! -d $www_dir/$plots_dir_name ]; then
-  mkdir $www_dir/$plots_dir_name
+  mkdir -p $www_dir/$plots_dir_name
 else
-  rm -f $www_dir/$plots_dir_name/*
+  rm -f $www_dir/$plots_dir_name/*.png
+fi
+# Check on MPAS-Analysis www_dir: create it if it does not exist, purge it if it does
+export mpas_www_link=./mpas-analysis
+export mpas_www_dir=$www_dir/$plots_dir_name/$mpas_www_link
+if [ ! -d $mpas_www_dir ]; then
+  mkdir -p $mpas_www_dir
+else
+  rm -rf $mpas_www_dir/*
 fi
 
 # LOAD THE MACHINE-SPECIFIC ANACONDA-2.7 ENVIRONMENT
@@ -347,32 +372,61 @@ if [ $machname == "nersc" ]; then
   module unload python
   module unload python_base
   module use /global/project/projectdirs/acme/software/modulefiles/all
-  module load python/anaconda-2.7-acme
+  module load e3sm-unified/1.1.3
   export NCO_PATH_OVERRIDE=No
 elif [ $machname == "olcf" ]; then
   module unload python
-  module use /ccs/proj/cli115/pwolfram/modulefiles/all
-  module load python/anaconda-2.7-acme
+  module use /ccs/proj/cli115/software/modulefiles/all
+  module load e3sm-unified/1.1.3
   export NCO_PATH_OVERRIDE=No
 elif [ $machname == "acme1" ]; then
-  export PATH=/usr/local/anaconda2/bin:$PATH
-  source activate ACME_UNIFIED
+  module use /usr/local/e3sm_unified/modulefiles
+  module load e3sm-unified/1.1.3-py2-nox
   export NCO_PATH_OVERRIDE=No
 elif [ $machname == "aims4" ]; then
-  export PATH=/usr/local/anaconda2/bin:$PATH
-  source activate ACME-UNIFIED
+  module use /usr/local/e3sm_unified/modulefiles
+  module load e3sm-unified/1.1.3-py2-nox
   export NCO_PATH_OVERRIDE=No
 elif [ $machname == "lanl" ]; then
   module unload python
   module use $projdir/modulefiles/all
-  module load python/anaconda-2.7-climate
+  module load e3sm-unified/1.1.3
+elif [ $machname == "anvil" ]; then
+  unset LD_LIBRARY_PATH
+  soft add +e3sm-unified-1.1.3-nox
+elif [ $machname == "theta" ]; then
+  module use $projdir/software/modulefiles/all
+  module load e3sm-unified/1.1.3
 fi
 
-# The following is needed for rhea, aims4 and acme1
+# The following is needed to avoid the too-many-open-files problem
+# in xarray. Since we are mostly using ncrcat in MPAS-Analysis v0.6
+# and beyond, this will eventually become outdated (as per v0.6, we
+# are still using xarray 'open_mfdataset' to open pre-processed
+# model data).
 if [ $machname == "aims4" ] || [ $machname == "acme1" ] || [ ${HOSTNAME:0:4} == "rhea" ]; then
   export mpasAutocloseFileLimitFraction=0.02
 else
   export mpasAutocloseFileLimitFraction=0.2 # default value
+fi
+
+# Take into account changes in mpas namelist and streams file names
+# (Note: this will eventually be removed, but for now, May 2018, we
+#  need to remain backward compatible).
+if [ -f $test_archive_dir/$test_casename/run/mpaso_in ]; then
+  export seaIce_namelist_file=mpaso_in
+else
+  export seaIce_namelist_file=mpas-o_in
+fi
+if [ -f $test_archive_dir/$test_casename/run/mpassi_in ]; then
+  export seaIce_namelist_file=mpassi_in
+else
+  export seaIce_namelist_file=mpas-cice_in
+fi
+if [ -f $test_archive_dir/$test_casename/run/streams.seaice ]; then
+  export seaIce_streams_file=streams.seaice
+else
+  export seaIce_streams_file=streams.cice
 fi
 
 # PUT THE PROVIDED CASE INFORMATION IN CSH ARRAYS TO FACILITATE READING BY OTHER SCRIPTS
@@ -381,9 +435,7 @@ fi
 # RUN DIAGNOSTICS
 if [ $generate_atm_diags -eq 1 ]; then
   if ! $run_batch_script; then
-    echo "starting atm diags"
     ./bash_scripts/aprime_atm_diags.bash
-    echo "atm diags complete"
     atm_status=$?
     if [ $atm_status -eq 0 ]; then
       # Update www/plots directory with newly generated plots
@@ -404,7 +456,7 @@ if [ $generate_atm_diags -eq 1 ]; then
       echo "**** $batch_script"
       echo "**** jobID:"
       sbatch $batch_script
-    elif [ ${HOSTNAME:0:5} == "titan" ]; then
+    elif [ ${HOSTNAME:0:5} == "titan" ] || [ $machname == "anvil" ]; then
       update_wwwdir_script="$log_dir/batch_update_wwwdir.$machname.$uniqueID.bash"
       sed 's@PBS -l walltime=.*@PBS -l walltime='$batch_walltime'@' ./bash_scripts/batch_atm.$machname.bash > $batch_script
       sed -i 's@PBS -o .*@PBS -o '$log_dir'/aprime_atm_diags.o'$uniqueID'@' $batch_script
@@ -434,9 +486,7 @@ fi
 
 if [ $generate_ocnice_diags -eq 1 ]; then
   if ! $run_batch_script; then
-    echo "starting ocnice diags"
     ./bash_scripts/aprime_ocnice_diags.bash
-    echo "ocnice diags complete"
     ocnice_status=$?
     if [ $ocnice_status -eq 0 ]; then
       # Update www/plots directory with newly generated plots
@@ -452,17 +502,15 @@ if [ $generate_ocnice_diags -eq 1 ]; then
       sed 's@SBATCH --time=.*@SBATCH --time='$batch_walltime'@' ./bash_scripts/batch_ocnice.$machname.bash > $batch_script
       sed -i 's@SBATCH --output=.*@SBATCH --output='$log_dir'/aprime_ocnice_diags.o'$uniqueID'@' $batch_script
       sed -i 's@SBATCH --error=.*@SBATCH --error='$log_dir'/aprime_ocnice_diags.e'$uniqueID'@' $batch_script
-      sed -i 's@SBATCH --nodes=.*@SBATCH --nodes='$mpas_analysis_tasks'@' $batch_script
       echo
       echo "**** Submitting ocn/ice batch script: batch_ocnice.$machname.$uniqueID.bash"
       echo "**** jobID:"
       sbatch $batch_script
-    elif [ $machname == "olcf" ]; then
+    elif [ $machname == "titan" ] || [ $machname == "anvil" ]; then
       update_wwwdir_script="$log_dir/batch_update_wwwdir.$machname.$uniqueID.bash"
       sed 's@PBS -l walltime=.*@PBS -l walltime='$batch_walltime'@' ./bash_scripts/batch_ocnice.$machname.bash > $batch_script
       sed -i 's@PBS -o .*@PBS -o '$log_dir'/aprime_ocnice_diags.o'$uniqueID'@' $batch_script
       sed -i 's@PBS -e .*@PBS -e '$log_dir'/aprime_ocnice_diags.e'$uniqueID'@' $batch_script
-      sed -i 's@PBS -l nodes=.*@PBS -l nodes='$mpas_analysis_tasks'@' $batch_script
       sed -i 's@batch_script=.*@batch_script='$update_wwwdir_script'@' $batch_script
       sed 's@PBS -o .*@PBS -o '$log_dir'/aprime_update_wwwdir.o'$uniqueID'@' \
        ./bash_scripts/batch_update_wwwdir.$machname.bash > $update_wwwdir_script
@@ -507,15 +555,14 @@ if [ $atm_status -eq 0 ]    || [ $atm_status -eq -2 ]   ||
   for j in `seq 1 $n_test_cases`; do
      if [ $generate_html -eq 1 ]; then
 	./bash_scripts/generate_html_index_file.bash	$j \
-							$plots_dir \
-							$www_dir
+							$plots_dir
      fi
   done
   chmod ga+rX $www_dir
   chmod -R ga+rX $www_dir/$plots_dir_name
 else
   echo
-  echo "Neither atmospheric nor ocn/ice diagnostics were successful. HTML page not generated!"
+  echo "Neither atmospheric nor ocn/ice diagnostics were generated. HTML page also not generated!"
   echo
 fi
 

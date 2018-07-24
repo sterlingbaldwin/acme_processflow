@@ -24,8 +24,7 @@ requirements:
     - acme_diags >=1.2.1
     - markupsafe
     - matplotlib
-    - nco >=4.7.4
-    - ncurses
+    - nco ==4.7.3
     - pip
     - python
     - setuptools
@@ -39,3 +38,5 @@ requirements:
     - hdf5
     - scipy ==0.19.1=np113py27_0
     - beautiful-soup
+    - paramiko
+    - ncl

@@ -13,7 +13,6 @@ class JobStatus(IntEnum):
     CANCELLED = 8
     TIMEOUT = 9
 
-
 StatusMap = {
     'VALID': JobStatus.VALID,
     'INVALID': JobStatus.INVALID,

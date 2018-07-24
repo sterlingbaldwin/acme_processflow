@@ -7,34 +7,25 @@ import random
 
 from time import sleep
 from peewee import *
-from globus_cli.commands.ls import _get_ls_res as get_ls
+from enum import IntEnum
+from threading import Thread
 
 from models import DataFile
-from jobs.Transfer import Transfer
-from jobs.JobStatus import JobStatus
-from lib.YearSet import SetStatus
-from lib.util import (print_debug,
-                      print_line)
+from lib.jobstatus import JobStatus
+from lib.util import print_debug
+from lib.util import print_line
 
-filestatus = {
-    'EXISTS': 0,
-    'NOT_EXIST': 1,
-    'IN_TRANSIT': 2
-}
+from lib.globus_interface import transfer as globus_transfer
+from globus_cli.services.transfer import get_client
 
-file_type_map = {
-    'atm': 'EXPERIMENT.cam.h0.YEAR-MONTH.nc',
-    'ice': 'mpascice.hist.am.timeSeriesStatsMonthly.YEAR-MONTH-01.nc',
-    'ocn': 'mpaso.hist.am.timeSeriesStatsMonthly.YEAR-MONTH-01.nc',
-    'lnd': 'EXPERIMENT.clm2.h0.YEAR-MONTH.nc',
-    'rest': 'mpaso.rst.YEAR-01-01_00000.nc',
-    'mpascice.rst': 'mpascice.rst.YEAR-01-01_00000.nc',
-    'streams.ocean': 'streams.ocean',
-    'streams.cice': 'streams.cice',
-    'mpas-cice_in': 'mpas-cice_in',
-    'mpas-o_in': 'mpas-o_in',
-    'meridionalHeatTransport': 'mpaso.hist.am.meridionalHeatTransport.YEAR-MONTH-01.nc',
-}
+from lib.ssh_interface import transfer as ssh_transfer
+from lib.ssh_interface import get_ssh_client
+
+
+class FileStatus(IntEnum):
+    PRESENT = 0
+    NOT_PRESENT = 1
+    IN_TRANSIT = 2
 
 
 class FileManager(object):
@@ -42,710 +33,541 @@ class FileManager(object):
     Manage all files required by jobs
     """
 
-    def __init__(self, database=None, types=None, sta=False, ui=False, **kwargs):
+    def __init__(self, mutex, event_list, config, database='processflow.db'):
         """
         Parameters:
             mutex (theading.Lock) the mutext for accessing the database
-            sta (bool) is this run short term archived or not (1) yes (0) no
-            types (list(str)): A list of strings of datatypes
             database (str): the path to where to create the sqlite database file
-            remote_endpoint (str): the Globus UUID for the remote endpoint
-            remote_path (str): the base directory to search for this runs model output
-            local_endpoint (str): The Globus UUID for the local endpoint
-            local_path (str): the local project path
+            config (dict): the global configuration dict
         """
-        self.mutex = kwargs['mutex']
-        self.event_list = kwargs['event_list']
-        self.ui = ui
-        self.sta = sta
-        self.updated_rest = False
-        self.types = types if isinstance(types, list) else [types]
-        self.active_transfers = 0
-        self.db_path = database
+        self._mutex = mutex
+        self._event_list = event_list
+        self._db_path = database
+        self._config = config
+
         if os.path.exists(database):
             os.remove(database)
 
-        self.mutex.acquire()
+        self._mutex.acquire()
         DataFile._meta.database.init(database)
         if DataFile.table_exists():
             DataFile.drop_table()
 
-        DataFile.create_table() 
-        if self.mutex.locked():
-            self.mutex.release()
-        self.remote_endpoint = kwargs.get('remote_endpoint')
-        self.local_path = kwargs.get('local_path')
-        self.local_endpoint = kwargs.get('local_endpoint')
-        self.start_year = 0
-        self.custom_archive = kwargs.get('custom_archive')
-        self.experiment = kwargs.get('experiment')
+        DataFile.create_table()
+        if self._mutex.locked():
+            self._mutex.release()
         
-        
-        self.remote_path = None
-        path_split = kwargs.get('remote_path').split(os.sep)
-        for index, val in enumerate(path_split):
-            if val == self.experiment:
-                self.remote_path = os.sep.join(path_split[:index + 1])
-                break
-        if not self.remote_path:
-            print '###############################################################################'
-            print "# could not find remote path, were the case_id and source_path set correctly? #"
-            print '# if this is a purely local run, disreguard                                   #'
-            print '###############################################################################'
-            self.remote_path = '/dummy/path/{}'.format(self.experiment)
+        self.thread_list = list()
+        self.kill_event = threading.Event()
 
     def __str__(self):
+        # TODO: make this better
         return str({
-            'short term archive': self.sta,
-            'active_transfers': self.active_transfers,
-            'remote_path': self.remote_path,
-            'remote_endpoint': self.remote_endpoint,
-            'local_path': self.local_path,
-            'local_endpoint': self.local_endpoint,
-            'db_path': self.db_path
+            'db_path': self._db_path,
         })
 
-    def populate_handle_rest(self, simstart, newfiles):
+    def get_endpoints(self):
         """
-        Add the restart files to the newfiles list to be added to the db
+        Return a list of globus endpoints for all cases
         """
+        self._mutex.acquire()
+        q = (DataFile
+             .select()
+             .where(
+                 DataFile.transfer_type == 'globus'))
+        endpoints = list()
+        for x in q.execute():
+            if x.remote_uuid not in endpoints:
+                endpoints.append(x.remote_uuid)
+        self._mutex.release()
+        return endpoints
 
-        # First add the mpaso.rst
-        name = file_type_map['rest'].replace(
-            'YEAR', '{:04d}'.format(simstart + 1))
-        local_path = os.path.join(
-            self.local_path,
-            'rest',
-            name)
-        head, tail = os.path.split(local_path)
-        if not os.path.exists(head):
-            os.makedirs(head)
-
-        if self.sta:
-            if self.custom_archive:
-                remote_path = os.path.join(
-                    self.custom_archive,
-                    'rest',
-                    '{year:04d}-01-01-00000'.format(year=simstart + 1),
-                    name)
-            else:
-                remote_path = os.path.join(
-                    self.remote_path,
-                    'archive',
-                    'rest',
-                    '{year:04d}-01-01-00000'.format(year=simstart + 1),
-                    name)
-        else:
-            remote_path = os.path.join(
-                self.remote_path,
-                'run',
-                name)
-        newfiles = self._add_file(
-            newfiles=newfiles,
-            name=name,
-            local_path=local_path,
-            remote_path=remote_path,
-            _type='rest')
-
-        # Second add the mpascice.rst
-        name = file_type_map['mpascice.rst'].replace(
-            'YEAR', '{:04d}'.format(simstart + 1))
-        local_path = os.path.join(
-            self.local_path,
-            'rest',
-            name)
-
-        if self.sta:
-            if self.custom_archive:
-                remote_path = os.path.join(
-                    self.custom_archive,
-                    'rest',
-                    '{year:04d}-01-01-00000'.format(year=simstart + 1),
-                    name)
-            else:
-                remote_path = os.path.join(
-                    self.remote_path,
-                    'archive',
-                    'rest',
-                    '{year:04d}-01-01-00000'.format(year=simstart + 1),
-                    name)
-        else:
-            remote_path = os.path.join(
-                self.remote_path,
-                'run',
-                name)
-        newfiles = self._add_file(
-            newfiles=newfiles,
-            name=name,
-            local_path=local_path,
-            remote_path=remote_path,
-            _type='mpascice.rst')
-
-    def populate_handle_mpas(self, _type, newfiles):
+    def write_database(self):
         """
-        Populate the file table with the streams.ocean, streams.cice, mpas-o_in, and mpas-cice_in files
-        which are found in the run directory even if sta is on
+        Write out a human readable version of the database for debug purposes
         """
-        local_path = os.path.join(
-            self.local_path,
-            'mpas',
-            _type)
-        head, tail = os.path.split(local_path)
-        if not os.path.exists(head):
-            os.makedirs(head)
+        file_list_path = os.path.join(
+            self._config['global']['project_path'],
+            'output',
+            'file_list.txt')
+        with open(file_list_path, 'w') as fp:
+            self._mutex.acquire()
+            try:
+                for case in self._config['simulations']:
+                    if case in ['start_year', 'end_year', 'comparisons']:
+                        continue
+                    fp.write('+++++++++++++++++++++++++++++++++++++++++++++')
+                    fp.write('\n\t{case}\t\n'.format(case=case))
+                    fp.write('+++++++++++++++++++++++++++++++++++++++++++++\n')
+                    q = (DataFile
+                         .select(DataFile.datatype)
+                         .where(DataFile.case == case)
+                         .distinct())
+                    for df_type in q.execute():
+                        _type = df_type.datatype
+                        fp.write('===================================\n')
+                        fp.write('\t' + _type + ':\n')
+                        datafiles = (DataFile
+                                     .select()
+                                     .where(
+                                            (DataFile.datatype == _type) &
+                                            (DataFile.case == case)))
+                        for datafile in datafiles.execute():
+                            filestr = '-------------------------------------'
+                            filestr += '\n\t     name: ' + datafile.name + '\n\t     local_status: '
+                            if datafile.local_status == 0:
+                                filestr += ' present, '
+                            elif datafile.local_status == 1:
+                                filestr += ' missing, '
+                            else:
+                                filestr += ' in transit, '
+                            filestr += '\n\t     remote_status: '
+                            if datafile.remote_status == 0:
+                                filestr += ' present'
+                            elif datafile.remote_status == 1:
+                                filestr += ' missing'
+                            else:
+                                filestr += ' in transit'
+                            filestr += '\n\t     local_size: ' + \
+                                str(datafile.local_size)
+                            filestr += '\n\t     local_path: ' + datafile.local_path
+                            filestr += '\n\t     remote_path: ' + datafile.remote_path + '\n'
+                            fp.write(filestr)
+            except Exception as e:
+                print_debug(e)
+            finally:
+                if self._mutex.locked():
+                    self._mutex.release()
 
-        remote_path = os.path.join(self.remote_path, 'run', _type)
-        newfiles = self._add_file(
-            newfiles=newfiles,
-            name=_type,
-            local_path=local_path,
-            remote_path=remote_path,
-            _type=_type)
+    # def render_string(self, instring, **kwargs):
+    #     """
+    #     take a list of keyword arguments and replace uppercase instances of them in the input string
+    #     """
+    #     for string, val in kwargs.items():
+    #         if string in instring:
+    #             instring = instring.replace(string, val)
+    #     return instring
 
-    def populate_heat_transport(self, newfiles):
-        name = 'mpaso.hist.am.meridionalHeatTransport.{year:04d}-02-01.nc'.format(
-            year=self.start_year)
-        local_path = os.path.join(
-            self.local_path,
-            'mpas',
-            name)
-        head, tail = os.path.split(local_path)
-        if not os.path.exists(head):
-            os.makedirs(head)
-
-        if self.sta:
-            if self.custom_archive:
-                remote_path = os.path.join(
-                    self.custom_archive,
-                    'ocn',
-                    'hist',
-                    name)
-            else:
-                remote_path = os.path.join(
-                    self.remote_path,
-                    'archive',
-                    'ocn',
-                    'hist',
-                    name)
-        else:
-            remote_path = os.path.join(
-                self.remote_path,
-                'run',
-                name)
-
-        newfiles = self._add_file(
-            newfiles=newfiles,
-            name=name,
-            local_path=local_path,
-            remote_path=remote_path,
-            _type='meridionalHeatTransport')
-
-    def populate_monthly(self, _type, newfiles, simstart, simend, experiment):
-        local_base = os.path.join(
-            self.local_path, _type)
-        if not os.path.exists(local_base):
-            os.makedirs(local_base)
-
-        for year in xrange(simstart, simend + 1):
-            for month in xrange(1, 13):
-                name = (file_type_map[_type]
-                            .replace('EXPERIMENT', experiment)
-                            .replace('YEAR', '{0:04d}'.format(year))
-                            .replace('MONTH', '{0:02d}'.format(month)))
-
-                local_path = os.path.join(
-                    local_base, name)
-                
-                if self.sta:
-                    if self.custom_archive:
-                        remote_path = os.path.join(
-                            self.custom_archive,
-                            _type,
-                            'hist',
-                            name)
-                    else:
-                        remote_path = os.path.join(
-                            self.remote_path,
-                            'archive',
-                            _type,
-                            'hist',
-                            name)
+    def check_data_ready(self, data_required, case, start_year=None, end_year=None):
+        self._mutex.acquire()
+        try:
+            for datatype in data_required:
+                if start_year and end_year:
+                    q = (DataFile
+                            .select()
+                            .where(
+                                (DataFile.year >= start_year) &
+                                (DataFile.year <= end_year) &
+                                (DataFile.case == case) &
+                                (DataFile.datatype == datatype)))
                 else:
-                    remote_path = os.path.join(
-                        self.remote_path,
-                        'run',
-                        name)
-                newfiles = self._add_file(
-                    newfiles=newfiles,
-                    name=name,
-                    local_path=local_path,
-                    remote_path=remote_path,
-                    _type=_type,
-                    year=year,
-                    month=month)
+                    q = (DataFile
+                            .select()
+                            .where(
+                                (DataFile.case == case) &
+                                (DataFile.datatype == datatype)))
+                datafiles = q.execute()
+                for df in datafiles:
+                    if not os.path.exists(df.local_path) and df.local_status == FileStatus.PRESENT.value:
+                        df.local_status = FileStatus.NOT_PRESENT.value
+                        df.save()
+                    elif os.path.exists(df.local_path) and df.local_status == FileStatus.NOT_PRESENT.value:
+                        df.local_status = FileStatus.PRESENT.value
+                        df.save()
+                    if df.local_status != FileStatus.PRESENT.value:
+                        return False
+            return True
+        finally:
+            self._mutex.release()
 
-    def populate_file_list(self, simstart, simend, experiment):
+    def render_file_string(self, data_type, data_type_option, case, year=None, month=None):
+        """
+        Takes strings from the data_types dict and replaces the keywords with the appropriate values
+        """
+        # setup the replacement dict
+        start_year = int(self._config['simulations']['start_year'])
+        end_year = int(self._config['simulations']['end_year'])
+
+        replace = {
+            'PROJECT_PATH': self._config['global']['project_path'],
+            'REMOTE_PATH': self._config['simulations'][case].get('remote_path', ''),
+            'CASEID': case,
+            'REST_YR': '{:04d}'.format(start_year + 1),
+            'START_YR': '{:04d}'.format(start_year),
+            'END_YR': '{:04d}'.format(end_year)
+        }
+        if year is not None:
+            replace['YEAR'] = '{:04d}'.format(year)
+        if month is not None:
+            replace['MONTH'] = '{:02d}'.format(month)
+
+        if self._config['data_types'][data_type].get(case):
+            if self._config['data_types'][data_type][case].get(data_type_option):
+                instring = self._config['data_types'][data_type][case][data_type_option]
+                for item in self._config['simulations'][case]:
+                    if item.upper() in self._config['data_types'][data_type][case][data_type_option]:
+                        instring = instring.replace(item.upper(), self._config['simulations'][case][item])
+                return instring
+        
+        instring = self._config['data_types'][data_type][data_type_option]
+        for string, val in replace.items():
+            if string in instring:
+                instring = instring.replace(string, val)
+        return instring
+
+    def populate_file_list(self):
         """
         Populate the database with the required DataFile entries
-
-        Parameters:
-            simstart (int): the start year of the simulation,
-            simend (int): the end year of the simulation,
-            experiment (str): the name of the experiment
-                ex: 20170915.beta2.A_WCYCL1850S.ne30_oECv3_ICG.edison
         """
         msg = 'Creating file table'
         print_line(
-            ui=False,
             line=msg,
-            event_list=self.event_list)
-        if self.sta:
-            msg = 'Using short term archive'
-        else:
-            msg = 'Short term archive turned off'
-        print_line(
-            ui=self.ui,
-            line=msg,
-            event_list=self.event_list)
-        if not self.start_year:
-            self.start_year = simstart
-        newfiles = []
+            event_list=self._event_list)
+        newfiles = list()
+        start_year = int(self._config['simulations']['start_year'])
+        end_year = int(self._config['simulations']['end_year'])
         with DataFile._meta.database.atomic():
-            for _type in self.types:
-                if _type not in file_type_map:
+            self._mutex.acquire()
+
+            # for each case
+            for case in self._config['simulations']:
+                if case in ['start_year', 'end_year', 'comparisons']:
                     continue
-                if _type == 'rest':
-                    self.populate_handle_rest(simstart, newfiles)
-                elif _type in ['streams.ocean', 'streams.cice', 'mpas-o_in', 'mpas-cice_in']:
-                    self.populate_handle_mpas(_type, newfiles)
-                elif _type == 'meridionalHeatTransport':
-                    self.populate_heat_transport(newfiles)
-                else:
-                    self.populate_monthly(
-                        _type, newfiles, simstart, simend, experiment)
-            msg = 'Inserting file data into the table'
-            print_line(
-                ui=self.ui,
-                line=msg,
-                event_list=self.event_list)
-            self.mutex.acquire()
-            try:
-                step = 50
-                for idx in range(0, len(newfiles), step):
-                    DataFile.insert_many(newfiles[idx: idx + step]).execute()
-            except Exception as e:
-                print_debug(e)
-            finally:
-                if self.mutex.locked():
-                    self.mutex.release()
+                # for each data type
+                for _type in self._config['data_types']:
+                    data_types_for_case = self._config['simulations'][case]['data_types']
+                    if 'all' not in data_types_for_case:
+                        if _type not in data_types_for_case:
+                            continue
+
+                    # setup the base local_path
+                    local_path = self.render_file_string(
+                        data_type=_type,
+                        data_type_option='local_path',
+                        case=case)
+
+                    new_files = list()
+                    if self._config['data_types'][_type].get('monthly'):
+                        # handle monthly data
+                        for year in range(start_year, end_year + 1):
+                            for month in range(1, 13):
+                                filename = self.render_file_string(
+                                    data_type=_type,
+                                    data_type_option='file_format',
+                                    case=case,
+                                    year=year,
+                                    month=month)
+                                r_path = self.render_file_string(
+                                    data_type=_type,
+                                    data_type_option='remote_path',
+                                    case=case,
+                                    year=year,
+                                    month=month)
+                                new_files.append({
+                                    'name': filename,
+                                    'remote_path': os.path.join(r_path, filename),
+                                    'local_path': os.path.join(local_path, filename),
+                                    'local_status': FileStatus.NOT_PRESENT.value,
+                                    'case': case,
+                                    'remote_status': FileStatus.NOT_PRESENT.value,
+                                    'year': year,
+                                    'month': month,
+                                    'datatype': _type,
+                                    'local_size': 0,
+                                    'transfer_type': self._config['simulations'][case]['transfer_type'],
+                                    'remote_uuid': self._config['simulations'][case].get('remote_uuid', ''),
+                                    'remote_hostname': self._config['simulations'][case].get('remote_hostname', '')
+                                })
+                    else:
+                        # handle one-off data
+                        filename = self.render_file_string(
+                                    data_type=_type,
+                                    data_type_option='file_format',
+                                    case=case)
+                        r_path = self.render_file_string(
+                                    data_type=_type,
+                                    data_type_option='remote_path',
+                                    case=case)
+                        new_files.append({
+                            'name': filename,
+                            'remote_path': os.path.join(r_path, filename),
+                            'local_path': os.path.join(local_path, filename),
+                            'local_status': FileStatus.NOT_PRESENT.value,
+                            'case': case,
+                            'remote_status': FileStatus.NOT_PRESENT.value,
+                            'year': 0,
+                            'month': 0,
+                            'datatype': _type,
+                            'local_size': 0,
+                            'transfer_type': self._config['simulations'][case]['transfer_type'],
+                            'remote_uuid': self._config['simulations'][case].get('remote_uuid', ''),
+                            'remote_hostname': self._config['simulations'][case].get('remote_hostname', '')
+                        })
+                    tail, _ = os.path.split(new_files[0]['local_path'])
+                    if not os.path.exists(tail):
+                        os.makedirs(tail)
+                    step = 50
+                    for idx in range(0, len(new_files), step):
+                        DataFile.insert_many(
+                            new_files[idx: idx + step]).execute()
+
+            if self._mutex.locked():
+                self._mutex.release()
             msg = 'Database update complete'
             print_line(
-                ui=self.ui,
                 line=msg,
-                event_list=self.event_list)
-
-    def _add_file(self, newfiles, **kwargs):
-        local_status = filestatus['EXISTS'] \
-            if os.path.exists(kwargs['local_path']) \
-            else filestatus['NOT_EXIST']
-        local_size = os.path.getsize(kwargs['local_path']) \
-            if local_status == filestatus['EXISTS'] \
-            else 0
-        newfiles.append({
-            'name': kwargs['name'],
-            'local_path': kwargs['local_path'],
-            'local_status': local_status,
-            'local_size': local_size,
-            'remote_path': kwargs['remote_path'],
-            'remote_status': filestatus['NOT_EXIST'],
-            'remote_size': 0,
-            'year': kwargs.get('year', 0),
-            'month': kwargs.get('month', 0),
-            'datatype': kwargs['_type']
-        })
-        return newfiles
+                event_list=self._event_list)
+    
+    def terminate_transfers(self):
+        self.kill_event.set()
+        for thread in self.thread_list:
+            msg = 'terminating {}, this may take a moment'.format(thread.name)
+            print_line(msg, self._event_list)
+            thread.join()
 
     def print_db(self):
-        self.mutex.acquire()
+        self._mutex.acquire()
         for df in DataFile.select():
             print {
+                'case': df.case,
+                'type': df.datatype,
                 'name': df.name,
                 'local_path': df.local_path,
-                'remote_path': df.remote_path
+                'remote_path': df.remote_path,
+                'transfer_type': df.transfer_type,
             }
-
-    def update_remote_status(self, client):
+        self._mutex.release()
+    
+    def add_files(self, data_type, file_list):
         """
-        Check remote location for existance of the files on our list
-        If they exist, update their status in the DB
-
-        Parameters:
-            client (globus_sdk.client): the globus client to use for remote query
-        """
-        result = client.endpoint_autoactivate(
-            self.remote_endpoint, if_expires_in=2880)
-        if result['code'] == "AutoActivationFailed":
-            return False
-
-        # find the list of files that are still needed
-        remote_directories = list()
-        q = (DataFile
-                .select()
-                .where(
-                    DataFile.remote_status == filestatus['NOT_EXIST']))
-        data_files_needed = q.execute()
-        file_names_needed = [x.name for x in data_files_needed]
+        Add files to the database
         
-        msg = '{} additional files needed'.format(
-            len(file_names_needed))
-        print_line(
-            ui=self.ui,
-            line=msg,
-            event_list=self.event_list)
-        # find all the unique directories that hold those files
-        for remote_path in [x.remote_path for x in data_files_needed]:
-            tail, head = os.path.split(remote_path)
-            if tail not in remote_directories:
-                remote_directories.append(tail)
-
-        remote_files = list()
-        for remote_directory in remote_directories:
-            msg = 'Checking remote directory {}'.format(remote_directory)
-            print_line(
-                ui=self.ui,
-                line=msg,
-                event_list=self.event_list)
-            res = self._get_ls(client, remote_directory)
-            names = [x['name'] for x in res if x['name'] in file_names_needed]
-            sizes = [x['size'] for x in res if x['name'] in file_names_needed]
-            self.mutex.acquire()
-            try:
-                for name in names:
-                    remote_path = os.path.join(remote_directory, name)
-                    DataFile.update(
-                        remote_status=filestatus['EXISTS'],
-                        remote_size=sizes[names.index(name)],
-                        remote_path=remote_path
-                    ).where(
-                        DataFile.name == name
-                    ).execute()
-            except Exception as e:
-                print_debug(e)
-                print "Do you have the correct start and end dates and experiment name?"
-            except OperationalError as operror:
-                line = 'Error writing to database, database is locked by another process'
-                print_line(
-                    ui=self.ui,
-                    line=line,
-                    event_list=self.event_list)
-                logging.error(line)
-            finally:
-                if self.mutex.locked():
-                    self.mutex.release()
-        msg = 'remote update complete'
-        print_line(
-            ui=self.ui,
-            line=msg,
-            event_list=self.event_list)
-
-    def _get_ls(self, client, path):
-        for fail_count in xrange(10):
-            try:
-                res = get_ls(
-                    client,
-                    path,
-                    self.remote_endpoint,
-                    False, 0, False)
-            except Exception as e:
-                sleep(fail_count)
-                if fail_count >= 9:
-                    print_debug(e)
-            else:
-                return res
-
-    def update_remote_rest_sta_path(self, client, pattern='mpaso.rst'):
-        if not self.sta:
-            return
-        path = os.path.join(
-            self.remote_path,
-            'archive',
-            'rest')
-        res = self._get_ls(
-            client=client,
-            path=path)
-        contents = res['DATA']
-        subdir = contents[1]['name']
-        path = os.path.join(path, subdir)
-        contents = self._get_ls(
-            client=client,
-            path=path)
-        remote_name = ''
-        remote_path = ''
-        size = 0
-        for remote_file in contents:
-            if re.search(pattern=pattern, string=remote_file['name']):
-                remote_name = remote_file['name']
-                remote_path = os.path.join(
-                    self.remote_path,
-                    'archive',
-                    'rest',
-                    subdir,
-                    remote_file['name'])
-                size = remote_file['size']
-                break
-        return remote_name, remote_path, size
+        Parameters:
+            data_type (str): the data_type of the new files
+            file_list (list): a list of dictionaries in the format
+                local_path (str): path to the file,
+                case (str): the case these files belong to
+                name (str): the filename
+                remote_path (str): the remote path of these files, optional
+                transfer_type (str): the transfer type of these files, optional
+                year (int): the year of the file, optional
+                month (int): the month of the file, optional
+                remote_uuid (str): remote globus endpoint id, optional
+                remote_hostname (str): remote hostname for sftp transfer, optional
+        """
+        self._mutex.acquire()
+        try:
+            new_files = list()
+            for file in file_list:
+                new_files.append({
+                    'name': file['name'],
+                    'local_path': file['local_path'],
+                    'local_status': file.get('local_status', FileStatus.NOT_PRESENT.value),
+                    'datatype': data_type,
+                    'case': file['case'],
+                    'year': file.get('year', 0),
+                    'month': file.get('month', 0),
+                    'remote_uuid': file.get('remote_uuid', ''),
+                    'remote_hostname': file.get('remote_hostname', ''),
+                    'remote_path': file.get('remote_path', ''),
+                    'remote_status': FileStatus.NOT_PRESENT.value,
+                    'local_size': 0,
+                    'transfer_type': file.get('transfer_type', 'local')
+                })
+            step = 50
+            for idx in range(0, len(new_files), step):
+                DataFile.insert_many(
+                    new_files[idx: idx + step]).execute()
+        finally:
+            self._mutex.release()
+        
 
     def update_local_status(self):
         """
         Update the database with the local status of the expected files
 
-        Parameters:
-            types (list(str)): the list of files types to expect, must be members of file_type_map
+        Return True if there was new local data found, False othewise
         """
-
-        self.mutex.acquire()
+        self._mutex.acquire()
         try:
             query = (DataFile
                      .select()
                      .where(
-                            (DataFile.local_status == filestatus['NOT_EXIST']) |
-                            (DataFile.local_status == filestatus['IN_TRANSIT'])))
+                            (DataFile.local_status == FileStatus.NOT_PRESENT.value) |
+                            (DataFile.local_status == FileStatus.IN_TRANSIT.value)))
+            printed = False
+            change = False
             for datafile in query.execute():
+                marked = False
                 if os.path.exists(datafile.local_path):
-                    local_size = os.path.getsize(datafile.local_path)
-                    if local_size == datafile.remote_size and local_size != 0:
-                        datafile.local_status = filestatus['EXISTS']
-                        datafile.local_size = local_size
-                        datafile.save()
+                    if datafile.local_status == FileStatus.NOT_PRESENT.value or datafile.local_status == FileStatus.IN_TRANSIT.value:
+                        datafile.local_status = FileStatus.PRESENT.value
+                        marked = True
+                        change = True
+                else:
+                    if datafile.transfer_type == 'local':
+                        msg = '{case} transfer_type is local, but {filename} is not present'.format(
+                            case=datafile.case, filename=datafile.name)
+                        logging.error(msg)
+                        if not printed:
+                            print_line(msg, self._event_list)
+                            printed = True
+                    if datafile.local_status == FileStatus.PRESENT.value:
+                        datafile.local_status = FileStatus.NOT_PRESENT.value
+                        marked = True
+                if marked:
+                    datafile.save()
         except OperationalError as operror:
             line = 'Error writing to database, database is locked by another process'
             print_line(
-                ui=self.ui,
                 line=line,
-                event_list=self.event_list)
+                event_list=self._event_list)
             logging.error(line)
         finally:
-            if self.mutex.locked():
-                self.mutex.release()
+            if self._mutex.locked():
+                self._mutex.release()
+        return change
 
     def all_data_local(self):
         """
         Returns True if all data is local, False otherwise
         """
-        self.mutex.acquire()
+        self._mutex.acquire()
         try:
             query = (DataFile
                      .select()
                      .where(
-                         (DataFile.local_status == filestatus['NOT_EXIST']) |
-                         (DataFile.local_status == filestatus['IN_TRANSIT'])))
+                         (DataFile.local_status == FileStatus.NOT_PRESENT.value) |
+                         (DataFile.local_status == FileStatus.IN_TRANSIT.value)))
             missing_data = query.execute()
             # if any of the data is missing, not all data is local
             if missing_data:
-                msg = 'All data is not local, missing the following'
-                logging.debug(msg)
+                logging.debug('All data is not local, missing the following')
                 logging.debug([x.name for x in missing_data])
                 return False
         except Exception as e:
             print_debug(e)
         finally:
-            if self.mutex.locked():
-                self.mutex.release()
-        msg = 'All data is local'
-        logging.debug(msg)
+            if self._mutex.locked():
+                self._mutex.release()
+        logging.debug('All data is local')
         return True
 
-    def all_data_remote(self):
-        self.mutex.acquire()
-        try:
-            for data in DataFile.select():
-                if data.remote_status != filestatus['EXISTS']:
-                    return False
-        except Exception as e:
-            print_debug(e)
-        finally:
-            if self.mutex.locked():
-                self.mutex.release()
-        return True
-
-    def transfer_needed(self, event_list, event, remote_endpoint, ui, display_event, emailaddr, thread_list):
+    def transfer_needed(self, event_list, event):
         """
         Start a transfer job for any files that arent local, but do exist remotely
 
         Globus user must already be logged in
-
-        Parameters:
-            event_list (EventList): the list to push information into
-            event (threadding.event): the thread event to trigger a cancel
         """
-        if self.active_transfers >= 2:
-            msg = 'Currently have {} transfers active, not starting any new ones'.format(
-                self.active_transfers)
-            logging.info(msg)
-            return False
+
         # required files dont exist locally, do exist remotely
         # or if they do exist locally have a different local and remote size
-        self.mutex.acquire()
+        target_files = list()
+        self._mutex.acquire()
         try:
-            required_files = [x for x in DataFile.select().where(
-                (DataFile.remote_status == filestatus['EXISTS']) &
-                (DataFile.local_status != filestatus['IN_TRANSIT']) &
-                ((DataFile.local_status == filestatus['NOT_EXIST']) |
-                 (DataFile.local_size != DataFile.remote_size))
-            ).execute()]
-            if len(required_files) == 0:
-                msg = 'No new files needed'
-                logging.info(msg)
-                return False
-            target_files = []
-            transfer_names = []
-            target_size = 1e11  # 100 GB
-            total_size = 0
-            for file in required_files:
-                if total_size + file.remote_size < target_size:
-                    target_files.append({
-                        'name': file.name,
-                        'local_size': file.local_size,
-                        'local_path': file.local_path,
-                        'local_status': file.local_status,
-                        'remote_size': file.remote_size,
-                        'remote_path': file.remote_path,
-                        'remote_status': file.remote_status
-                    })
-                    transfer_names.append(file.name)
-                    total_size += file.remote_size
-                else:
-                    break
-        except Exception as e:
-            print_debug(e)
-            return False
-        finally:
-            if self.mutex.locked():
-                self.mutex.release()
+            q = (DataFile
+                 .select(DataFile.case)
+                 .where(
+                     DataFile.local_status == FileStatus.NOT_PRESENT.value))
+            caselist = [x.case for x in q.execute()]
+            if not caselist or len(caselist) == 0:
+                return
+            cases = list()
+            for case in caselist:
+                if case not in cases:
+                    cases.append(case)
 
-        logging.info('Transfering required files')
-        msg = 'total transfer size {size} gigabytes for {nfiles} files'.format(
-            size=(total_size / 1e9),
-            nfiles=len(target_files))
-        print_line(
-            ui=self.ui,
-            line=msg,
-            event_list=self.event_list)
-        transfer_config = {
-            'file_list': target_files,
-            'source_endpoint': self.remote_endpoint,
-            'destination_endpoint': self.local_endpoint,
-            'source_path': self.remote_path,
-            'destination_path': self.local_path,
-            'source_email': emailaddr,
-            'display_event': display_event,
-            'ui': ui,
-        }
-        transfer = Transfer(
-            config=transfer_config,
-            event_list=event_list)
-        self.mutex.acquire()
-        try:
-            step = 100
-            for idx in range(0, len(transfer_names), step):
-                DataFile.update(
-                    local_status=filestatus['IN_TRANSIT']
-                ).where(
-                    DataFile.name << transfer_names[idx: idx + step]
-                ).execute()
-        except Exception as e:
-            print_debug(e)
-            return False
-        except OperationalError as operror:
-            line = 'Error writing to database, database is locked by another process'
-            print_line(
-                ui=self.ui,
-                line=line,
-                event_list=self.event_list)
-            logging.error(line)
-            return False
-        finally:
-            if self.mutex.locked():
-                self.mutex.release()
-
-        msg = 'Starting file transfer'
-        print_line(
-            ui=self.ui,
-            line=msg,
-            event_list=self.event_list)
-        args = (transfer, event, event_list)
-        thread = threading.Thread(
-            target=self._handle_transfer,
-            name='filemanager_transfer',
-            args=args)
-        thread_list.append(thread)
-        thread.start()
-        return True
-
-    def _handle_transfer(self, transfer, event, event_list):
-        # this is to stop the simultanious print issue
-        sleep(random.uniform(0.01, 0.1))
-
-        self.active_transfers += 1
-        transfer.execute(event)
-        self.active_transfers -= 1
-
-        if transfer.status == JobStatus.FAILED:
-            msg = "Transfer has failed"
-            print_line(
-                ui=self.ui,
-                line=msg,
-                event_list=self.event_list)
-            logging.error(msg)
-            return
-        else:
-            self.transfer_cleanup(transfer)
-
-    def transfer_cleanup(self, transfer):
-        try:
-            self.mutex.acquire()
-            names = [x['name'] for x in transfer.file_list]
-            query = (DataFile
+            for case in cases:
+                q = (DataFile
                      .select()
-                     .where(DataFile.name << names))
-            for datafile in query.execute():
-                if os.path.exists(datafile.local_path) \
-                        and os.path.getsize(datafile.local_path) == datafile.remote_size:
-                    datafile.local_status = filestatus['EXISTS']
-                    datafile.local_size = os.path.getsize(datafile.local_path)
-                else:
-                    msg = 'file transfer error on {}'.format(datafile.name)
-                    print_line(
-                        ui=self.ui,
-                        line=msg,
-                        event_list=self.event_list)
-                    datafile.local_status = filestatus['NOT_EXIST']
-                    datafile.local_size = 0
-                datafile.save()
-            total_files = DataFile.select().count()
-            local_files = DataFile.select().where(
-                DataFile.local_status == filestatus['EXISTS']
-            ).count()
-            msg = 'Transfer complete: {local}/{total} files local'.format(
-                local=local_files,
-                total=total_files)
-            print_line(
-                ui=self.ui,
-                line=msg,
-                event_list=self.event_list)
-        except OperationalError as operror:
-            line = 'Error writing to database, database is locked by another process'
-            print_line(
-                ui=self.ui,
-                line=line,
-                event_list=self.event_list)
-            logging.error(line)
-        if self.mutex.locked():
-            self.mutex.release()
+                     .where(
+                            (DataFile.case == case) &
+                            (DataFile.local_status == FileStatus.NOT_PRESENT.value)))
+                required_files = [x for x in q.execute()]
+                for file in required_files:
+                    if file.transfer_type == 'local':
+                        required_files.remove(file)
+                if not required_files:
+                    msg = 'ERROR: all missing files are marked as local'
+                    print_line(msg, self._event_list)
+                    return
+                # mark files as in-transit so we dont double-copy
+                q = (DataFile
+                     .update({DataFile.local_status: FileStatus.IN_TRANSIT})
+                     .where(DataFile.name << [x.name for x in required_files]))
+                q.execute()
 
-    def years_ready(self, start_year, end_year):
+                for file in required_files:
+                    target_files.append({
+                        'local_path': file.local_path,
+                        'remote_path': file.remote_path,
+                    })
+
+                if required_files[0].transfer_type == 'globus':
+                    msg = 'Starting globus file transfer of {} files'.format(
+                        len(required_files))
+                    print_line(msg, self._event_list)
+                    msg = 'See https://www.globus.org/app/activity for transfer details'
+                    print_line(msg, self._event_list)
+
+                    client = get_client()
+                    remote_uuid = required_files[0].remote_uuid
+                    local_uuid = self._config['global']['local_globus_uuid']
+                    thread_name = '{}_globus_transfer'.format(required_files[0].case)
+                    _args = (client, remote_uuid,
+                             local_uuid, target_files,
+                             self.kill_event)
+                    thread = Thread(
+                        target=globus_transfer,
+                        name=thread_name,
+                        args=_args)
+                    self.thread_list.append(thread)
+                    thread.start()
+                elif required_files[0].transfer_type == 'sftp':
+                    msg = 'Starting sftp file transfer of {} files'.format(
+                        len(required_files))
+                    print_line(msg, self._event_list)
+
+                    client = get_ssh_client(required_files[0].remote_hostname)
+                    thread_name = '{}_sftp_transfer'.format(required_files[0].case)
+                    _args = (target_files, client, self.kill_event)
+                    thread = Thread(
+                        target=self._ssh_transfer,
+                        name=thread_name,
+                        args=_args)
+                    self.thread_list.append(thread)
+                    thread.start()
+        except Exception as e:
+            print_debug(e)
+            return False
+        finally:
+            if self._mutex.locked():
+                self._mutex.release()
+
+    def _ssh_transfer(self, target_files, client, event):
+        sftp_client = client.open_sftp()
+        for file in target_files:
+            if event.is_set():
+                return
+            _, filename = os.path.split(file['local_path'])
+            msg = 'sftp transfer from {} to {}'.format(
+                file['remote_path'], file['local_path'])
+            logging.info(msg)
+
+            msg = 'starting sftp transfer for {}'.format(filename)
+            print_line(msg, self._event_list)
+
+            ssh_transfer(sftp_client, file)
+            
+            msg = 'sftp transfer complete for {}'.format(filename)
+            print_line(msg, self._event_list)
+
+            msg = self.report_files_local()
+            print_line(msg, self._event_list)
+
+    def years_ready(self, data_type, start_year, end_year):
         """
-        Checks if atm files exist from start year to end of endyear
+        Checks if data_type files exist from start year to end of endyear
 
         Parameters:
             start_year (int): the first year to start checking
@@ -758,24 +580,24 @@ class FileManager(object):
         data_ready = True
         non_zero_data = False
 
-        self.mutex.acquire()
+        self._mutex.acquire()
         try:
             query = (DataFile
                      .select()
                      .where(
-                            (DataFile.datatype == 'atm') &
+                            (DataFile.datatype == data_type) &
                             (DataFile.year >= start_year) &
                             (DataFile.year <= end_year)))
             for datafile in query.execute():
-                if datafile.local_status != filestatus['EXISTS']:
+                if datafile.local_status != FileStatus.NOT_PRESENT.value:
                     data_ready = False
                 else:
                     non_zero_data = True
         except Exception as e:
             print_debug(e)
         finally:
-            if self.mutex.locked():
-                self.mutex.release()
+            if self._mutex.locked():
+                self._mutex.release()
 
         if data_ready:
             return 1
@@ -784,79 +606,58 @@ class FileManager(object):
         elif not data_ready and not non_zero_data:
             return -1
 
-    def get_file_paths_by_year(self, start_year, end_year, _type):
-        monthly = ['atm', 'ocn', 'ice']
-        self.mutex.acquire()
+    def report_files_local(self):
+        """
+        Return a string in the format 'X of Y files availabe locally' where X is the number here, and Y is the total
+        """
+        q = (DataFile
+             .select(DataFile.local_status)
+             .where(DataFile.local_status == FileStatus.PRESENT.value))
+        local = len([x.local_status for x in q.execute()])
+
+        q = (DataFile.select(DataFile.local_status))
+        total = len([x.local_status for x in q.execute()])
+
+        msg = '{local}/{total} files available locally or {prec:.2f}%'.format(
+            local=local, total=total, prec=((local*1.0)/total)*100)
+        return msg
+
+    def get_file_paths_by_year(self, datatype, case, start_year=None, end_year=None):
+        """
+        Return paths to files that match the given type, start, and end year
+
+        Parameters:
+            datatype (str): the type of data
+            case (str): the name of the case to return files for
+            monthly (bool): is this datatype monthly frequency
+            start_year (int): the first year to return data for
+            end_year (int): the last year to return data for
+        """
+        self._mutex.acquire()
         try:
-            if _type not in monthly:
+            if start_year and end_year:
                 query = (DataFile
                          .select()
                          .where(
-                                (DataFile.datatype == _type) &
-                                (DataFile.local_status == filestatus['EXISTS'])))
+                                (DataFile.year <= end_year) &
+                                (DataFile.year >= start_year) &
+                                (DataFile.case == case) &
+                                (DataFile.datatype == datatype) &
+                                (DataFile.local_status == FileStatus.PRESENT.value)))
             else:
                 query = (DataFile
                          .select()
                          .where(
-                                (DataFile.datatype == _type) &
-                                (DataFile.year >= start_year) &
-                                (DataFile.year <= end_year) &
-                                (DataFile.local_status == filestatus['EXISTS'])))
+                                (DataFile.case == case) &
+                                (DataFile.datatype == datatype) &
+                                (DataFile.local_status == FileStatus.PRESENT.value)))
             datafiles = query.execute()
             if datafiles is None or len(datafiles) == 0:
-                files = []
-            else:
-                files = [x.local_path for x in datafiles]
+                return None
+            return [x.local_path for x in datafiles]
         except Exception as e:
             print_debug(e)
-            files = []
         finally:
-            if self.mutex.locked():
-                self.mutex.release()
-        return files
+            if self._mutex.locked():
+                self._mutex.release()
 
-    def check_year_sets(self, job_sets):
-        """
-        Checks the file_list, and sets the year_set status to ready if all the files are in place,
-        otherwise, checks if there is partial data, or zero data
-        """
-        incomplete_job_sets = [s for s in job_sets
-                               if s.status != SetStatus.COMPLETED
-                               and s.status != SetStatus.RUNNING
-                               and s.status != SetStatus.FAILED]
-
-        for job_set in incomplete_job_sets:
-            data_ready = self.years_ready(
-                start_year=job_set.set_start_year,
-                end_year=job_set.set_end_year)
-
-            if data_ready == 1:
-                if job_set.status != SetStatus.DATA_READY:
-                    job_set.status = SetStatus.DATA_READY
-                    msg = "{start:04d}-{end:04d} is ready".format(
-                        start=job_set.set_start_year,
-                        end=job_set.set_end_year)
-                    print_line(
-                        ui=self.ui,
-                        line=msg,
-                        event_list=self.event_list)
-            elif data_ready == 0:
-                if job_set.status != SetStatus.PARTIAL_DATA:
-                    job_set.status = SetStatus.PARTIAL_DATA
-                    msg = "{start:04d}-{end:04d} has partial data".format(
-                        start=job_set.set_start_year,
-                        end=job_set.set_end_year)
-                    print_line(
-                        ui=self.ui,
-                        line=msg,
-                        event_list=self.event_list)
-            elif data_ready == -1:
-                if job_set.status != SetStatus.NO_DATA:
-                    job_set.status = SetStatus.NO_DATA
-                    msg = "{start:04d}-{end:04d} has no data".format(
-                        start=job_set.set_start_year,
-                        end=job_set.set_end_year)
-                    print_line(
-                        ui=self.ui,
-                        line=msg,
-                        event_list=self.event_list)
