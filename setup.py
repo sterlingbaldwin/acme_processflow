@@ -3,7 +3,7 @@ from setuptools import find_packages, setup
 
 data_files = [(sys.prefix + '/share/processflow/resources',
                ['resources/e3sm_diags_template_vs_model.py',
-               ['resources/e3sm_diags_template_vs_obs.py',
+                'resources/e3sm_diags_template_vs_obs.py',
                 'resources/amwg_template_vs_model.csh',
                 'resources/amwg_template_vs_obs.csh',
                 'resources/aprime_template_vs_obs.bash'])]
