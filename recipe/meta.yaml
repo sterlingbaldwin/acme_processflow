@@ -5,9 +5,14 @@ package:
 source:
   git_url: git://github.com/ACME-Climate/acme_workflow
   git_tag: {{ environ['TAG'] }}
+
 build:
   script: python setup.py install
   string: {{ environ['BUILD_NAME'] }}
+
+about:
+    home: https://github.com/ACME-Climate/acme_workflow
+    summary: Automated post processing for E3SM model data
 
 requirements:
   build:
@@ -16,23 +21,22 @@ requirements:
   
   run:
     - peewee
-    - acme_diags
+    - acme_diags >=1.2.1
     - markupsafe
     - matplotlib
-    - nco
-    - ncurses
+    - nco ==4.7.3
     - pip
     - python
     - setuptools
     - sqlite
     - configobj
-    - globus-sdk
-    - globus-cli
+    - globus-sdk ==1.1.1
+    - globus-cli ==1.1.2
     - jmespath
-    - six
+    - six >=1.10
     - libcf
     - hdf5
-
-about:
-    home: https://github.com/ACME-Climate/acme_workflow
-    summary: Automated post processing for E3SM model data
+    - scipy ==0.19.1=np113py27_0
+    - beautiful-soup
+    - paramiko
+    - ncl

@@ -2,17 +2,18 @@ import sys
 from setuptools import find_packages, setup
 
 data_files = [(sys.prefix + '/share/processflow/resources',
-               ['resources/e3sm_diags_template.py',
-                'resources/amwg_template.csh',
-                'resources/config_template.json',
-                'resources/aprime_template.bash'])]
+               ['resources/e3sm_diags_template_vs_model.py',
+                'resources/e3sm_diags_template_vs_obs.py',
+                'resources/amwg_template_vs_model.csh',
+                'resources/amwg_template_vs_obs.csh',
+                'resources/aprime_template_vs_obs.bash'])]
 
 setup(
-    name="acme_processflow",
-    version="0.4.54",
+    name="e3sm_processflow",
+    version="2.0.0",
     author="Sterling Baldwin",
     author_email="baldwin32@llnl.gov",
-    description="ACME Automated Processflow for handling post processing jobs for raw model data",
+    description="E3SM Automated workflow for handling post processing and diagnostic jobs for raw model data",
     scripts=["processflow.py"],
     packages=find_packages(
         exclude=["*.test", "*.test.*", "test.*", "test", "*_template.py"]),

@@ -1,0 +1,21 @@
+def error = null
+currentBuild.result = "SUCCESS"
+echo "Running ${env.BUILD_ID}"
+
+def processflow_dir = "/p/user_pub/e3sm/jenkins/processflow_tmp"
+def scripts_dir = "${processflow_dir}/acme_processflow/tests/jenkins/python"
+
+def testdir = "/p/user_pub/e3sm/jenkins/processflow/testdir/processflow_nightly"
+def cleanup_script = "${scripts_dir}/clean_testdir.py"
+
+try {
+    stage('remove_old_testdir') {
+       node('master') {
+           sh "python ${cleanup_script} --testdir ${testdir} --ndays 5"
+       }
+    }
+} catch (caughtException) {
+    error = caughtException
+    currentBuild.result = "FAILURE"
+} 
+

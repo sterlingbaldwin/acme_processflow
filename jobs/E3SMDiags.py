@@ -1,221 +1,217 @@
 import os
 import json
 import logging
+import subprocess
 
-from subprocess import Popen, PIPE
-from pprint import pformat
-from datetime import datetime
-from shutil import copyfile
+from bs4 import BeautifulSoup
+from shutil import copytree, rmtree
 
-from lib.events import EventList
-from lib.slurm import Slurm
-from JobStatus import JobStatus, StatusMap
-from lib.util import (render,
-                      get_climo_output_files,
-                      create_symlink_dir,
-                      print_line)
+from jobs.diag import Diag
+from lib.util import render, print_line
+from lib.jobstatus import JobStatus
 
-
-class E3SMDiags(object):
-    def __init__(self, config, event_list):
-        self.event_list = event_list
-        self.inputs = {
-            'ui': '',
-            'regrid_base_path': '',
-            'regrided_climo_path': '',
-            'reference_data_path': '',
-            'test_data_path': '',
-            'test_name': '',
-            'seasons': '',
-            'backend': '',
-            'sets': '',
-            'results_dir': '',
-            'template_path': '',
-            'run_scripts_path': '',
-            'start_year': '',
-            'end_year': '',
-            'year_set': '',
-            'experiment': '',
-            'web_dir': '',
-            'host_url': '',
-            'output_path': ''
-        }
-        self.slurm_args = {
-            'num_cores': '-n 16',  # 16 cores
-            'run_time': '-t 0-05:00',  # 2 hour max run time
+class E3SMDiags(Diag):
+    def __init__(self, *args, **kwargs):
+        super(E3SMDiags, self).__init__(*args, **kwargs)
+        self._job_type = 'e3sm_diags'
+        self._requires = 'climo'
+        self._data_required = ['climo_regrid']
+        self._host_path = ''
+        self._host_url = ''
+        self._short_comp_name = ''
+        self._slurm_args = {
+            'num_cores': '-n 24',  # 24 cores
+            'run_time': '-t 0-10:00',  # 10 hours run time
             'num_machines': '-N 1',  # run on one machine
-            'oversubscribe': '--oversubscribe'
         }
-        self.start_time = None
-        self.end_time = None
-        self.output_path = None
-        self.config = {}
-        self._status = JobStatus.INVALID
-        self.host_suffix = '/viewer/index.html'
-        self._type = "e3sm_diags"
-        self.year_set = config.get('year_set', 0)
-        self.start_year = config['start_year']
-        self.end_year = config['end_year']
-        self.job_id = 0
-        self.depends_on = ['ncclimo']
-        self.messages = []
-        self.prevalidate(config)
-
-    def __str__(self):
-        return json.dumps({
-            'type': self.type,
-            'config': self.config,
-            'status': self.status,
-            'depends_on': self.depends_on,
-            'job_id': self.job_id,
-            'messages': self.messages
-        }, sort_keys=True, indent=4)
-
-    def prevalidate(self, config):
-        for key, val in config.items():
-            if key in self.inputs:
-                self.config[key] = val
-                if key == 'sets':
-                    if isinstance(val, int):
-                        self.config[key] = [self.config[key]]
-                    elif isinstance(val, str):
-                        self.config[key] = [int(self.config[key])]
-
-        valid = True
-        for key, val in self.config.items():
-            if val == '':
-                valid = False
-                msg = '{0}: {1} is missing or empty'.format(key, val)
-                self.messages.append(msg)
-                break
-
-        if not os.path.exists(self.config.get('run_scripts_path')):
-            os.makedirs(self.config.get('run_scripts_path'))
-        if isinstance(self.config['seasons'], str):
-            self.config['seasons'] = [self.config['seasons']]
-        if self.year_set == 0:
-            self.messages.append('invalid year_set')
-            self.status = JobStatus.INVALID
-        if valid:
-            self.status = JobStatus.VALID
-
-    def postvalidate(self):
-        if not os.path.exists(self.config['results_dir']):
-            return False
-        contents = os.listdir(self.config['results_dir'])
-        if 'viewer' not in contents:
-            return False
-        if 'index.html' not in os.listdir(os.path.join(self.config['results_dir'], 'viewer')):
-            return False
-        try:
-            for item in ['params.py', 'params.pyc', 'viewer']:
-                if item in contents:
-                    contents.remove(item)
-        except:
-            return False
+        if self.comparison == 'obs':
+            self._short_comp_name = 'obs'
         else:
-            return bool(len(contents) >= len(self.config['sets']))
+            self._short_comp_name = kwargs['config']['simulations'][self.comparison]['short_name']
+    # -----------------------------------------------
+    def _dep_filter(self, job):
+        """
+        find the climo job we're waiting for, assuming there's only
+        one climo job in this case with the same start and end years
+        """
+        if job.job_type != self._requires: return False
+        if job.start_year != self.start_year: return False
+        if job.end_year != self.end_year: return False
+        return True
+    # -----------------------------------------------
+    def setup_dependencies(self, *args, **kwargs):
+        """
+        AMWG requires climos
+        """
+        jobs = kwargs['jobs']
+        if self.comparison != 'obs':
+            other_jobs = kwargs['comparison_jobs']
+            try:
+                self_climo, = filter(lambda job: self._dep_filter(job), jobs)
+            except ValueError:
+                raise Exception('Unable to find climo for {}, is this case set to generate climos?'.format(self.msg_prefix()))
+            try:
+                comparison_climo, = filter(lambda job: self._dep_filter(job), other_jobs)
+            except ValueError:
+                raise Exception('Unable to find climo for {}, is that case set to generates climos?'.format(self.comparison))
+            self.depends_on.extend((self_climo.id, comparison_climo.id))
+        else:
+            try:
+                self_climo, = filter(lambda job: self._dep_filter(job), jobs)
+            except ValueError:
+                raise Exception('Unable to find climo for {}, is this case set to generate climos?'.format(self.msg_prefix()))
+            self.depends_on.append(self_climo.id)
+    # -----------------------------------------------
+    def execute(self, config, dryrun=False):
+        
+        self._output_path = os.path.join(
+            config['global']['project_path'],
+            'output', 'diags', self.short_name, 'e3sm_diags',
+            '{start:04d}_{end:04d}_vs_{comp}'.format(
+                start=self.start_year,
+                end=self.end_year,
+                comp=self._short_comp_name))
+        if not os.path.exists(self._output_path):
+            os.makedirs(self._output_path)
+        
+        # render the parameter file from the template
+        param_template_out = os.path.join(
+            config['global']['run_scripts_path'],
+            'e3sm_diags_{start:04d}_{end:04d}_{case}_vs_{comp}_params.py'.format(
+                start=self.start_year,
+                end=self.end_year,
+                case=self.short_name,
+                comp=self._short_comp_name))
+        variables = dict()
+        input_path, _ = os.path.split(self._input_file_paths[0])
+        variables['short_test_name'] = self.short_name
+        variables['test_data_path'] = input_path
+        variables['test_name'] = self.case
+        variables['backend'] = config['diags']['e3sm_diags']['backend']
+        variables['results_dir'] = self._output_path
 
-    def execute(self, dryrun=False):
-
-        # Check if the output already exists
-        if self.postvalidate():
-            self.status = JobStatus.COMPLETED
-            return 0
-        # render the parameters file
-        self.output_path = self.config['output_path']
-        template_out = os.path.join(
-            self.output_path,
-            'params.py')
-        variables = {
-            'sets': self.config['sets'],
-            'backend': self.config['backend'],
-            'reference_data_path': self.config['reference_data_path'],
-            'test_data_path': self.config['regrided_climo_path'],
-            'test_name': self.config['test_name'],
-            'seasons': self.config['seasons'],
-            'results_dir': self.config['results_dir']
-        }
+        if self.comparison == 'obs':
+            template_input_path = os.path.join(
+                config['global']['resource_path'],
+                'e3sm_diags_template_vs_obs.py')
+            variables['reference_data_path'] = config['diags']['e3sm_diags']['reference_data_path']
+        else:
+            template_input_path = os.path.join(
+                config['global']['resource_path'],
+                'e3sm_diags_template_vs_model.py')
+            input_path, _ = os.path.split(self._input_file_paths[0])
+            variables['reference_data_path'] = input_path
+            variables['ref_name'] = self.comparison
+            variables['reference_name'] = config['simulations'][self.comparison]['short_name']
+        
         render(
             variables=variables,
-            input_path=self.config.get('template_path'),
-            output_path=template_out)
+            input_path=template_input_path,
+            output_path=param_template_out)
+        
+        if not dryrun:
+            self._dryrun = False
+            if not self.prevalidate():
+                return False
+            if self.postvalidate(config):
+                self.status = JobStatus.COMPLETED
+                return True
+        else:
+            self._dryrun = True
+            return
 
-        run_name = '{type}_{start:04d}_{end:04d}'.format(
-            start=self.config.get('start_year'),
-            end=self.config.get('end_year'),
-            type=self.type)
-        template_copy = os.path.join(
-            self.config.get('run_scripts_path'),
-            run_name)
-        copyfile(
-            src=template_out,
-            dst=template_copy)
+        # create the run command and submit it
+        cmd = ['acme_diags_driver.py', '-p', param_template_out]
+        return self._submit_cmd_to_slurm(config, cmd)
+    # -----------------------------------------------
+    def postvalidate(self, config, *args, **kwargs):
+        return self._check_links(config)
+    # -----------------------------------------------
+    def handle_completion(self, filemanager, event_list, config):
+        
+        if self.status != JobStatus.COMPLETED:
+            msg = '{prefix}: Job failed'.format(
+                prefix=self.msg_prefix())
+            print_line(msg, event_list)
+            logging.info(msg)
+        else:
+            msg = '{prefix}: Job complete'.format(
+                prefix=self.msg_prefix())
+            print_line(msg, event_list)
+            logging.info(msg)
 
-        # Create directory of regridded climos
-        file_list = get_climo_output_files(
-            input_path=self.config['regrid_base_path'],
-            start_year=self.start_year,
-            end_year=self.end_year)
-        create_symlink_dir(
-            src_dir=self.config['regrid_base_path'],
-            src_list=file_list,
-            dst=self.config['regrided_climo_path'])
+        # if hosting is turned off, simply return
+        if not config['global']['host']:
+            return
 
-        # setup sbatch script
-        run_script = os.path.join(
-            self.config.get('run_scripts_path'),
-            run_name)
-        if os.path.exists(run_script):
-            os.remove(run_script)
-
-        self.slurm_args['output_file'] = '-o {output_file}'.format(
-            output_file=run_script + '.out')
-
-        cmd = 'acme_diags_driver.py -p {template}'.format(
-            template=template_out)
-
-        slurm_args_str = ['#SBATCH {value}\n'.format(
-            value=v) for k, v in self.slurm_args.items()]
-        slurm_prefix = ''.join(slurm_args_str)
-        with open(run_script, 'w') as batchfile:
-            batchfile.write('#!/bin/bash\n')
-            batchfile.write(slurm_prefix)
-            batchfile.write(cmd)
-
-        slurm = Slurm()
-        msg = 'Submitting to queue {type}: {start:04d}-{end:04d}'.format(
-            type=self.type,
+        # else setup the web hosting
+        hostname = config['img_hosting']['img_host_server']
+        self.host_path = os.path.join(
+            config['img_hosting']['host_directory'],
+            self.case,
+            'e3sm_diags',
+            '{start:04d}_{end:04d}_vs_{comp}'.format(
+                start=self.start_year,
+                end=self.end_year,
+                comp=self._short_comp_name))
+        
+        self.setup_hosting(config, self._output_path, self.host_path, event_list)
+        
+        self._host_url = 'https://{server}/{prefix}/{case}/e3sm_diags/{start:04d}_{end:04d}_vs_{comp}/viewer/index.html'.format(
+            server=config['img_hosting']['img_host_server'],
+            prefix=config['img_hosting']['url_prefix'],
+            case=self.case,
             start=self.start_year,
-            end=self.end_year)
-        print_line(
-            ui=self.config.get('ui', False),
-            line=msg,
-            event_list=self.event_list,
-            current_state=True)
-        self.job_id = slurm.batch(run_script, '--oversubscribe')
-        status = slurm.showjob(self.job_id)
-        self.status = StatusMap[status.get('JobState')]
-
-        return self.job_id
-
-    def __str__(self):
-        return pformat({
-            'type': self.type,
-            'status': self.status,
-            'depends_on': self.depends_on,
-            'job_id': self.job_id,
-            'year_set': self.year_set
-        }, indent=4)
-
-    @property
-    def type(self):
-        return self._type
-
-    @property
-    def status(self):
-        return self._status
-
-    @status.setter
-    def status(self, status):
-        self._status = status
+            end=self.end_year,
+            comp=self._short_comp_name)
+    # -----------------------------------------------
+    def _check_links(self, config):
+        
+        self._output_path = os.path.join(
+            config['global']['project_path'],
+            'output', 'diags', self.short_name, 'e3sm_diags',
+            '{start:04d}_{end:04d}_vs_{comp}'.format(
+                start=self.start_year,
+                end=self.end_year,
+                comp=self._short_comp_name))
+        viewer_path = os.path.join(self._output_path, 'viewer', 'index.html')
+        if not os.path.exists(viewer_path):
+            return False
+        viewer_head = os.path.join(self._output_path, 'viewer')
+        if not os.path.exists(viewer_head):
+            return False
+        missing_links = list()
+        with open(viewer_path, 'r') as viewer_pointer:
+            viewer_page = BeautifulSoup(viewer_pointer, 'lxml')
+            viewer_links = viewer_page.findAll('a')
+            for link in viewer_links:
+                link_path = os.path.join(viewer_head, link.attrs['href'])
+                if not os.path.exists(link_path):
+                    missing_links.append(link_path)
+                    continue
+                if link_path[-4:] == 'html':
+                    link_tail, _ = os.path.split(link_path)
+                    with open(link_path, 'r') as link_pointer:
+                        link_page = BeautifulSoup(link_pointer, 'lxml')
+                        link_links = link_page.findAll('a')
+                        for sublink in link_links:
+                            try:
+                                sublink_preview = sublink.attrs['data-preview']
+                            except:
+                                continue
+                            else:
+                                sublink_path = os.path.join(link_tail, sublink_preview)
+                                if not os.path.exists(sublink_path):
+                                    missing_links.append(sublink_path)
+        if missing_links:
+            msg = '{prefix}: missing the following links'.format(
+                prefix=self.msg_prefix())
+            logging.error(msg)
+            logging.error(missing_links)
+            return False
+        else:
+            msg = '{prefix}: all links found'.format(
+                prefix=self.msg_prefix())
+            logging.info(msg)
+            return True
+    # -----------------------------------------------
